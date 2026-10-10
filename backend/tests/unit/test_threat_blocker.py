@@ -22,6 +22,8 @@ class TestThreatAnalyser:
         assert "score" in result
         assert "mitre_ttp" in result
         assert "auto_block" in result
+        assert result["auto_block"] is False
+        assert "containment_recommended" in result
         assert "reason" in result
 
     def test_high_entropy_quic_is_high_threat(self):
@@ -57,7 +59,8 @@ class TestThreatAnalyser:
             "jitter": 0.1,
         })
         assert result["threat_level"] in ("high", "critical")
-        assert result["auto_block"] is True
+        assert result["containment_recommended"] is True
+        assert result["auto_block"] is False
 
     def test_mitre_ttp_mapped_for_c2(self):
         from agents.threat_blocker import analyse_signal
@@ -91,6 +94,7 @@ class TestThreatAnalyser:
         result = analyse_signal({})
         assert result["threat_level"] == "info"
         assert result["auto_block"] is False
+        assert result["containment_recommended"] is False
 
 
 class TestThreatBlockerAgent:
@@ -192,6 +196,9 @@ class TestSIEMExporter:
         assert result["format"] == "json"
         assert "payload" in result
         assert result["payload"]["event_id"] == "evt-001"
+        assert result["payload"]["blocked"] is False
+        assert result["payload"]["containment_verified"] is False
+        assert result["payload"]["status"] == "containment_pending"
 
     def test_export_splunk_hec_format(self):
         from agents.threat_blocker import export_siem
@@ -225,6 +232,22 @@ class TestSIEMExporter:
         cef_str = result["payload"]
         assert cef_str.startswith("CEF:")
 
+    def test_export_only_marks_containment_when_enforcement_is_verified(self):
+        from agents.threat_blocker import export_siem
+        event = {
+            "event_id": "evt-verified",
+            "src_ip": "192.0.2.10",
+            "threat_level": "high",
+            "mitre_ttp": "T1071",
+            "blocked": True,
+            "enforcement_verified": True,
+            "timestamp": "2026-10-10T00:00:00Z",
+        }
+        result = export_siem(event, fmt="json")
+        assert result["payload"]["blocked"] is True
+        assert result["payload"]["containment_verified"] is True
+        assert result["payload"]["status"] == "contained"
+
     def test_export_unknown_format_raises(self):
         from agents.threat_blocker import export_siem
         with pytest.raises(ValueError):
@@ -242,7 +265,7 @@ class TestSIEMExporter:
         event = {"event_id": "e2", "mitre_ttp": "T1071", "threat_level": "critical",
                  "src_ip": "2.2.2.2", "blocked": True, "timestamp": "2026-01-01T00:00:00Z"}
         result = export_siem(event, fmt="splunk_hec")
-        assert result["payload"]["sourcetype"] == "resilientai:threat"
+        assert result["payload"]["sourcetype"] == "aurontra:threat"
 
 
 class TestMITREMapper:
