@@ -10,7 +10,7 @@ Phases are sequential release gates. A phase is complete only after implementati
 | 02 | Immediate containment and safe defaults | Negative tests for unsafe public actions; fail-closed webhook; audit | Complete — CI green |
 | 03 | Authentication and role-based API perimeter | JWT signature/issuer/audience checks, HTTPS identity config, role-policy tests | Complete — business data plane remains closed |
 | 04 | Threat model and security design | STRIDE/trust-boundary model, abuse cases, mitigation/evidence mapping | Complete — 18 threats and verification matrix reviewed; CI green |
-| 05 | Durable tenant persistence and resource-level authorization | Migrations, tenant-scoped repositories, PostgreSQL RLS, cross-tenant tests, transaction/backup tests | In progress — schema foundation only; route integration remains open |
+| 05 | Durable tenant persistence and resource-level authorization | Migrations, tenant-scoped repositories, PostgreSQL RLS, cross-tenant tests, transaction/backup tests | In progress — foreign keys and RLS migration added; repository integration remains open |
 | 06 | Durable jobs and event processing | Retry, idempotency, replay, cancellation and dead-letter tests | Not started |
 | 07 | Organization/device lifecycle | Enrollment, revocation, ownership and offboarding tests | Not started |
 | 08 | Authenticated endpoint agent | Device identity, signed requests, replay protection, versioning tests | Not started |

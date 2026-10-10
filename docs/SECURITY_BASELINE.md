@@ -48,8 +48,8 @@ Production release remains blocked until all of the following have evidence:
 
 ## Known limitations
 
-- The Alembic bootstrap creates missing tables but does not alter pre-existing tables. It is intentionally irreversible; use a reviewed backup-and-restore process for rollback.
-- Tenant/API-key/audit/webhook models are schema foundations only. They do not establish tenant isolation by themselves.
+- The Alembic bootstrap creates missing tables but does not alter pre-existing tables. Migration 0002 adds tenant foreign keys and PostgreSQL RLS policies. Both migrations are intentionally irreversible; use a reviewed backup-and-restore process for rollback.
+- Tenant/API-key/audit/webhook models and tenant foreign keys are schema foundations; PostgreSQL RLS is now covered by a dedicated CI job, but route repositories still need tenant-scoped queries and the data plane remains closed.
 - JWT middleware and role policy are perimeter controls, not object-level authorization or a completed cross-tenant isolation implementation.
 - Content-Length checking does not by itself stop oversized chunked requests.
 - The old deployment archive is removed from the working tree. Its historical blob remains in Git history; the workflow scans history for matching secrets but does not execute historical artifacts.
