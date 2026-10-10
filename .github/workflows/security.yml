@@ -35,10 +35,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          tracked_archives="$(git ls-files | grep -E '\\.tar\\.gz$' || true)"
+          tracked_archives="$(git ls-files '*.tar.gz')"
           if [[ -n "$tracked_archives" ]]; then
             echo "::error::Deployment archives must not be committed; publish reviewed release artifacts separately."
-            printf '%s\\n' "$tracked_archives"
+            printf '%s\n' "$tracked_archives"
             exit 1
           fi
           echo "No deployment archives are tracked in the current tree."
