@@ -226,6 +226,8 @@ async def block_threat(
             "action_taken": "monitor",
             "blocked": False,
             "enforcement_verified": False,
+            # Stable error code only; never echo exception text or provider details.
+            "error": "bridge_unavailable",
         })
         return base
 
