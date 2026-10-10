@@ -42,3 +42,23 @@ def test_liveness_is_public(monkeypatch):
         response = client.get("/health/live")
     assert response.status_code == 200
     assert response.json()["alive"] is True
+
+
+def test_production_cannot_disable_authentication(monkeypatch):
+    monkeypatch.setattr(settings, "ENVIRONMENT", "production")
+    monkeypatch.setattr(settings, "AUTH_MODE", "disabled")
+    monkeypatch.setattr(settings, "DATA_PLANE_ENABLED", True)
+    with TestClient(app) as client:
+        response = client.get("/tickets/")
+    assert response.status_code == 503
+    assert response.json()["code"] == "PRODUCTION_AUTH_REQUIRED"
+
+
+def test_data_plane_cannot_be_enabled_before_tenant_isolation_is_implemented(monkeypatch):
+    monkeypatch.setattr(settings, "ENVIRONMENT", "development")
+    monkeypatch.setattr(settings, "AUTH_MODE", "disabled")
+    monkeypatch.setattr(settings, "DATA_PLANE_ENABLED", True)
+    with TestClient(app) as client:
+        response = client.get("/tickets/")
+    assert response.status_code == 503
+    assert response.json()["code"] == "TENANT_DATA_PLANE_NOT_READY"

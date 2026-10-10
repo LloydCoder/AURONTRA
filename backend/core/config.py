@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     APP_NAME: str = "Aurontra"
     VERSION: str = "0.1.0"
     DEBUG: bool = False
+    ENVIRONMENT: str = "development"
 
     # Secure-by-default: the business data plane stays closed until auth and tenant-scoped persistence are ready.
     AUTH_MODE: str = "required"

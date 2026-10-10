@@ -4,7 +4,12 @@ from functools import lru_cache
 from typing import Any
 import jwt
 from jwt import PyJWKClient
+from jwt.exceptions import PyJWKClientConnectionError, PyJWTError
 from core.config import settings
+
+class AuthenticationProviderUnavailable(RuntimeError):
+    """The configured identity provider could not be reached safely."""
+
 
 @lru_cache(maxsize=1)
 def _jwks_client() -> PyJWKClient:
@@ -18,7 +23,10 @@ def verify_bearer_token(token: str) -> dict[str, Any]:
         raise RuntimeError("JWT verification is not configured")
     if not token or len(token) > 16_384:
         raise ValueError("Invalid token size")
-    signing_key = _jwks_client().get_signing_key_from_jwt(token).key
+    try:
+        signing_key = _jwks_client().get_signing_key_from_jwt(token).key
+    except PyJWKClientConnectionError as exc:
+        raise AuthenticationProviderUnavailable("JWKS provider unavailable") from exc
     claims = jwt.decode(
         token, signing_key, algorithms=["RS256", "ES256"],
         issuer=settings.JWT_ISSUER, audience=settings.JWT_AUDIENCE,

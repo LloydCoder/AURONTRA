@@ -55,3 +55,8 @@ This document is not a substitute for an independent penetration test, external 
 - The business data plane remains closed by default even when a token is valid. It must not be enabled in production until durable tenant-scoped repositories, migrations, object-level authorization, and cross-tenant isolation tests are complete.
 - CI explicitly opts into the legacy in-process test mode. That setting is test-only and must not be copied to production.
 - Only `/health/live` is unauthenticated. Readiness, bridge inventory, docs, reports, telemetry, and all business endpoints remain behind the auth/data-plane gate.
+
+
+- `ENVIRONMENT=production` cannot be combined with `AUTH_MODE=disabled`; the request gate returns a fail-closed 503.
+- JWT verification distinguishes invalid credentials (401) from JWKS provider unavailability (503).
+- The tenant-isolation implementation gate is a code-level release switch, not an environment variable. Setting `DATA_PLANE_ENABLED=true` alone cannot open the production business API.
