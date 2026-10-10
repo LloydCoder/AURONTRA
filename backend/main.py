@@ -87,6 +87,11 @@ async def enforce_auth_and_data_plane(request: Request, call_next):
         request.state.subject = principal["subject"]
         request.state.role = principal["role"]
         request.state.claims = claims
+    # Deterministic identity is permitted only in explicit test mode.
+    if settings.TEST_MODE and not getattr(request.state, "tenant_id", None):
+        request.state.tenant_id = "test-tenant"
+        request.state.subject = "test-runner"
+        request.state.role = "org:owner"
     # Authentication alone does not fix cross-tenant in-memory storage.
     if not settings.DATA_PLANE_ENABLED or (not TENANT_ISOLATION_IMPLEMENTED and not settings.TEST_MODE):
         return JSONResponse(status_code=503, content={"detail": "Business API is disabled until durable tenant isolation is enabled.", "code": "TENANT_DATA_PLANE_NOT_READY"})
