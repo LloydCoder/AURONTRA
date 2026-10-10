@@ -1,20 +1,20 @@
 # Aurontra Enterprise Hardening Roadmap
 
-Aurontra is part of the Tinlance ecosystem. It must consume the authoritative Tinlance Agent System through supported contracts and must not duplicate the Agent Platform's identity, authorization, policy, approval, sandbox, secrets, runtime or audit authority.
+Aurontra is a Tinlance ecosystem product and a consumer of the four-repository Tinlance Agent System. It must not duplicate the Agent Platform's authoritative identity, authorization, policy, approval, sandbox, secrets, execution, or evidence controls.
 
-Phases are sequential release gates. A phase is complete only when implementation, tests, documentation, security review and CI evidence are reconciled. Roadmap entries do not imply completion.
+Phases are sequential release gates. A phase is complete only after implementation, tests, documentation reconciliation, security review, and CI evidence. Passing CI does not certify production readiness.
 
 | Phase | Scope | Acceptance evidence | Status |
 |---|---|---|---|
-| 01 | Forensic baseline, requirements and supply-chain inventory | Immutable baseline SHA, file/archive/history review, risk register | In progress |
-| 02 | Immediate containment and safe defaults | Negative tests for unsafe public actions; webhook fails closed | In progress |
-| 03 | Authentication and tenant/resource authorization | Positive and negative identity/RBAC/cross-tenant tests | Not started |
-| 04 | Threat model and security design | Threat register, owners, mitigations, test mapping | Not started |
-| 05 | Durable persistence and migrations | Migration, transaction, tenancy, backup/restore tests | Not started |
+| 01 | Forensic baseline, requirements and supply-chain inventory | Immutable baseline SHA, archive/history scan, risk register | In progress |
+| 02 | Immediate containment and safe defaults | Negative tests for unsafe public actions; fail-closed webhook; audit | In progress |
+| 03 | Authentication and tenant/resource authorization | JWT verification, RBAC, positive/negative cross-tenant tests | In progress — perimeter only |
+| 04 | Threat model and security design | Threat register, mitigations, test mapping | Not started |
+| 05 | Durable persistence and migrations | Alembic migration, tenant-scoped repositories, transaction/backup tests | In progress — schema foundation only |
 | 06 | Durable jobs and event processing | Retry, idempotency, replay, cancellation and dead-letter tests | Not started |
 | 07 | Organization/device lifecycle | Enrollment, revocation, ownership and offboarding tests | Not started |
 | 08 | Authenticated endpoint agent | Device identity, signed requests, replay protection, versioning tests | Not started |
-| 09 | Governed action engine | Agent Platform contract tests, policy and approval evidence | Not started |
+| 09 | Governed action engine | Tinlance Agent Platform contract tests, policy/approval evidence | Not started |
 | 10 | Safe remediation playbooks | Allowlist, least privilege, bounded execution and postcondition tests | Not started |
 | 11 | Orchestration recovery | Crash, retry, duplicate, partial failure and reconciliation tests | Not started |
 | 12 | Telemetry pipeline | Provenance, freshness, schema, missing-data and retention tests | Not started |
@@ -31,37 +31,30 @@ Phases are sequential release gates. A phase is complete only when implementatio
 | 23 | Security assurance and release integrity | SAST, dependency/secret scans, integration/load/fault tests, provenance | Not started |
 | 24 | Production release certification gate | Full forensic audit, clean deployment, rollback/recovery and go/no-go | Not started |
 
+## Current implementation evidence
+
+- Unsafe local playbook execution is disabled and playbooks are recommendation-only.
+- Threat containment is disabled until a real enforcement adapter and independent verification exist.
+- Billing webhook signatures fail closed; checkout and onboarding remain disabled.
+- JWT/JWKS perimeter verification has been added, but no route-level RBAC or durable tenant isolation is claimed.
+- Organization, API-key metadata, audit-event and webhook-idempotency models plus an Alembic bootstrap migration exist. These are not yet connected to route repositories.
+- Production startup no longer mutates schema with `create_all`; it requires the configured migration revision when the data plane is requested.
+- The production data plane remains closed by a code-level release gate.
+
 ## Serial execution protocol
 
-1. Record the exact commit SHA and CI state before each phase.
-2. Implement one phase at a time; do not start the next until the current phase's required checks pass.
-3. Add or update tests with each behavior change.
-4. Reconcile code, tests, configuration, docs, release notes and threat register.
-5. Inspect workflow job logs, not just the summary badge.
-6. Audit the completed phase against acceptance criteria and inspect changed files before proceeding.
-7. Record unresolved external dependencies explicitly; do not claim a green production release if deployment credentials or environment access are missing.
-8. After Phase 24, audit the complete repository, history, artifacts, integrations and release evidence.
+1. Record the exact commit SHA and workflow state before each phase.
+2. Complete one phase, inspect every changed file, run tests and security scans, then audit its acceptance criteria before starting the next phase.
+3. Reconcile code, tests, configuration, docs, release notes, and threat register after every phase.
+4. Inspect workflow job logs, not just the summary badge.
+5. Record unresolved external dependencies explicitly; do not claim a green production release if credentials or environment access are missing.
+6. After Phase 24, audit the complete repository, history, archives, integrations and release evidence.
 
 ## Non-negotiable status distinctions
 
-- Unit tests passing is not equivalent to full CI passing.
-- Full CI passing is not equivalent to successful deployment.
-- Deployment success is not equivalent to verified runtime correctness.
-- A threat decision is not a verified containment event.
+- Unit tests passing is not full CI.
+- Full CI passing is not successful deployment.
+- Deployment success is not verified runtime correctness.
+- A threat decision is not verified containment.
 - Control mapping is not compliance certification.
 - Estimated ROI is not measured savings.
-
-
-## Phase 2 — durable tenant and evidence foundation (in progress)
-
-- Added schema definitions for organizations, hashed API-key metadata, append-only ORM audit events, and provider/event idempotency records.
-- These model definitions are not yet a production migration and do not by themselves enable the business data plane.
-- Remaining phase gates: Alembic migration history, tenant foreign keys and repository adoption across all routes, transactional writes, PostgreSQL/RLS design, API-key verification/rotation/revocation, audit-chain concurrency tests, webhook replay tests, backup/restore validation, and a full cross-tenant isolation suite.
-
-
-## Phase 2 — durable tenant and evidence foundation (in progress)
-
-- Added versioned Alembic bootstrap migration for existing business tables plus organization, API-key metadata, audit-event, and webhook idempotency tables.
-- The migration creates missing tables but intentionally does not mutate pre-existing tables; an existing database requires a backup and schema-drift review before adopting it.
-- The production business data plane remains closed. Models/migrations do not establish tenant isolation until every route uses durable repositories with organization-scoped queries and cross-tenant tests.
-- Remaining phase gates: durable repository adoption, tenant foreign keys for every business record, hashed/rotatable API key lifecycle, transactional audit writes and concurrent chain tests, webhook signature/replay/idempotency processing, PostgreSQL/RLS design, backup/restore validation, and cross-tenant isolation suite.
