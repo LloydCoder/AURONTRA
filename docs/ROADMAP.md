@@ -2,15 +2,15 @@
 
 Aurontra is a Tinlance ecosystem product and a consumer of the four-repository Tinlance Agent System. It must not duplicate the Agent Platform's authoritative identity, authorization, policy, approval, sandbox, secrets, execution, or evidence controls.
 
-Phases are sequential release gates. A phase is complete only after implementation, tests, documentation reconciliation, security review, and CI evidence. Passing CI does not certify production readiness.
+Phases are sequential release gates. A phase is complete only after implementation, tests, documentation reconciliation, security review, and CI evidence. Passing CI does not certify production readiness. Phase 04's threat model is reviewed; the next active phase is durable tenant persistence and resource-level authorization.
 
 | Phase | Scope | Acceptance evidence | Status |
 |---|---|---|---|
 | 01 | Forensic baseline, requirements and supply-chain inventory | Immutable baseline SHA, archive/history scan, risk register | Complete — legacy archive removed; history scan green |
 | 02 | Immediate containment and safe defaults | Negative tests for unsafe public actions; fail-closed webhook; audit | Complete — CI green |
 | 03 | Authentication and role-based API perimeter | JWT signature/issuer/audience checks, HTTPS identity config, role-policy tests | Complete — business data plane remains closed |
-| 04 | Threat model and security design | STRIDE/trust-boundary model, abuse cases, mitigation/evidence mapping | In progress |
-| 05 | Durable tenant persistence and resource-level authorization | Migrations, tenant-scoped repositories, PostgreSQL RLS, cross-tenant tests, transaction/backup tests | Schema scaffolding exists; implementation gated on Phase 04 audit |
+| 04 | Threat model and security design | STRIDE/trust-boundary model, abuse cases, mitigation/evidence mapping | Complete — 18 threats and verification matrix reviewed; CI green |
+| 05 | Durable tenant persistence and resource-level authorization | Migrations, tenant-scoped repositories, PostgreSQL RLS, cross-tenant tests, transaction/backup tests | In progress — schema foundation only; route integration remains open |
 | 06 | Durable jobs and event processing | Retry, idempotency, replay, cancellation and dead-letter tests | Not started |
 | 07 | Organization/device lifecycle | Enrollment, revocation, ownership and offboarding tests | Not started |
 | 08 | Authenticated endpoint agent | Device identity, signed requests, replay protection, versioning tests | Not started |
