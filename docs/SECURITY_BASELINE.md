@@ -12,7 +12,7 @@ The 2026-10-09 repository audit and workflow logs identified:
 - Billing webhook verification accepted requests when the webhook secret was missing.
 - Domain records and histories were held in process memory.
 - The tracked frontend did not establish a reproducible, backend-connected Next.js application.
-- The public repository contained a deployment archive that has not been fully inspected. No full Git-history/archive secret scan has been certified.
+- The public repository contains a deployment archive. Gitleaks 8.30.1 was pinned by SHA-256 and scanned the working tree, nested archives (depth 3), and reachable Git history successfully on commit acfb67a4aaf8559be864bb8235613c30162d40cc. This is evidence that the configured scanner found no matching secrets, not a guarantee that every sensitive artifact or secret type is detectable. The archive contents still require a functional/deployment-artifact review.
 
 ## Immediate safe defaults
 
