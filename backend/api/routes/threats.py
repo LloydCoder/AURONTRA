@@ -79,7 +79,27 @@ async def threat_events_endpoint(limit: int = 50):
     if limit < 1 or limit > 200:
         raise HTTPException(status_code=422, detail="limit must be between 1 and 200")
     try:
-        return {"events": await get_events(limit=limit), "source": "threatfade", "containment_verified": False}
+        upstream_events = await get_events(limit=limit)
+        normalized_events = []
+        for item in upstream_events:
+            event = dict(item) if isinstance(item, dict) else {"upstream_event": item}
+            upstream_claim = (
+                event.get("blocked") is True
+                or event.get("status") in {"blocked", "contained", "quarantined"}
+                or event.get("action_taken") in {"blocked", "contained", "quarantined"}
+            )
+            event["containment_verified"] = False
+            if upstream_claim:
+                event["upstream_reported_blocked"] = True
+                event["blocked"] = False
+                event["status"] = "containment_unverified"
+                event["action_taken"] = "containment_unverified"
+            normalized_events.append(event)
+        return {
+            "events": normalized_events,
+            "source": "threatfade",
+            "containment_verified": False,
+        }
     except Exception:
         return {
             "events": _threat_events[-limit:],
