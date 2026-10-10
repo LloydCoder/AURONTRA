@@ -7,9 +7,9 @@ FDSE: 100% complete, validated by Engr Uzoma.
   - Identity Threat Scanner (18 credential patterns)
 
 What flows IN from FDSE:
-  - Playbook library → auto-seeds ResilientAI knowledge base
+  - Playbook library → auto-seeds Aurontra knowledge base
   - Credential scan results → creates security tickets
-  - ROI data → enriches ResilientAI's own ROI reports
+  - ROI data → enriches Aurontra's own ROI reports
 
 What flows OUT to FDSE:
   - Threat events → FDSE generates incident response playbooks
@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 async def pull_playbook_library() -> list[dict]:
     """
     Pull all incident response playbooks from FDSE.
-    Seeds ResilientAI's knowledge base with pre-written IT response guides.
+    Seeds Aurontra's knowledge base with pre-written IT response guides.
     """
     if not settings.FDSE_URL:
         return []
@@ -42,7 +42,7 @@ async def pull_playbook_library() -> list[dict]:
 
 async def seed_kb_from_fdse() -> dict:
     """
-    Pull FDSE playbooks and auto-seed the ResilientAI knowledge base.
+    Pull FDSE playbooks and auto-seed the Aurontra knowledge base.
     Called once on startup and weekly thereafter.
     Returns count of articles seeded.
     """
@@ -69,7 +69,7 @@ async def request_playbook_for_incident(
 ) -> dict:
     """
     Request a specific incident response playbook from FDSE.
-    Used when ResilientAI detects a threat and needs response guidance.
+    Used when Aurontra detects a threat and needs response guidance.
     """
     if not settings.FDSE_URL:
         return {"playbook": None, "source": "fdse_unavailable"}
@@ -89,7 +89,7 @@ async def request_playbook_for_incident(
 async def scan_credentials(target_domain: str) -> dict:
     """
     Use FDSE's identity threat scanner (18 credential patterns) on a domain.
-    High-severity findings auto-create security tickets in ResilientAI.
+    High-severity findings auto-create security tickets in Aurontra.
     """
     if not settings.FDSE_URL:
         return {"findings": [], "source": "fdse_unavailable"}

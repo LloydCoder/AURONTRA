@@ -1,11 +1,11 @@
 """
-AI Shield Bridge — security incidents → ResilientAI threat events.
+AI Shield Bridge — security incidents → Aurontra threat events.
 AI Shield: Sprint 1 complete, Parliament Ensemble (Claude+Grok+ThreatFade),
 MITRE ATLAS coverage, 136 tests.
 Deployed on port 8002 on AWS EC2 Stockholm.
 
 What flows IN from AI Shield:
-  - Security incidents detected → creates threat events in ResilientAI
+  - Security incidents detected → creates threat events in Aurontra
   - MITRE ATLAS findings → enriches threat classification
   - Parliament Ensemble verdicts → high-confidence blocking decisions
 
@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 async def receive_security_incident(incident: dict) -> dict:
     """
     Process a security incident from AI Shield.
-    Maps it to a ResilientAI threat event for blocking + SLA tracking.
+    Maps it to a Aurontra threat event for blocking + SLA tracking.
     """
     severity_map = {
         "critical": "critical",

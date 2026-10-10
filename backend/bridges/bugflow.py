@@ -4,11 +4,11 @@ BugFlow: 51 modules, 128 tests, Telegram alerts, ThreatFade C2 integrated.
 
 What flows IN from BugFlow:
   - change_detection.py results → surface changes = early warning signals
-  - Vulnerability findings → creates auto-tickets in ResilientAI
+  - Vulnerability findings → creates auto-tickets in Aurontra
   - C2 detection events → enriches ThreatFade signals
 
 What flows OUT to BugFlow:
-  - ResilientAI device list → BugFlow knows what to scan
+  - Aurontra device list → BugFlow knows what to scan
   - Threat events → BugFlow feeds its detection model
 """
 import httpx
@@ -41,7 +41,7 @@ async def get_surface_changes(target: str) -> dict:
 async def get_vulnerability_findings(target: str, severity: str = "high") -> list[dict]:
     """
     Pull vulnerability findings from BugFlow that warrant auto-ticketing.
-    High/critical findings become ResilientAI tickets automatically.
+    High/critical findings become Aurontra tickets automatically.
     """
     if not settings.BUGFLOW_URL:
         return []
@@ -61,7 +61,7 @@ async def get_vulnerability_findings(target: str, severity: str = "high") -> lis
 async def notify_threat_event(event: dict) -> bool:
     """
     Send a ThreatFade-detected event to BugFlow for its detection model.
-    Bidirectional: BugFlow feeds ResilientAI, ResilientAI feeds BugFlow.
+    Bidirectional: BugFlow feeds Aurontra, Aurontra feeds BugFlow.
     """
     if not settings.BUGFLOW_URL:
         return False
