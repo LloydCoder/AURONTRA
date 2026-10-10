@@ -27,7 +27,7 @@ Until secure endpoint execution and authorization are implemented and tested:
 
 ## Development and verification
 
-Backend CI uses Python 3.12 and pytest. The CI workflow is the source of truth for currently enforced checks. Security, persistence, frontend, integration, and deployment gates will be expanded as hardening proceeds.
+Backend CI uses Python 3.12 and pytest. The CI workflow is the source of truth for currently enforced checks. Security, persistence, frontend, integration, and deployment gates will be expanded as hardening proceeds. New tenant, API-key, audit, and webhook idempotency models are schema foundations only; no production migration or tenant-isolated data-plane release is claimed.
 
 ## Architecture and security principles
 

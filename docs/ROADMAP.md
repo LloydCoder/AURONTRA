@@ -50,3 +50,10 @@ Phases are sequential release gates. A phase is complete only when implementatio
 - A threat decision is not a verified containment event.
 - Control mapping is not compliance certification.
 - Estimated ROI is not measured savings.
+
+
+## Phase 2 — durable tenant and evidence foundation (in progress)
+
+- Added schema definitions for organizations, hashed API-key metadata, append-only ORM audit events, and provider/event idempotency records.
+- These model definitions are not yet a production migration and do not by themselves enable the business data plane.
+- Remaining phase gates: Alembic migration history, tenant foreign keys and repository adoption across all routes, transactional writes, PostgreSQL/RLS design, API-key verification/rotation/revocation, audit-chain concurrency tests, webhook replay tests, backup/restore validation, and a full cross-tenant isolation suite.
