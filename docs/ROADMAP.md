@@ -40,6 +40,7 @@ Phases are sequential release gates. A phase is complete only after implementati
 - Organization, API-key metadata, audit-event and webhook-idempotency models plus an Alembic bootstrap migration exist. These are not yet connected to route repositories.
 - Production startup no longer mutates schema with `create_all`; it requires the configured migration revision when the data plane is requested.
 - The production data plane remains closed by a code-level release gate.
+- The unreviewed legacy deployment archive has been removed; release artifacts must be built from reviewed source and must not be committed as deployment tarballs.
 
 ## Serial execution protocol
 

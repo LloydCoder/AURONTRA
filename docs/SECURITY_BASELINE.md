@@ -12,7 +12,7 @@ The 2026-10-09 repository audit and workflow logs identified:
 - Billing webhook verification accepted requests when the signing secret was missing.
 - Business data and histories were held in process memory.
 - The tracked frontend did not establish a reproducible, backend-connected Next.js application.
-- The public repository contains a deployment archive. Gitleaks 8.30.1, pinned and checksum-verified, scanned the working tree, nested archives to depth 3, and reachable Git history successfully on commit `acfb67a4aaf8559be864bb8235613c30162d40cc`. This is evidence that the configured scanner found no matching secrets, not a guarantee that every sensitive artifact or secret type is detectable. Functional/deployment-artifact review remains open.
+- The legacy `resilientai-DEPLOY-READY.tar.gz` deployment archive has been removed from the current branch because it was not suitable to trust as a release artifact. Its historical Git object remains in repository history and is covered by the archive-aware Gitleaks history scan. Gitleaks 8.30.1, pinned and checksum-verified, reported no matching secrets on commit `acfb67a4aaf8559be864bb8235613c30162d40cc`; that is not a guarantee that every sensitive artifact or secret type is detectable. Deployment should be built from reviewed source, not that archived bundle.
 
 ## Immediate safety controls now in code
 
@@ -48,5 +48,5 @@ Production release remains blocked until all of the following have evidence:
 - Tenant/API-key/audit/webhook models are schema foundations only. They do not establish tenant isolation by themselves.
 - JWT middleware and role policy are perimeter controls, not object-level authorization or a completed cross-tenant isolation implementation.
 - Content-Length checking does not by itself stop oversized chunked requests.
-- The archive has been secret-scanned, but its behavior and deployment suitability have not been certified.
+- The old deployment archive is removed from the working tree. Its historical blob remains in Git history; the workflow scans history for matching secrets but does not execute historical artifacts.
 - This document is not a substitute for independent penetration testing, production environment verification, or external compliance assessment.
