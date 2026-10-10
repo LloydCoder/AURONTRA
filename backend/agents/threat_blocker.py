@@ -193,24 +193,12 @@ async def block_threat(
     org_id: str,
     additional_context: dict | None = None,
 ) -> dict:
-    """
-    Execute threat blocking decision via ThreatFade bridge.
+    """Create a threat assessment; never claim enforcement without an adapter.
 
-    Flow:
-      1. Call ThreatFade /detect/scenario for oracle verdict
-      2. Score locally with analyse_signal()
-      3. Execute block if score >= threshold
-      4. Return full event record for SIEM export
-
-    Args:
-        event_id:  unique event identifier
-        src_ip:    source IP address of the suspicious traffic
-        scenario:  ThreatFade scenario name (e.g. 'c2_beacon')
-        org_id:    organisation ID for multi-tenant isolation
-        additional_context: optional extra signal data
-
-    Returns:
-        Standardised threat event dict
+    This compatibility function is decision-only. A score or ThreatFade verdict
+    is not evidence that a firewall, network control, or endpoint actually
+    blocked the traffic. Verified containment will be implemented by a separate
+    enforcement adapter with acknowledgements and postcondition checks.
     """
     timestamp = datetime.now(timezone.utc).isoformat()
     base = {
@@ -221,20 +209,26 @@ async def block_threat(
         "timestamp": timestamp,
         "blocked": False,
         "action_taken": "monitor",
+        "status": "analysis_pending",
+        "enforcement_verified": False,
         "threat_level": "info",
         "score": 0,
         "mitre_ttp": "T1071",
     }
 
-    # ── Call ThreatFade oracle ─────────────────────────────────────────
     try:
         tf_result = await threatfade_bridge.detect_scenario(scenario)
-    except Exception as e:
-        base["error"] = str(e)
-        base["action_taken"] = "monitor"
+    except Exception:
+        # Do not return internal bridge errors or misrepresent a failed
+        # dependency call as a successful detection/containment.
+        base.update({
+            "status": "analysis_unavailable",
+            "action_taken": "monitor",
+            "blocked": False,
+            "enforcement_verified": False,
+        })
         return base
 
-    # ── Local analysis on top of ThreatFade verdict ────────────────────
     signal = {
         "src_ip": src_ip,
         "protocol": tf_result.get("protocol", "HTTPS"),
@@ -243,8 +237,6 @@ async def block_threat(
         **(additional_context or {}),
     }
     assessment = analyse_signal(signal)
-
-    # Override with ThreatFade's own threat level if it's stronger
     tf_level = tf_result.get("threat_level", "info")
     level_rank = {"info": 0, "low": 1, "medium": 2, "high": 3, "critical": 4}
     final_level = (
@@ -252,33 +244,24 @@ async def block_threat(
         if level_rank.get(tf_level, 0) >= level_rank.get(assessment["threat_level"], 0)
         else assessment["threat_level"]
     )
-
-    ttp = map_mitre_ttp(
-        protocol=signal.get("protocol", ""),
-        entropy=signal.get("entropy", 0),
-        z_score=signal.get("z_score", 0),
-    )
-
-    # ── Block decision ─────────────────────────────────────────────────
-    should_block = (
-        assessment["auto_block"] or
-        final_level in ("high", "critical")
-    )
-
-    action = "blocked" if should_block else "monitor"
-
+    should_request_containment = assessment["auto_block"] or final_level in ("high", "critical")
     base.update({
-        "blocked": should_block,
-        "action_taken": action,
+        "blocked": False,
+        "action_taken": "containment_pending" if should_request_containment else "monitor",
+        "status": "containment_pending" if should_request_containment else "assessed",
+        "requested_action": "block" if should_request_containment else None,
+        "enforcement_verified": False,
         "threat_level": final_level,
         "score": assessment["score"],
-        "mitre_ttp": ttp,
+        "mitre_ttp": map_mitre_ttp(
+            protocol=signal.get("protocol", ""),
+            entropy=signal.get("entropy", 0),
+            z_score=signal.get("z_score", 0),
+        ),
         "reason": assessment["reason"],
         "threatfade_verdict": tf_result,
     })
-
     return base
-
 
 def export_siem(event: dict, fmt: str = "json") -> dict:
     """
