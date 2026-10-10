@@ -163,8 +163,7 @@ def upgrade():
 
 
 def downgrade():
-    # Non-destructive baseline downgrade: do not drop pre-existing tenant/business data.
-    # Use a reviewed backup-and-restore procedure for schema rollback in production.
-    for table in ("webhook_events", "audit_events", "api_keys", "organizations"):
-        if table in _tables():
-            op.drop_table(table)
+    raise RuntimeError(
+        "The bootstrap migration is intentionally irreversible because it may adopt "
+        "pre-existing tables. Use a reviewed backup-and-restore procedure for rollback."
+    )
