@@ -1,10 +1,11 @@
-"""ResilientAI — FastAPI entry point. Complete product."""
+"""Aurontra — FastAPI application entry point."""
 import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from core.config import settings
 from core.database import init_db
+import models  # noqa: F401 — register SQLAlchemy models before metadata creation
 from api.routes import (
     health, tickets, devices, resilience,
     automation, threats, billing, reports,
@@ -17,9 +18,9 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info(f"[ResilientAI] Starting {settings.APP_NAME} v{settings.VERSION}")
+    logger.info("Starting %s v%s", settings.APP_NAME, settings.VERSION)
     await init_db()
-    logger.info("[ResilientAI] Database initialised")
+    logger.info("Database initialised")
     yield
     logger.info("[ResilientAI] Shutting down")
 
@@ -27,7 +28,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.VERSION,
-    description="Proactive IT resilience + cyber defence as a service. Powered by ThreatFade.",
+    description="IT service operations, resilience analysis, and governed remediation orchestration.",
     lifespan=lifespan,
 )
 
@@ -35,8 +36,11 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=[
+        "Authorization", "Content-Type", "X-Request-ID",
+        "X-Tinlance-API-Version", "Idempotency-Key", "traceparent",
+    ],
 )
 
 # Core
