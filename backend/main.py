@@ -61,7 +61,8 @@ async def enforce_auth_and_data_plane(request: Request, call_next):
         return JSONResponse(status_code=503, content={"detail": "Test mode is forbidden in production.", "code": "PRODUCTION_TEST_MODE_FORBIDDEN"})
     if settings.ENVIRONMENT.lower() == "production" and settings.AUTH_MODE == "disabled":
         return JSONResponse(status_code=503, content={"detail": "Authentication cannot be disabled in production.", "code": "PRODUCTION_AUTH_REQUIRED"})
-    if settings.AUTH_MODE != "disabled":
+    signature_only = path == "/billing/webhook"
+    if settings.AUTH_MODE != "disabled" and not signature_only:
         if not (settings.JWT_JWKS_URL and settings.JWT_ISSUER and settings.JWT_AUDIENCE):
             return JSONResponse(status_code=503, content={"detail": "Business API unavailable: authentication provider is not configured.", "code": "AUTH_PROVIDER_NOT_CONFIGURED"})
         if settings.ENVIRONMENT.lower() == "production":

@@ -135,3 +135,71 @@ def test_production_rejects_http_identity_provider_endpoints(monkeypatch):
         response = client.get("/tickets/")
     assert response.status_code == 503
     assert response.json()["code"] == "AUTH_PROVIDER_CONFIG_INVALID"
+
+
+def test_jwt_verifier_accepts_valid_signature_and_required_claims(monkeypatch):
+    import jwt
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    from core import auth
+
+    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    class SigningKey:
+        key = private_key.public_key()
+    class FakeJwksClient:
+        def get_signing_key_from_jwt(self, token):
+            return SigningKey()
+
+    monkeypatch.setattr(auth, "_jwks_client", lambda: FakeJwksClient())
+    monkeypatch.setattr(settings, "JWT_JWKS_URL", "https://issuer.example/jwks.json")
+    monkeypatch.setattr(settings, "JWT_ISSUER", "https://issuer.example")
+    monkeypatch.setattr(settings, "JWT_AUDIENCE", "aurontra-api")
+    now = int(__import__("time").time())
+    token = jwt.encode(
+        {"sub": "user_123", "org_id": "org_123", "iss": "https://issuer.example",
+         "aud": "aurontra-api", "iat": now, "exp": now + 60},
+        private_key, algorithm="RS256", headers={"kid": "test-key"},
+    )
+    claims = auth.verify_bearer_token(token)
+    assert claims["sub"] == "user_123"
+    assert claims["org_id"] == "org_123"
+
+
+def test_jwt_verifier_rejects_wrong_signature(monkeypatch):
+    import jwt
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    from core import auth
+
+    trusted_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    attacker_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    class SigningKey:
+        key = trusted_key.public_key()
+    class FakeJwksClient:
+        def get_signing_key_from_jwt(self, token):
+            return SigningKey()
+
+    monkeypatch.setattr(auth, "_jwks_client", lambda: FakeJwksClient())
+    monkeypatch.setattr(settings, "JWT_JWKS_URL", "https://issuer.example/jwks.json")
+    monkeypatch.setattr(settings, "JWT_ISSUER", "https://issuer.example")
+    monkeypatch.setattr(settings, "JWT_AUDIENCE", "aurontra-api")
+    now = int(__import__("time").time())
+    token = jwt.encode(
+        {"sub": "user_123", "org_id": "org_123", "iss": "https://issuer.example",
+         "aud": "aurontra-api", "iat": now, "exp": now + 60},
+        attacker_key, algorithm="RS256", headers={"kid": "attacker-key"},
+    )
+    with pytest.raises(jwt.InvalidSignatureError):
+        auth.verify_bearer_token(token)
+
+
+def test_signed_webhook_is_not_required_to_present_user_bearer_token(monkeypatch):
+    monkeypatch.setattr(settings, "ENVIRONMENT", "development")
+    monkeypatch.setattr(settings, "AUTH_MODE", "required")
+    monkeypatch.setattr(settings, "JWT_JWKS_URL", "")
+    monkeypatch.setattr(settings, "JWT_ISSUER", "")
+    monkeypatch.setattr(settings, "JWT_AUDIENCE", "")
+    monkeypatch.setattr(settings, "DATA_PLANE_ENABLED", False)
+    monkeypatch.setattr(settings, "TEST_MODE", False)
+    with TestClient(app) as client:
+        response = client.post("/billing/webhook", content=b'{"meta":{}}', headers={"content-type": "application/json"})
+    assert response.status_code == 503
+    assert response.json()["code"] == "TENANT_DATA_PLANE_NOT_READY"

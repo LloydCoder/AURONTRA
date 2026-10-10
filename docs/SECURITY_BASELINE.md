@@ -22,7 +22,7 @@ The 2026-10-09 repository audit and workflow logs identified:
 4. Lemon Squeezy webhook signature verification fails closed when secret/signature is missing and verifies HMAC-SHA256 over the exact raw body.
 5. Public organization registration and checkout return 503 pending durable tenant lifecycle and provider-backed billing.
 6. ROI output labels caller-supplied calculations as illustrative models, not measured savings.
-7. Production business APIs require configured JWT/JWKS verification and a tenant claim; only `/health/live` is public.
+7. User-facing business APIs require configured JWT/JWKS verification, a tenant claim, and a recognized organization role; only `/health/live` is public. The Lemon Squeezy webhook uses raw-body HMAC as its authentication mechanism, but remains disabled behind the data-plane gate until durable event idempotency is implemented.
 8. The production business data plane remains closed until durable tenant isolation is implemented. `DATA_PLANE_ENABLED=true` alone cannot bypass the code-level gate.
 9. `ENVIRONMENT=production` rejects `AUTH_MODE=disabled` and `TEST_MODE=true`.
 10. Declared request bodies larger than `MAX_REQUEST_BODY_BYTES` (1 MiB default) are rejected. Production ingress must also cap chunked bodies and apply rate/concurrency limits.
