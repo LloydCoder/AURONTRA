@@ -55,23 +55,14 @@ class TestThreatsAPI:
         assert "mitre_ttp" in data
 
     @pytest.mark.asyncio
-    async def test_threats_block_endpoint_exists(self, client):
-        mock_result = {
-            "event_id": "evt-test-001",
-            "blocked": True,
-            "threat_level": "high",
-            "action_taken": "blocked",
-            "mitre_ttp": "T1071.001",
+    async def test_threats_block_endpoint_fails_closed_until_enforcement_exists(self, client):
+        r = await client.post("/threats/block", json={
             "src_ip": "185.220.101.47",
-        }
-        with patch("api.routes.threats.block_threat", new_callable=AsyncMock) as mock_block:
-            mock_block.return_value = mock_result
-            r = await client.post("/threats/block", json={
-                "src_ip": "185.220.101.47",
-                "scenario": "c2_beacon",
-                "org_id": "org-001",
-            })
-        assert r.status_code in (200, 201)
+            "scenario": "c2_beacon",
+            "org_id": "org-001",
+        })
+        assert r.status_code == 503
+        assert "containment is disabled" in r.json()["detail"]
 
     @pytest.mark.asyncio
     async def test_threats_events_endpoint_returns_list(self, client):
