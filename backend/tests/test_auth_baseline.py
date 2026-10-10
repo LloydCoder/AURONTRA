@@ -46,6 +46,7 @@ def test_liveness_is_public(monkeypatch):
 
 def test_production_cannot_disable_authentication(monkeypatch):
     monkeypatch.setattr(settings, "ENVIRONMENT", "production")
+    monkeypatch.setattr(settings, "TEST_MODE", False)
     monkeypatch.setattr(settings, "AUTH_MODE", "disabled")
     monkeypatch.setattr(settings, "DATA_PLANE_ENABLED", True)
     with TestClient(app) as client:
