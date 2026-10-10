@@ -43,3 +43,43 @@ async def test_public_threat_containment_is_disabled():
     with pytest.raises(HTTPException) as exc:
         await block_threat_endpoint(BlockRequest(src_ip="192.0.2.10", scenario="test", org_id="test-org"))
     assert exc.value.status_code == 503
+
+
+@pytest.mark.asyncio
+async def test_disk_cleanup_is_recommendation_only():
+    from resilience.playbooks.disk_full import DiskFullPlaybook
+    result = await DiskFullPlaybook().execute({"device_id": "test-device", "disk_percent": 95})
+    assert result["status"] == "simulated"
+    assert result["bytes_freed"] == 0
+    assert result["enforcement_verified"] is False
+
+
+@pytest.mark.asyncio
+async def test_service_restart_does_not_execute_on_api_host():
+    from resilience.playbooks.service_restart import ServiceRestartPlaybook
+    result = await ServiceRestartPlaybook().execute({"device_id": "test-device", "service_name": "nginx"})
+    assert result["status"] == "simulated"
+    assert result["restart_successful"] is False
+    assert result["enforcement_verified"] is False
+
+
+@pytest.mark.asyncio
+async def test_certificate_playbook_does_not_probe_or_renew_unverified_domain():
+    from resilience.playbooks.cert_expiry import CertExpiryPlaybook
+    result = await CertExpiryPlaybook().execute({
+        "device_id": "test-device",
+        "domain": "example.invalid",
+        "days_until_expiry": 1,
+    })
+    assert result["status"] == "simulated"
+    assert result["renewal_triggered"] is False
+    assert result["days_until_expiry_source"] == "caller_supplied_unverified"
+
+
+@pytest.mark.asyncio
+async def test_high_cpu_playbook_does_not_change_process_priority():
+    from resilience.playbooks.high_cpu import HighCPUPlaybook
+    result = await HighCPUPlaybook().execute({"device_id": "test-device", "cpu_percent": 99})
+    assert result["status"] == "simulated"
+    assert result["processes_niced"] == 0
+    assert result["enforcement_verified"] is False
