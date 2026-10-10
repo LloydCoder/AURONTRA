@@ -96,3 +96,42 @@ async def test_production_closed_mode_does_not_mutate_database_schema(monkeypatc
         pytest.fail("production closed mode must not call metadata.create_all")
     monkeypatch.setattr(Base.metadata, "create_all", forbidden_create_all)
     await init_db()
+
+
+def test_role_policy_allows_viewer_read_but_denies_mutation():
+    from core.auth import AuthorizationDenied, authorize_claims
+    claims = {"sub": "user_1", "org_id": "org_1", "org_role": "org:viewer"}
+    assert authorize_claims(claims, "GET", "/tickets/")["tenant_id"] == "org_1"
+    with pytest.raises(AuthorizationDenied):
+        authorize_claims(claims, "POST", "/tickets/ingest")
+
+
+def test_role_policy_restricts_privileged_operations_to_admin():
+    from core.auth import AuthorizationDenied, authorize_claims
+    member = {"sub": "user_2", "org_id": "org_1", "org_role": "org:member"}
+    with pytest.raises(AuthorizationDenied):
+        authorize_claims(member, "POST", "/automation/trigger")
+    admin = {"sub": "user_3", "org_id": "org_1", "org_role": "org:admin"}
+    assert authorize_claims(admin, "POST", "/automation/trigger")["role"] == "org:admin"
+
+
+def test_role_policy_denies_missing_or_unknown_role():
+    from core.auth import AuthorizationDenied, authorize_claims
+    with pytest.raises(AuthorizationDenied):
+        authorize_claims({"sub": "user_1", "org_id": "org_1"}, "GET", "/tickets/")
+    with pytest.raises(AuthorizationDenied):
+        authorize_claims({"sub": "user_1", "org_id": "org_1", "org_role": "superuser"}, "GET", "/tickets/")
+
+
+def test_production_rejects_http_identity_provider_endpoints(monkeypatch):
+    monkeypatch.setattr(settings, "ENVIRONMENT", "production")
+    monkeypatch.setattr(settings, "TEST_MODE", False)
+    monkeypatch.setattr(settings, "AUTH_MODE", "required")
+    monkeypatch.setattr(settings, "JWT_JWKS_URL", "http://issuer.example/jwks.json")
+    monkeypatch.setattr(settings, "JWT_ISSUER", "http://issuer.example")
+    monkeypatch.setattr(settings, "JWT_AUDIENCE", "aurontra-api")
+    monkeypatch.setattr(settings, "DATA_PLANE_ENABLED", False)
+    with TestClient(app) as client:
+        response = client.get("/tickets/")
+    assert response.status_code == 503
+    assert response.json()["code"] == "AUTH_PROVIDER_CONFIG_INVALID"

@@ -2,6 +2,7 @@
 from __future__ import annotations
 from functools import lru_cache
 from typing import Any
+from urllib.parse import urlparse
 import jwt
 from jwt import PyJWKClient
 from jwt.exceptions import PyJWKClientConnectionError, PyJWTError
@@ -37,3 +38,43 @@ def verify_bearer_token(token: str) -> dict[str, Any]:
     if not isinstance(claims, dict):
         raise ValueError("JWT payload must be an object")
     return claims
+
+
+class AuthorizationDenied(PermissionError):
+    """The verified identity lacks a required tenant role."""
+
+
+_ROLE_RANK = {
+    "viewer": 1,
+    "org:viewer": 1,
+    "member": 2,
+    "org:member": 2,
+    "admin": 3,
+    "org:admin": 3,
+    "owner": 3,
+    "org:owner": 3,
+}
+
+
+def authorize_claims(claims: dict[str, Any], method: str, path: str) -> dict[str, str]:
+    """Validate tenant identity and apply a conservative role policy to an API operation."""
+    tenant_id = claims.get("org_id") or claims.get("tenant_id")
+    subject = claims.get("sub")
+    role = claims.get("org_role") or claims.get("role")
+    if not isinstance(tenant_id, str) or not tenant_id or not isinstance(subject, str) or not subject:
+        raise AuthorizationDenied("Token must identify a subject and organization")
+    if not isinstance(role, str) or role not in _ROLE_RANK:
+        raise AuthorizationDenied("Token must contain a recognized organization role")
+
+    normalized_method = method.upper()
+    admin_only = (
+        path.startswith("/automation/trigger")
+        or path.startswith("/threats/block")
+        or path.startswith("/billing/checkout")
+        or path.startswith("/onboarding/register")
+        or normalized_method == "DELETE"
+    )
+    minimum_rank = 3 if admin_only else (2 if normalized_method in {"POST", "PUT", "PATCH"} else 1)
+    if _ROLE_RANK[role] < minimum_rank:
+        raise AuthorizationDenied("Organization role is insufficient for this operation")
+    return {"tenant_id": tenant_id, "subject": subject, "role": role}

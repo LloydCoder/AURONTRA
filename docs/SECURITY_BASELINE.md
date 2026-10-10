@@ -46,7 +46,7 @@ Production release remains blocked until all of the following have evidence:
 
 - The Alembic bootstrap creates missing tables but does not alter pre-existing tables. It is intentionally irreversible; use a reviewed backup-and-restore process for rollback.
 - Tenant/API-key/audit/webhook models are schema foundations only. They do not establish tenant isolation by themselves.
-- JWT middleware is a perimeter control, not object-level authorization.
+- JWT middleware and role policy are perimeter controls, not object-level authorization or a completed cross-tenant isolation implementation.
 - Content-Length checking does not by itself stop oversized chunked requests.
 - The archive has been secret-scanned, but its behavior and deployment suitability have not been certified.
 - This document is not a substitute for independent penetration testing, production environment verification, or external compliance assessment.

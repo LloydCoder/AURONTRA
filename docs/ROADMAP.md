@@ -36,7 +36,7 @@ Phases are sequential release gates. A phase is complete only after implementati
 - Unsafe local playbook execution is disabled and playbooks are recommendation-only.
 - Threat containment is disabled until a real enforcement adapter and independent verification exist.
 - Billing webhook signatures fail closed; checkout and onboarding remain disabled.
-- JWT/JWKS perimeter verification has been added, but no route-level RBAC or durable tenant isolation is claimed.
+- JWT/JWKS verification and a conservative role policy have been added; no object-level authorization or durable tenant isolation is claimed.
 - Organization, API-key metadata, audit-event and webhook-idempotency models plus an Alembic bootstrap migration exist. These are not yet connected to route repositories.
 - Production startup no longer mutates schema with `create_all`; it requires the configured migration revision when the data plane is requested.
 - The production data plane remains closed by a code-level release gate.
