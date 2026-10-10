@@ -135,8 +135,10 @@ async def ingest_via_webhook(raw: dict, request: Request, db: AsyncSession = Dep
         parsed = parse_webhook(raw)
     except (ValueError, KeyError) as exc:
         raise HTTPException(status_code=422, detail="Invalid ticket webhook payload") from exc
+    parsed["provider_source"] = parsed.get("source", "webhook")
+    parsed["source"] = "webhook"
     ticket = await _create_ticket(parsed, request, db)
-    return {"ticket": _serialize(ticket), "source": parsed.get("source", "webhook")}
+    return {"ticket": _serialize(ticket), "source": parsed["provider_source"]}
 
 
 @router.post("/{ticket_id}/resolve")
@@ -157,14 +159,18 @@ async def resolve_ticket_endpoint(ticket_id: str, request: Request, db: AsyncSes
     ticket.ai_model_used = result.get("model_used")
     confidence = result.get("confidence")
     ticket.ai_confidence = str(confidence) if confidence is not None else None
-    ticket.ai_resolved = bool(result.get("resolved")) and not bool(result.get("escalated"))
-    if result.get("escalated"):
-        ticket.status = TicketStatus.ESCALATED
-    elif ticket.ai_resolved:
-        ticket.status = TicketStatus.RESOLVED
-        ticket.resolved_at = datetime.now(timezone.utc)
+    # A generated answer is not evidence that the underlying IT issue was fixed.
+    ticket.ai_resolved = False
+    ticket.status = TicketStatus.ESCALATED if result.get("escalated") else TicketStatus.OPEN
+    ticket.resolved_at = None
     await db.flush()
-    return {**result, "ticket": _serialize(ticket)}
+    return {
+        **result,
+        "resolved": False,
+        "resolution_claimed_by_model": bool(result.get("resolved")),
+        "outcome_verified": False,
+        "ticket": _serialize(ticket),
+    }
 
 
 @router.get("/{ticket_id}")
