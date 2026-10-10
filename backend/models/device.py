@@ -1,13 +1,14 @@
-"""Device model — represents a monitored endpoint or service."""
-from sqlalchemy import Column, String, Integer, Boolean, DateTime, func
+"""Device model — monitored endpoint with a tenant-owned identity."""
+from sqlalchemy import Column, String, Integer, Boolean, DateTime, ForeignKey, UniqueConstraint, func
 from core.database import Base
 
 
 class Device(Base):
     __tablename__ = "devices"
+    __table_args__ = (UniqueConstraint("org_id", "id", name="uq_devices_org_id_id"),)
 
     id = Column(String, primary_key=True)
-    org_id = Column(String, nullable=False, index=True)
+    org_id = Column(String, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
     name = Column(String, nullable=False)
     ip_address = Column(String, nullable=True)
     os_type = Column(String, nullable=True)

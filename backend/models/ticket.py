@@ -1,6 +1,6 @@
-"""Ticket model — IT support ticket with AI resolution tracking."""
+"""Tenant-owned IT support ticket model."""
 import enum
-from sqlalchemy import Column, String, Boolean, DateTime, Text, Enum, func
+from sqlalchemy import Column, String, Boolean, DateTime, Text, Enum, ForeignKey, ForeignKeyConstraint, func
 from core.database import Base
 
 
@@ -28,9 +28,15 @@ class TicketSource(str, enum.Enum):
 
 class Ticket(Base):
     __tablename__ = "tickets"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["org_id", "device_id"], ["devices.org_id", "devices.id"],
+            name="fk_tickets_org_device", ondelete="RESTRICT",
+        ),
+    )
 
     id = Column(String, primary_key=True)
-    org_id = Column(String, nullable=False, index=True)
+    org_id = Column(String, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
     title = Column(String, nullable=False)
     description = Column(Text, nullable=False)
     reporter_email = Column(String, nullable=False)
