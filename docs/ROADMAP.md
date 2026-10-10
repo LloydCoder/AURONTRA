@@ -6,11 +6,11 @@ Phases are sequential release gates. A phase is complete only after implementati
 
 | Phase | Scope | Acceptance evidence | Status |
 |---|---|---|---|
-| 01 | Forensic baseline, requirements and supply-chain inventory | Immutable baseline SHA, archive/history scan, risk register | In progress |
-| 02 | Immediate containment and safe defaults | Negative tests for unsafe public actions; fail-closed webhook; audit | In progress |
-| 03 | Authentication and tenant/resource authorization | JWT verification, RBAC, positive/negative cross-tenant tests | In progress — perimeter only |
-| 04 | Threat model and security design | Threat register, mitigations, test mapping | Not started |
-| 05 | Durable persistence and migrations | Alembic migration, tenant-scoped repositories, transaction/backup tests | In progress — schema foundation only |
+| 01 | Forensic baseline, requirements and supply-chain inventory | Immutable baseline SHA, archive/history scan, risk register | Complete — legacy archive removed; history scan green |
+| 02 | Immediate containment and safe defaults | Negative tests for unsafe public actions; fail-closed webhook; audit | Complete — CI green |
+| 03 | Authentication and role-based API perimeter | JWT signature/issuer/audience checks, HTTPS identity config, role-policy tests | Complete — business data plane remains closed |
+| 04 | Threat model and security design | STRIDE/trust-boundary model, abuse cases, mitigation/evidence mapping | In progress |
+| 05 | Durable tenant persistence and resource-level authorization | Migrations, tenant-scoped repositories, PostgreSQL RLS, cross-tenant tests, transaction/backup tests | Schema scaffolding exists; implementation gated on Phase 04 audit |
 | 06 | Durable jobs and event processing | Retry, idempotency, replay, cancellation and dead-letter tests | Not started |
 | 07 | Organization/device lifecycle | Enrollment, revocation, ownership and offboarding tests | Not started |
 | 08 | Authenticated endpoint agent | Device identity, signed requests, replay protection, versioning tests | Not started |
@@ -33,14 +33,14 @@ Phases are sequential release gates. A phase is complete only after implementati
 
 ## Current implementation evidence
 
-- Unsafe local playbook execution is disabled and playbooks are recommendation-only.
+- Public playbook execution is disabled; local playbooks are recommendation-only.
 - Threat containment is disabled until a real enforcement adapter and independent verification exist.
 - Billing webhook signatures fail closed; checkout and onboarding remain disabled.
-- JWT/JWKS verification and a conservative role policy have been added; no object-level authorization or durable tenant isolation is claimed.
-- Organization, API-key metadata, audit-event and webhook-idempotency models plus an Alembic bootstrap migration exist. These are not yet connected to route repositories.
+- JWT/JWKS verification and conservative role policy are implemented and tested. Object-level authorization and tenant isolation are not claimed.
+- Organization, API-key metadata, audit-event and webhook-idempotency models plus an Alembic bootstrap migration exist. They are not yet connected to all route repositories.
 - Production startup no longer mutates schema with `create_all`; it requires the configured migration revision when the data plane is requested.
 - The production data plane remains closed by a code-level release gate.
-- The unreviewed legacy deployment archive has been removed; release artifacts must be built from reviewed source and must not be committed as deployment tarballs.
+- The old deployment archive is removed from the working tree. The security workflow rejects future tracked tarballs and scans historical blobs as data only.
 
 ## Serial execution protocol
 

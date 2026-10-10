@@ -28,6 +28,10 @@ The 2026-10-09 repository audit and workflow logs identified:
 10. Declared request bodies larger than `MAX_REQUEST_BODY_BYTES` (1 MiB default) are rejected. Production ingress must also cap chunked bodies and apply rate/concurrency limits.
 11. Production startup no longer calls SQLAlchemy `create_all`; when the data plane is requested, the database must have exactly the configured Alembic revision.
 
+## CI archive-handling incident and remediation
+
+During development of the archive inventory workflow, an unsafe shell command substitution attempted to execute some file paths discovered inside the legacy archive on an ephemeral GitHub-hosted runner. The workflow revision was replaced, the archive was removed from the current branch, and the current security workflow does not extract or execute archives; it rejects tracked `.tar.gz` files and scans the current tree and reachable history as data. The affected job had `contents: read` permissions and no application/deployment secrets were configured; no production deployment was run. The job was isolated to a GitHub-hosted runner. Because an independent outbound-network audit of that runner was not available, this is recorded as a workflow security incident rather than asserting that no external communication occurred.
+
 ## Release gates
 
 Production release remains blocked until all of the following have evidence:
