@@ -57,3 +57,11 @@ Phases are sequential release gates. A phase is complete only when implementatio
 - Added schema definitions for organizations, hashed API-key metadata, append-only ORM audit events, and provider/event idempotency records.
 - These model definitions are not yet a production migration and do not by themselves enable the business data plane.
 - Remaining phase gates: Alembic migration history, tenant foreign keys and repository adoption across all routes, transactional writes, PostgreSQL/RLS design, API-key verification/rotation/revocation, audit-chain concurrency tests, webhook replay tests, backup/restore validation, and a full cross-tenant isolation suite.
+
+
+## Phase 2 — durable tenant and evidence foundation (in progress)
+
+- Added versioned Alembic bootstrap migration for existing business tables plus organization, API-key metadata, audit-event, and webhook idempotency tables.
+- The migration creates missing tables but intentionally does not mutate pre-existing tables; an existing database requires a backup and schema-drift review before adopting it.
+- The production business data plane remains closed. Models/migrations do not establish tenant isolation until every route uses durable repositories with organization-scoped queries and cross-tenant tests.
+- Remaining phase gates: durable repository adoption, tenant foreign keys for every business record, hashed/rotatable API key lifecycle, transactional audit writes and concurrent chain tests, webhook signature/replay/idempotency processing, PostgreSQL/RLS design, backup/restore validation, and cross-tenant isolation suite.

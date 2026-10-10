@@ -37,6 +37,13 @@ jobs:
       - name: Validate dependency environment
         run: python -m pip check
 
+      - name: Validate Alembic migration on a clean SQLite database
+        env:
+          DATABASE_URL: sqlite+aiosqlite:///./migration_test.db
+        run: |
+          alembic upgrade head
+          alembic current
+
       - name: Compile backend
         run: python -m compileall -q .
 

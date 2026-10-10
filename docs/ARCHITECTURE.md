@@ -52,3 +52,8 @@ Aurontra's production default requires a configured JWT verifier and keeps the b
 ## Resource consumption
 
 The application rejects oversized declared request bodies before routing. The production reverse proxy/API gateway must also enforce maximum streamed body size, per-tenant rate limits, concurrency budgets, and upstream timeouts; these controls are not yet certified as deployed.
+
+
+## Database migration status
+
+The repository now has an Alembic environment and a versioned bootstrap migration for the current schema plus tenant/API-key/audit/webhook foundations. The migration is intentionally non-destructive for tables that already exist; it does not claim to reconcile an existing production database automatically. Before production adoption, back up the database, compare actual schema to the migration/model definitions, and run a reviewed forward migration. Production startup must not use `create_all` as a substitute for migrations.

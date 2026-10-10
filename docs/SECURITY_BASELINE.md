@@ -67,3 +67,11 @@ This document is not a substitute for an independent penetration test, external 
 The API perimeter rejects request bodies whose declared `Content-Length` exceeds `MAX_REQUEST_BODY_BYTES` (default 1 MiB). Production ingress must enforce the same or stricter body-size limit for chunked/streamed requests and apply rate/concurrency limits at the gateway. The application-level content-length check alone is not a complete DoS defense.
 
 - `TEST_MODE=true` is permitted only in non-production environments and is explicitly set by CI to exercise legacy route behavior. Production requests are rejected if test mode is enabled.
+
+
+## Schema migration gate
+
+- Alembic bootstrap migration: `0001_tenant_security_foundation`.
+- CI must run `alembic upgrade head` against a clean disposable database.
+- Existing databases are not automatically altered by this bootstrap; back up and reconcile schema drift before applying it.
+- The current startup still calls SQLAlchemy `create_all` for compatibility. Removing production schema mutation and enforcing migrations is a remaining release blocker.
