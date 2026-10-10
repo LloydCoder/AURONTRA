@@ -53,38 +53,51 @@ jobs:
           retention-days: 14
 
   deployment-preflight:
-    name: Deployment credential preflight
+    name: Deployment configuration preflight
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     outputs:
-      ssh_key_available: ${{ steps.check.outputs.ssh_key_available }}
+      deployment_ready: ${{ steps.check.outputs.deployment_ready }}
     env:
       EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+      EC2_HOST: ${{ vars.EC2_HOST }}
+      EC2_SSH_HOST_FINGERPRINT: ${{ secrets.EC2_SSH_HOST_FINGERPRINT }}
+      EC2_APP_DIR: ${{ vars.EC2_APP_DIR }}
+      EC2_SERVICE_NAME: ${{ vars.EC2_SERVICE_NAME }}
     steps:
-      - name: Check required deployment credential without exposing it
+      - name: Validate required deployment configuration without exposing secrets
         id: check
         shell: bash
         run: |
-          if [[ -n "${EC2_SSH_KEY}" ]]; then
-            echo "ssh_key_available=true" >> "$GITHUB_OUTPUT"
-            echo "Deployment credential is configured." >> "$GITHUB_STEP_SUMMARY"
+          missing=()
+          [[ -n "${EC2_SSH_KEY}" ]] || missing+=("secret EC2_SSH_KEY")
+          [[ -n "${EC2_HOST}" ]] || missing+=("variable EC2_HOST")
+          [[ -n "${EC2_SSH_HOST_FINGERPRINT}" ]] || missing+=("secret EC2_SSH_HOST_FINGERPRINT")
+          [[ -n "${EC2_APP_DIR}" ]] || missing+=("variable EC2_APP_DIR")
+          [[ -n "${EC2_SERVICE_NAME}" ]] || missing+=("variable EC2_SERVICE_NAME")
+
+          if (( ${#missing[@]} == 0 )); then
+            echo "deployment_ready=true" >> "$GITHUB_OUTPUT"
+            echo "All required deployment configuration is present." >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "ssh_key_available=false" >> "$GITHUB_OUTPUT"
+            echo "deployment_ready=false" >> "$GITHUB_OUTPUT"
             {
               echo "## Deployment not attempted"
               echo ""
-              echo "The required EC2_SSH_KEY GitHub Actions secret is missing or empty."
-              echo "Configure the credential in repository/environment settings, then rerun the deployment workflow."
-              echo "This workflow run does not constitute a successful production deployment."
+              echo "Missing required configuration:"
+              for item in "${missing[@]}"; do echo "- $item"; done
+              echo ""
+              echo "Configure these repository/environment values, then rerun the deployment workflow."
+              echo "A skipped deployment is not a successful production deployment."
             } >> "$GITHUB_STEP_SUMMARY"
-            echo "::warning::EC2_SSH_KEY is missing; deployment will be skipped rather than falsely reported as successful."
+            echo "::warning::Deployment skipped because required host, credential, fingerprint, or service configuration is missing."
           fi
 
   deploy:
-    name: Deploy to EC2 Stockholm
+    name: Deploy to configured EC2 host
     needs: [test, deployment-preflight]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && needs.test.result == 'success' && needs.deployment-preflight.outputs.ssh_key_available == 'true'
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && needs.test.result == 'success' && needs.deployment-preflight.outputs.deployment_ready == 'true'
     environment: production
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -101,10 +114,11 @@ jobs:
           script_stop: true
           script: |
             set -euo pipefail
-            APP_DIR="/opt/tinlance/aurontra"
-            SERVICE_NAME="aurontra"
+            APP_DIR="${{ vars.EC2_APP_DIR }}"
+            SERVICE_NAME="${{ vars.EC2_SERVICE_NAME }}"
 
             test -d "$APP_DIR/.git"
+            test -x "$APP_DIR/.venv/bin/python"
             cd "$APP_DIR"
             git fetch origin main
             git checkout --detach origin/main
