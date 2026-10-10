@@ -55,35 +55,29 @@ class TestThreatsAPI:
         assert "mitre_ttp" in data
 
     @pytest.mark.asyncio
-    async def test_threats_block_endpoint_exists(self, client):
-        mock_result = {
-            "event_id": "evt-test-001",
-            "blocked": True,
-            "threat_level": "high",
-            "action_taken": "blocked",
-            "mitre_ttp": "T1071.001",
+    async def test_threats_block_endpoint_fails_closed_until_enforcement_exists(self, client):
+        r = await client.post("/threats/block", json={
             "src_ip": "185.220.101.47",
-        }
-        with patch("api.routes.threats.block_threat", new_callable=AsyncMock) as mock_block:
-            mock_block.return_value = mock_result
-            r = await client.post("/threats/block", json={
-                "src_ip": "185.220.101.47",
-                "scenario": "c2_beacon",
-                "org_id": "org-001",
-            })
-        assert r.status_code in (200, 201)
+            "scenario": "c2_beacon",
+            "org_id": "org-001",
+        })
+        assert r.status_code == 503
+        assert "containment is disabled" in r.json()["detail"]
 
     @pytest.mark.asyncio
     async def test_threats_events_endpoint_returns_list(self, client):
         with patch("api.routes.threats.get_events", new_callable=AsyncMock) as mock_events:
             mock_events.return_value = [
-                {"event": "c2_detected", "ip": "1.2.3.4"},
+                {"event": "c2_detected", "ip": "192.0.2.10", "blocked": True, "action_taken": "blocked"},
                 {"event": "ticket_resolved", "id": "tkt-001"},
             ]
             r = await client.get("/threats/events")
         assert r.status_code == 200
         data = r.json()
         assert "events" in data
+        assert data["events"][0]["upstream_reported_blocked"] is True
+        assert data["events"][0]["blocked"] is False
+        assert data["events"][0]["containment_verified"] is False
 
     @pytest.mark.asyncio
     async def test_threats_siem_export_endpoint(self, client):
@@ -93,12 +87,15 @@ class TestThreatsAPI:
             "threat_level": "critical",
             "mitre_ttp": "T1071.001",
             "blocked": True,
+            "action_taken": "blocked",
             "timestamp": "2026-06-20T12:00:00Z",
             "format": "json",
         })
         assert r.status_code in (200, 201)
         data = r.json()
         assert "format" in data
+        assert data["payload"]["blocked"] is False
+        assert data["payload"]["containment_verified"] is False
 
     @pytest.mark.asyncio
     async def test_threats_siem_export_splunk(self, client):

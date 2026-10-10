@@ -1,5 +1,5 @@
-"""AutomationRule model — defines self-healing trigger conditions."""
-from sqlalchemy import Column, String, Boolean, Float, DateTime, func
+"""Tenant-owned automation rule model. Execution remains governed elsewhere."""
+from sqlalchemy import Column, String, Boolean, Float, DateTime, ForeignKey, func
 from core.database import Base
 
 
@@ -7,7 +7,7 @@ class AutomationRule(Base):
     __tablename__ = "automation_rules"
 
     id = Column(String, primary_key=True)
-    org_id = Column(String, nullable=False, index=True)
+    org_id = Column(String, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
     name = Column(String, nullable=False)
     trigger_metric = Column(String, nullable=False)
     trigger_threshold = Column(Float, nullable=False)

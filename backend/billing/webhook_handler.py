@@ -1,17 +1,10 @@
 """
 LemonSqueezy webhook handler.
-Processes subscription lifecycle events from store 247127.
-
-Events handled:
-  subscription_created        → activate org subscription
-  subscription_updated        → sync plan/status changes
-  subscription_payment_success → record payment, extend access
-  subscription_cancelled      → start grace period
-  order_created               → one-time payment confirmation
+Webhook authenticity is mandatory. Missing configuration is a rejection,
+not a development-mode bypass.
 """
 import hashlib
 import hmac
-import json
 import logging
 from datetime import datetime, timezone
 from core.config import settings
@@ -20,27 +13,20 @@ logger = logging.getLogger(__name__)
 
 
 def verify_webhook_signature(body: bytes, signature: str) -> bool:
-    """
-    Verify LemonSqueezy webhook HMAC-SHA256 signature.
-    Signature is in X-Signature header.
-    """
-    if not settings.LEMONSQUEEZY_WEBHOOK_SECRET:
-        logger.warning("[billing] No webhook secret configured — skipping signature check")
-        return True  # Allow in dev mode
+    """Verify X-Signature HMAC-SHA256 over the exact raw request body."""
+    secret = settings.LEMONSQUEEZY_WEBHOOK_SECRET
+    if not secret or not signature:
+        logger.error("[billing] Webhook rejected: signature verification is not configured")
+        return False
 
-    expected = hmac.new(
-        settings.LEMONSQUEEZY_WEBHOOK_SECRET.encode(),
-        body,
-        hashlib.sha256,
-    ).hexdigest()
-
+    expected = hmac.new(secret.encode("utf-8"), body, hashlib.sha256).hexdigest()
     return hmac.compare_digest(expected, signature)
 
 
 async def handle_subscription_created(data: dict) -> dict:
-    """Activate subscription on new signup."""
+    """Record the verified subscription-created event."""
     attrs = data.get("attributes", {})
-    org_context = {
+    context = {
         "event": "subscription_created",
         "ls_subscription_id": data.get("id"),
         "ls_customer_id": attrs.get("customer_id"),
@@ -53,12 +39,12 @@ async def handle_subscription_created(data: dict) -> dict:
         "update_payment_url": attrs.get("urls", {}).get("update_payment_method"),
         "processed_at": datetime.now(timezone.utc).isoformat(),
     }
-    logger.info(f"[billing] Subscription created: {org_context['user_email']} → {org_context['product_name']}")
-    return {"action": "subscription_activated", **org_context}
+    logger.info("[billing] Subscription created: subscription_id=%s", context["ls_subscription_id"])
+    return {"action": "subscription_activated", **context}
 
 
 async def handle_subscription_updated(data: dict) -> dict:
-    """Sync subscription changes — plan upgrades, cancellations, etc."""
+    """Record subscription status changes."""
     attrs = data.get("attributes", {})
     return {
         "event": "subscription_updated",
@@ -72,7 +58,7 @@ async def handle_subscription_updated(data: dict) -> dict:
 
 
 async def handle_payment_success(data: dict) -> dict:
-    """Record successful payment and extend billing period."""
+    """Record a verified payment-success event."""
     attrs = data.get("attributes", {})
     return {
         "event": "payment_success",
@@ -84,25 +70,15 @@ async def handle_payment_success(data: dict) -> dict:
 
 
 async def process_webhook(event_name: str, data: dict) -> dict:
-    """
-    Route a LemonSqueezy webhook event to the appropriate handler.
-
-    Args:
-        event_name: from meta.event_name in webhook payload
-        data: the data object from the webhook
-
-    Returns:
-        Processing result dict
-    """
+    """Route a verified provider event to its handler."""
     handlers = {
-        "subscription_created":         handle_subscription_created,
-        "subscription_updated":         handle_subscription_updated,
+        "subscription_created": handle_subscription_created,
+        "subscription_updated": handle_subscription_updated,
         "subscription_payment_success": handle_payment_success,
     }
-
     handler = handlers.get(event_name)
     if handler:
         return await handler(data)
 
-    logger.info(f"[billing] Unhandled event: {event_name} — logged only")
+    logger.info("[billing] Unhandled verified event: %s", event_name)
     return {"event": event_name, "action": "logged", "data_id": data.get("id")}

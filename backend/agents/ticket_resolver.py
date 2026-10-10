@@ -125,7 +125,7 @@ def build_resolution_prompt(
         "unknown": "Acknowledge the issue and gather more information.",
     }.get(category, "Provide helpful IT support guidance.")
 
-    return f"""You are ResilientAI, an expert IT support agent resolving a {category} ticket.
+    return f"""You are Aurontra, an expert IT support agent resolving a {category} ticket.
 
 TICKET DETAILS:
 Title: {title}

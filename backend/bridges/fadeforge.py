@@ -6,7 +6,7 @@ IP intentionally separated from Tinlance.
 
 What flows IN from FadeForge:
   - Adversary profiles → enrich ThreatFade's C2 detection model
-  - Real malware Z-scores → calibrate ResilientAI anomaly thresholds
+  - Real malware Z-scores → calibrate Aurontra anomaly thresholds
   - Pen test findings → auto-create vulnerability tickets
 
 What flows OUT to FadeForge:
@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 async def get_adversary_profiles(limit: int = 10) -> list[dict]:
     """
     Pull adversary profiles from FadeForge.
-    Used to calibrate ResilientAI's anomaly detection thresholds.
+    Used to calibrate Aurontra's anomaly detection thresholds.
     Each profile contains real malware Z-scores and entropy signatures.
     """
     if not settings.FADEFORGE_URL:
@@ -45,7 +45,7 @@ async def get_adversary_profiles(limit: int = 10) -> list[dict]:
 async def calibrate_thresholds() -> dict:
     """
     Use FadeForge's real malware Z-score database to calibrate
-    ResilientAI's Isolation Forest and threat scoring thresholds.
+    Aurontra's Isolation Forest and threat scoring thresholds.
     Called weekly to keep detection current.
     """
     profiles = await get_adversary_profiles(limit=50)
@@ -82,7 +82,7 @@ async def send_blocked_signature(
 ) -> bool:
     """
     Send a blocked C2 signature back to FadeForge's red team playbook library.
-    Bidirectional: FadeForge trains ResilientAI, ResilientAI feeds FadeForge.
+    Bidirectional: FadeForge trains Aurontra, Aurontra feeds FadeForge.
     """
     if not settings.FADEFORGE_URL:
         return False

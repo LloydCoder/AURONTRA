@@ -62,7 +62,7 @@ def format_slack_message(
                         "elements": [
                             {
                                 "type": "mrkdwn",
-                                "text": f"ResilientAI · `{event_type}` · {ts_str}",
+                                "text": f"Aurontra · `{event_type}` · {ts_str}",
                             }
                         ],
                     },
@@ -91,7 +91,7 @@ def format_teams_message(
         "@context": "https://schema.org/extensions",
         "summary": title,
         "themeColor": _SEVERITY_COLORS.get(severity, "#00C9B1").lstrip("#"),
-        "title": f"ResilientAI — {title}",
+        "title": f"Aurontra — {title}",
         "text": detail,
         "sections": [
             {

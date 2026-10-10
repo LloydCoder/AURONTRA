@@ -1,5 +1,5 @@
 """
-Billing plans — ResilientAI SaaS pricing.
+Billing plans — Aurontra pricing and explicitly qualified feature availability.
 Updated post-research: Free tier + Outcome pricing + Monthly billing surfaced.
 LemonSqueezy store: 247127
 """
@@ -17,7 +17,7 @@ PLANS: dict[str, dict] = {
         "features": [
             "Up to 5 devices monitored",
             "Resilience scoring dashboard",
-            "50 AI-resolved tickets/month",
+            "50 AI-assisted ticket responses/month",
             "Threat monitoring (detect only)",
             "Community support",
         ],
@@ -32,9 +32,9 @@ PLANS: dict[str, dict] = {
         "annual_discount": 0.20,
         "features": [
             "Resilience scoring dashboard",
-            "200 AI-resolved tickets/month",
+            "200 AI-assisted ticket responses/month",
             "Threat monitoring (detect only)",
-            "1 self-healing playbook",
+            "Remediation playbooks are disabled pending governed endpoint integration",
             "Email + webhook integrations",
             "5 team members",
             "ROI report",
@@ -51,14 +51,14 @@ PLANS: dict[str, dict] = {
         "ls_variant_id": settings.LS_BUSINESS_VARIANT_ID,
         "annual_discount": 0.20,
         "features": [
-            "Unlimited ticket resolution",
-            "Auto threat blocking (ThreatFade)",
-            "72-hour failure forecasting",
-            "All self-healing playbooks",
+            "AI-assisted ticket workflows; resolution requires a verified outcome",
+            "Threat assessment only; automated containment is disabled pending verified enforcement",
+            "72-hour failure forecasting (experimental; validation required)",
+            "Remediation playbooks require governed endpoint integration",
             "Unlimited team members",
             "Priority support",
             "SIEM export (Splunk/CEF/JSON)",
-            "NIS2 / DORA compliance report",
+            "NIS2 / DORA control evidence mapping (not certification)",
             "ROI report",
             "Knowledge base (unlimited articles)",
             "SLA tracking + breach alerts",
@@ -75,14 +75,14 @@ PLANS: dict[str, dict] = {
         "annual_discount": 0.20,
         "features": [
             "White-label for MSPs",
-            "Custom self-healing playbooks",
-            "Air-gap / on-premise deployment",
-            "99.9% uptime SLA",
+            "Custom remediation playbooks subject to governed endpoint integration",
+            "Deployment model subject to technical validation",
+            "Availability/SLA terms only as agreed in a signed contract",
             "Dedicated onboarding",
             "Quarterly security reviews",
-            "Full API access",
-            "All compliance frameworks",
-            "Full audit trail export",
+            "API access subject to authentication and integration readiness",
+            "Control evidence mapping; no compliance certification",
+            "Operational evidence export; immutability guarantees not certified",
         ],
     },
     "outcome": {

@@ -101,9 +101,10 @@ class TestLemonSqueezyWebhook:
             "org_id": "org-test-001",
             "email": "cto@corp.com",
         })
-        assert r.status_code in (200, 201)
+        assert r.status_code == 503
         data = r.json()
-        assert "checkout_url" in data
+        assert "disabled" in data["detail"].lower()
+        assert "checkout_url" not in data
 
 
 # ── GAP 2: ROI Report Generator ───────────────────────────────────────
@@ -233,10 +234,10 @@ class TestOnboarding:
             "plan": "business",
             "device_count": 50,
         })
-        assert r.status_code in (200, 201)
+        assert r.status_code == 503
         data = r.json()
-        assert "org_id" in data
-        assert "api_key" in data
+        assert "disabled" in data["detail"].lower()
+        assert "api_key" not in data
 
     @pytest.mark.asyncio
     async def test_onboarding_returns_install_command(self, client):
@@ -246,10 +247,10 @@ class TestOnboarding:
             "plan": "starter",
             "device_count": 15,
         })
-        assert r.status_code in (200, 201)
+        assert r.status_code == 503
         data = r.json()
-        assert "agent_install_cmd" in data
-        assert "curl" in data["agent_install_cmd"].lower() or "pip" in data["agent_install_cmd"].lower()
+        assert "disabled" in data["detail"].lower()
+        assert "agent_install_cmd" not in data
 
     @pytest.mark.asyncio
     async def test_onboarding_health_check_endpoint(self, client):

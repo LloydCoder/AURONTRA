@@ -10,7 +10,7 @@ What flows OUT to HezCast:
 
 What flows IN from HezCast:
   - Generated email content → ready to send via Resend
-  - Campaign distribution → spreads ResilientAI's reports to stakeholders
+  - Campaign distribution → spreads Aurontra's reports to stakeholders
 """
 import httpx
 import logging
@@ -33,7 +33,7 @@ async def generate_incident_update(
         return {
             "generated": False,
             "source": "hezcast_unavailable",
-            "fallback_subject": f"[ResilientAI] Incident Resolved: {incident_title}",
+            "fallback_subject": f"[Aurontra] Incident Resolved: {incident_title}",
             "fallback_body": resolution_summary,
         }
     try:
@@ -44,7 +44,7 @@ async def generate_incident_update(
                     "title": incident_title,
                     "resolution": resolution_summary,
                     "severity": severity,
-                    "context": "IT resilience platform — ResilientAI",
+                    "context": "IT resilience platform — Aurontra",
                 },
             )
             r.raise_for_status()
@@ -54,7 +54,7 @@ async def generate_incident_update(
         return {
             "generated": False,
             "error": str(e),
-            "fallback_subject": f"[ResilientAI] Resolved: {incident_title}",
+            "fallback_subject": f"[Aurontra] Resolved: {incident_title}",
             "fallback_body": resolution_summary,
         }
 
@@ -80,7 +80,7 @@ async def generate_security_bulletin(
                     "mitre_ttp": mitre_ttp,
                     "blocked": blocked,
                     "org_id": org_id,
-                    "platform": "ResilientAI",
+                    "platform": "Aurontra",
                 },
             )
             r.raise_for_status()
@@ -96,7 +96,7 @@ async def distribute_roi_report(
     recipient_emails: list[str],
 ) -> dict:
     """
-    Send ResilientAI ROI report to HezCast for branded distribution.
+    Send Aurontra ROI report to HezCast for branded distribution.
     HezCast packages it into a professional PDF email campaign.
     """
     if not settings.HEZCAST_URL:
@@ -110,7 +110,7 @@ async def distribute_roi_report(
                     "report_type": "roi",
                     "data": roi_data,
                     "recipients": recipient_emails,
-                    "platform": "ResilientAI",
+                    "platform": "Aurontra",
                 },
             )
             r.raise_for_status()

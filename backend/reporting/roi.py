@@ -1,15 +1,10 @@
 """
-ROI Report Generator.
+Aurontra ROI model.
 
-Competitive gap closed:
-- No ITSM platform auto-generates a billable ROI evidence report
-- Cyber insurers now require documented response time + resolution rates
-- This report is the artefact that justifies the ResilientAI subscription cost
-
-Methodology:
-  - Labour saved: avg 15 min per AI-resolved ticket at hourly rate
-  - Breach cost avoided: IBM 2024 avg $4.45M × threat block probability weight
-  - ROI multiple: (savings / subscription_cost) — shows payback
+This module computes an illustrative estimate from caller-supplied counts and
+assumptions. It is not measured savings, proof of successful containment, or a
+guarantee of avoided breach costs. Production reporting must use verified,
+tenant-scoped event evidence and disclose the provenance of each input.
 """
 from datetime import datetime, timezone
 
@@ -60,7 +55,7 @@ def generate_roi_report(
         threats_blocked * _BREACH_PROBABILITY_PER_THREAT * _IBM_AVG_BREACH_COST_USD, 2
     )
 
-    # Total financial value delivered
+    # Total illustrative value modelled
     total_value = labour_cost_saved + breach_cost_avoided
 
     # Approximate subscription cost for period
@@ -89,15 +84,21 @@ def generate_roi_report(
         "avg_hourly_rate_usd": avg_hourly_rate,
         "labour_cost_saved": labour_cost_saved,
 
-        # Threat value
-        "threats_blocked": threats_blocked,
-        "breach_probability_per_threat": _BREACH_PROBABILITY_PER_THREAT,
-        "breach_cost_avoided": breach_cost_avoided,
+        # Threat value — caller-supplied counts are not verified containment evidence.
+        "threats_blocked": threats_blocked,  # deprecated compatibility alias
+        "threats_reported_blocked_unverified": threats_blocked,
+        "breach_probability_per_threat_assumption": _BREACH_PROBABILITY_PER_THREAT,
+        "breach_cost_avoided": breach_cost_avoided,  # deprecated compatibility alias
+        "breach_cost_avoided_modelled_usd": breach_cost_avoided,
 
         # ROI summary
-        "total_value_delivered_usd": total_value,
-        "total_roi_usd": total_value,  # alias for compatibility
+        "total_value_delivered_usd": total_value,  # deprecated compatibility alias; not measured
+        "total_value_modelled_usd": total_value,
+        "total_roi_usd": total_value,  # deprecated compatibility alias
         "subscription_cost_period_usd": period_cost,
         "roi_multiple": roi_multiple,
-        "roi_summary": f"ResilientAI delivered ${total_value:,.0f} in value against a ${period_cost:,.0f} subscription — {roi_multiple}× ROI over {period_days} days.",
+        "measured_savings": False,
+        "methodology_status": "illustrative_model_not_measured",
+        "input_provenance": "caller_supplied_unverified",
+        "roi_summary": f"Illustrative model estimates ${total_value:,.0f} in value against a ${period_cost:,.0f} subscription over {period_days} days. This is not verified savings or confirmed breach avoidance.",
     }

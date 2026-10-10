@@ -8,7 +8,7 @@ import logging
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from typing import Optional
-from billing.plans import PLANS, compute_monthly_cost, get_plan_for_device_count
+from billing.plans import PLANS, compute_monthly_cost
 from billing.webhook_handler import verify_webhook_signature, process_webhook
 from core.config import settings
 
@@ -90,41 +90,16 @@ async def estimate_cost(payload: EstimateRequest):
     }
 
 
-@router.post("/checkout")
+@router.post("/checkout", status_code=503)
 async def create_checkout(payload: CheckoutRequest):
-    """
-    Generate a LemonSqueezy checkout URL for a given plan.
-    Pre-fills org context in checkout metadata.
-    """
-    if payload.plan not in PLANS:
-        raise HTTPException(status_code=422, detail=f"Unknown plan: {payload.plan}")
-
-    plan = PLANS[payload.plan]
-    variant_id = plan.get("ls_variant_id", "")
-
-    # Build checkout URL with pre-filled metadata
-    # In production: call LemonSqueezy API to create a checkout session
-    # For now: construct URL with query params
-    checkout_url = (
-        f"{settings.LS_CHECKOUT_BASE_URL}/buy/{variant_id}"
-        f"?checkout[email]={payload.email}"
-        f"&checkout[custom][org_id]={payload.org_id}"
-        f"&checkout[custom][device_count]={payload.device_count}"
-        if variant_id
-        else f"https://resilientai.lemonsqueezy.com/checkout?plan={payload.plan}&org={payload.org_id}"
+    """Fail closed until provider-backed checkout and tenant authorization exist."""
+    raise HTTPException(
+        status_code=503,
+        detail=(
+            "Checkout is disabled until Aurontra has authenticated tenant context, "
+            "provider-created checkout sessions, durable webhook idempotency, and entitlement reconciliation."
+        ),
     )
-
-    monthly = compute_monthly_cost(payload.plan, payload.device_count, annual=True)
-
-    return {
-        "checkout_url": checkout_url,
-        "plan": payload.plan,
-        "device_count": payload.device_count,
-        "monthly_cost_usd": monthly,
-        "org_id": payload.org_id,
-        "note": "You will be redirected to LemonSqueezy to complete payment.",
-    }
-
 
 @router.post("/webhook")
 async def lemonsqueezy_webhook(request: Request):

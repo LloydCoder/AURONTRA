@@ -1,13 +1,15 @@
 """
-Threats router — Sprint 3.
-Analyse, block, and export threat events via ThreatFade + local scoring.
+Threats router — analysis and export.
+
+Analysis produces signals and decisions; it does not itself enforce a firewall,
+quarantine an endpoint, or prove that traffic was stopped. Public containment
+is disabled until enforcement and post-action verification exist.
 """
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional
-import uuid
 
-from agents.threat_blocker import analyse_signal, block_threat, export_siem
+from agents.threat_blocker import analyse_signal, export_siem
 from bridges.threatfade import get_events
 
 router = APIRouter()
@@ -44,53 +46,75 @@ class SIEMExportRequest(BaseModel):
 
 @router.get("/")
 async def threats_overview():
-    blocked_count = sum(1 for e in _threat_events if e.get("blocked"))
+    contained = sum(1 for event in _threat_events if event.get("status") == "contained")
     return {
         "status": "ok",
         "total_events": len(_threat_events),
-        "blocked": blocked_count,
-        "monitored": len(_threat_events) - blocked_count,
+        "contained": contained,
+        "containment_enabled": False,
+        "note": "Detection and analysis do not establish successful containment.",
     }
 
 
 @router.post("/analyse")
 async def analyse_threat(payload: SignalAnalyseRequest):
-    signal = payload.model_dump(exclude_none=True)
-    result = analyse_signal(signal)
-    return result
+    """Return risk analysis only; no enforcement action is taken."""
+    return analyse_signal(payload.model_dump(exclude_none=True))
 
 
-@router.post("/block", status_code=201)
+@router.post("/block", status_code=503)
 async def block_threat_endpoint(payload: BlockRequest):
-    event_id = f"evt-{uuid.uuid4().hex[:8]}"
-    result = await block_threat(
-        event_id=event_id,
-        src_ip=payload.src_ip,
-        scenario=payload.scenario,
-        org_id=payload.org_id,
+    """Fail closed until real enforcement and verification are implemented."""
+    raise HTTPException(
+        status_code=503,
+        detail=(
+            "Threat containment is disabled: no verified enforcement adapter and "
+            "post-action verification are available. Use /analyse for analysis only."
+        ),
     )
-    _threat_events.append(result)
-    return result
 
 
 @router.get("/events")
 async def threat_events_endpoint(limit: int = 50):
+    if limit < 1 or limit > 200:
+        raise HTTPException(status_code=422, detail="limit must be between 1 and 200")
     try:
-        bridge_events = await get_events(limit=limit)
-        return {"events": bridge_events, "source": "threatfade"}
-    except Exception as e:
+        upstream_events = await get_events(limit=limit)
+        normalized_events = []
+        for item in upstream_events:
+            event = dict(item) if isinstance(item, dict) else {"upstream_event": item}
+            upstream_claim = (
+                event.get("blocked") is True
+                or event.get("status") in {"blocked", "contained", "quarantined"}
+                or event.get("action_taken") in {"blocked", "contained", "quarantined"}
+            )
+            event["containment_verified"] = False
+            if upstream_claim:
+                event["upstream_reported_blocked"] = True
+                event["blocked"] = False
+                event["status"] = "containment_unverified"
+                event["action_taken"] = "containment_unverified"
+            normalized_events.append(event)
+        return {
+            "events": normalized_events,
+            "source": "threatfade",
+            "containment_verified": False,
+        }
+    except Exception:
         return {
             "events": _threat_events[-limit:],
             "source": "local",
-            "bridge_error": str(e),
+            "bridge_available": False,
+            "containment_verified": False,
         }
 
 
 @router.post("/export/siem")
 async def siem_export(payload: SIEMExportRequest):
     event = payload.model_dump(exclude={"format"})
+    # The public request is untrusted and cannot attest to enforcement.
+    event["enforcement_verified"] = False
     try:
-        result = export_siem(event, fmt=payload.format)
+        return export_siem(event, fmt=payload.format)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
-    return result

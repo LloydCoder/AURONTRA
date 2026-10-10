@@ -1,14 +1,10 @@
 """
-Threat Blocking Agent — Sprint 3 core deliverable.
+Aurontra threat assessment and SIEM serialization.
 
-Pipeline:
-  1. map_mitre_ttp()   — maps signal characteristics to MITRE ATT&CK TTPs
-  2. analyse_signal()  — scores raw signal, decides auto_block threshold
-  3. block_threat()    — calls ThreatFade bridge, executes block decision
-  4. export_siem()     — emits event in JSON / Splunk HEC / CEF format
-
-ThreatFade bridge is the detection oracle (Z-score 14.76, 0% FPR).
-ResilientAI adds the blocking decision layer + SIEM export on top.
+Signal scoring produces a risk assessment and optional containment
+recommendation only. It does not enforce network or endpoint controls.
+A containment claim is valid only when an independent enforcement adapter
+reports success and a postcondition check verifies the resulting state.
 """
 import uuid
 from datetime import datetime, timezone
@@ -38,7 +34,7 @@ _TAG_TTP_MAP = {
 }
 
 # Thresholds
-_AUTO_BLOCK_SCORE = 65      # Score at or above this → auto block
+_CONTAINMENT_RECOMMENDATION_SCORE = 65  # Recommendation threshold; never executes a block
 _HIGH_THREAT_SCORE = 60     # Score at or above this → high threat level
 _MEDIUM_THREAT_SCORE = 35   # Score at or above this → medium
 
@@ -106,7 +102,7 @@ def _compute_score(signal: dict) -> int:
     proto_risk = {"QUIC": 15, "ICMP": 12, "DNS": 8, "SMB": 10, "RDP": 10}
     score += proto_risk.get(proto, 0)
 
-    # Beacon pattern (0-10 pts) — regular interval + low jitter = C2 beacon
+    # Periodicity signal (0-10 pts); periodicity alone does not confirm C2
     if "beacon_interval" in signal and "jitter" in signal:
         jitter = float(signal.get("jitter", 1.0))
         if jitter < 0.2:
@@ -114,8 +110,8 @@ def _compute_score(signal: dict) -> int:
         elif jitter < 0.5:
             score += 5
 
-    # Beacon confirmed → lower auto-block threshold applies (handled in analyse_signal)
-    signal["_beacon_confirmed"] = (
+    # Mark a periodic pattern for scoring context; this is not confirmed C2.
+    signal["_periodic_pattern"] = (
         "beacon_interval" in signal and
         float(signal.get("jitter", 1.0)) < 0.2
     )
@@ -132,7 +128,7 @@ def analyse_signal(signal: dict) -> dict:
                 beacon_interval, jitter, bytes_out
 
     Returns:
-        dict: threat_level, score, mitre_ttp, auto_block, reason
+        dict: threat_level, score, mitre_ttp, containment_recommended, reason
     """
     if not signal:
         return {
@@ -140,14 +136,16 @@ def analyse_signal(signal: dict) -> dict:
             "score": 0,
             "mitre_ttp": "T1071",
             "auto_block": False,
+            "containment_recommended": False,
             "reason": "No signal data provided",
         }
 
     score = _compute_score(signal)
 
-    # Beacon-confirmed C2 gets a lower auto-block threshold (55 vs 65)
-    beacon_confirmed = signal.get("_beacon_confirmed", False)
-    effective_auto_block_threshold = 55 if beacon_confirmed else _AUTO_BLOCK_SCORE
+    # A periodic pattern may lower the recommendation threshold, but does not
+    # confirm C2 and never authorizes an enforcement action by itself.
+    periodic_pattern = signal.get("_periodic_pattern", False)
+    recommendation_threshold = 55 if periodic_pattern else _CONTAINMENT_RECOMMENDATION_SCORE
     if score >= _HIGH_THREAT_SCORE:
         threat_level = "critical" if score >= 80 else "high"
     elif score >= _MEDIUM_THREAT_SCORE:
@@ -157,7 +155,7 @@ def analyse_signal(signal: dict) -> dict:
     else:
         threat_level = "info"
 
-    auto_block = score >= effective_auto_block_threshold
+    containment_recommended = score >= recommendation_threshold
 
     ttp = map_mitre_ttp(
         protocol=signal.get("protocol", ""),
@@ -171,7 +169,7 @@ def analyse_signal(signal: dict) -> dict:
     if signal.get("entropy", 0) >= 6.5:
         reasons.append(f"Entropy {signal['entropy']:.2f} indicates obfuscation")
     if signal.get("protocol", "").upper() == "QUIC":
-        reasons.append("QUIC protocol — common C2 evasion vector")
+        reasons.append("QUIC protocol observed; protocol alone is not evidence of malicious activity")
     if "beacon_interval" in signal:
         reasons.append("Regular beacon interval detected")
     if not reasons:
@@ -181,7 +179,9 @@ def analyse_signal(signal: dict) -> dict:
         "threat_level": threat_level,
         "score": score,
         "mitre_ttp": ttp,
-        "auto_block": auto_block,
+        # Keep the legacy field false so clients cannot confuse a score with an action.
+        "auto_block": False,
+        "containment_recommended": containment_recommended,
         "reason": "; ".join(reasons),
     }
 
@@ -193,24 +193,12 @@ async def block_threat(
     org_id: str,
     additional_context: dict | None = None,
 ) -> dict:
-    """
-    Execute threat blocking decision via ThreatFade bridge.
+    """Create a threat assessment; never claim enforcement without an adapter.
 
-    Flow:
-      1. Call ThreatFade /detect/scenario for oracle verdict
-      2. Score locally with analyse_signal()
-      3. Execute block if score >= threshold
-      4. Return full event record for SIEM export
-
-    Args:
-        event_id:  unique event identifier
-        src_ip:    source IP address of the suspicious traffic
-        scenario:  ThreatFade scenario name (e.g. 'c2_beacon')
-        org_id:    organisation ID for multi-tenant isolation
-        additional_context: optional extra signal data
-
-    Returns:
-        Standardised threat event dict
+    This compatibility function is decision-only. A score or ThreatFade verdict
+    is not evidence that a firewall, network control, or endpoint actually
+    blocked the traffic. Verified containment will be implemented by a separate
+    enforcement adapter with acknowledgements and postcondition checks.
     """
     timestamp = datetime.now(timezone.utc).isoformat()
     base = {
@@ -221,20 +209,28 @@ async def block_threat(
         "timestamp": timestamp,
         "blocked": False,
         "action_taken": "monitor",
+        "status": "analysis_pending",
+        "enforcement_verified": False,
         "threat_level": "info",
         "score": 0,
         "mitre_ttp": "T1071",
     }
 
-    # ── Call ThreatFade oracle ─────────────────────────────────────────
     try:
         tf_result = await threatfade_bridge.detect_scenario(scenario)
-    except Exception as e:
-        base["error"] = str(e)
-        base["action_taken"] = "monitor"
+    except Exception:
+        # Do not return internal bridge errors or misrepresent a failed
+        # dependency call as a successful detection/containment.
+        base.update({
+            "status": "analysis_unavailable",
+            "action_taken": "monitor",
+            "blocked": False,
+            "enforcement_verified": False,
+            # Stable error code only; never echo exception text or provider details.
+            "error": "bridge_unavailable",
+        })
         return base
 
-    # ── Local analysis on top of ThreatFade verdict ────────────────────
     signal = {
         "src_ip": src_ip,
         "protocol": tf_result.get("protocol", "HTTPS"),
@@ -243,8 +239,6 @@ async def block_threat(
         **(additional_context or {}),
     }
     assessment = analyse_signal(signal)
-
-    # Override with ThreatFade's own threat level if it's stronger
     tf_level = tf_result.get("threat_level", "info")
     level_rank = {"info": 0, "low": 1, "medium": 2, "high": 3, "critical": 4}
     final_level = (
@@ -252,33 +246,24 @@ async def block_threat(
         if level_rank.get(tf_level, 0) >= level_rank.get(assessment["threat_level"], 0)
         else assessment["threat_level"]
     )
-
-    ttp = map_mitre_ttp(
-        protocol=signal.get("protocol", ""),
-        entropy=signal.get("entropy", 0),
-        z_score=signal.get("z_score", 0),
-    )
-
-    # ── Block decision ─────────────────────────────────────────────────
-    should_block = (
-        assessment["auto_block"] or
-        final_level in ("high", "critical")
-    )
-
-    action = "blocked" if should_block else "monitor"
-
+    should_request_containment = assessment["containment_recommended"] or final_level in ("high", "critical")
     base.update({
-        "blocked": should_block,
-        "action_taken": action,
+        "blocked": False,
+        "action_taken": "containment_pending" if should_request_containment else "monitor",
+        "status": "containment_pending" if should_request_containment else "assessed",
+        "requested_action": "block" if should_request_containment else None,
+        "enforcement_verified": False,
         "threat_level": final_level,
         "score": assessment["score"],
-        "mitre_ttp": ttp,
+        "mitre_ttp": map_mitre_ttp(
+            protocol=signal.get("protocol", ""),
+            entropy=signal.get("entropy", 0),
+            z_score=signal.get("z_score", 0),
+        ),
         "reason": assessment["reason"],
         "threatfade_verdict": tf_result,
     })
-
     return base
-
 
 def export_siem(event: dict, fmt: str = "json") -> dict:
     """
@@ -300,6 +285,37 @@ def export_siem(event: dict, fmt: str = "json") -> dict:
     if fmt not in supported:
         raise ValueError(f"Unsupported SIEM format '{fmt}'. Supported: {supported}")
 
+    # Never serialize caller-supplied "blocked": true as proof of containment.
+    # Only a trusted internal record with explicit enforcement verification may
+    # carry a positive containment claim. Public route input cannot set this flag.
+    event = dict(event)
+    enforcement_verified = event.get("enforcement_verified") is True
+    caller_claimed_containment = (
+        event.get("blocked") is True
+        or event.get("requested_action") == "block"
+        or event.get("status") in {"blocked", "contained", "quarantined"}
+        or event.get("action_taken") in {"blocked", "contained", "quarantined"}
+    )
+    verified_block = caller_claimed_containment and enforcement_verified
+    event["enforcement_verified"] = enforcement_verified
+    event["blocked"] = verified_block
+    event["containment_verified"] = verified_block
+    if verified_block:
+        event["status"] = "contained"
+        event["action_taken"] = "blocked"
+    elif caller_claimed_containment:
+        event["status"] = "containment_pending"
+        event["action_taken"] = "containment_pending"
+    else:
+        # Untrusted event input cannot preserve a false "contained" status or
+        # blocked action label when there is no verified enforcement record.
+        if event.get("status") in {"blocked", "contained", "quarantined"}:
+            event["status"] = "assessed"
+        if event.get("action_taken") in {"blocked", "contained", "quarantined"}:
+            event["action_taken"] = "monitor"
+        event.setdefault("status", "assessed")
+        event.setdefault("action_taken", "monitor")
+
     if fmt == "json":
         return {"format": "json", "payload": event}
 
@@ -309,8 +325,8 @@ def export_siem(event: dict, fmt: str = "json") -> dict:
             "payload": {
                 "time": event.get("timestamp", datetime.now(timezone.utc).isoformat()),
                 "host": event.get("src_ip", "unknown"),
-                "source": "resilientai",
-                "sourcetype": "resilientai:threat",
+                "source": "aurontra",
+                "sourcetype": "aurontra:threat",
                 "index": "security",
                 "event": event,
             },
@@ -320,11 +336,11 @@ def export_siem(event: dict, fmt: str = "json") -> dict:
         severity_map = {"info": 0, "low": 3, "medium": 5, "high": 7, "critical": 10}
         sev = severity_map.get(event.get("threat_level", "info"), 0)
         cef_str = (
-            f"CEF:0|Tinlance|ResilientAI|1.0|{event.get('mitre_ttp', 'T1071')}|"
+            f"CEF:0|Tinlance|Aurontra|0.1.0|{event.get('mitre_ttp', 'T1071')}|"
             f"Threat {event.get('threat_level', 'info')}|{sev}|"
             f"src={event.get('src_ip', 'unknown')} "
             f"act={event.get('action_taken', 'monitor')} "
-            f"msg={event.get('reason', 'Threat detected')} "
+            f"msg={event.get('reason', 'Threat assessment')} "
             f"externalId={event.get('event_id', 'unknown')}"
         )
         return {"format": "cef", "payload": cef_str}

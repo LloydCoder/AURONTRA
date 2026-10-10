@@ -3,8 +3,12 @@ from models.device import Device
 from models.ticket import Ticket, TicketStatus, TicketPriority, TicketSource
 from models.resilience_score import ResilienceScore
 from models.automation_rule import AutomationRule
+from models.organization import Organization
+from models.api_key import APIKey
+from models.audit_event import AuditEvent
+from models.webhook_event import WebhookEvent
 
 __all__ = [
     "Device", "Ticket", "TicketStatus", "TicketPriority", "TicketSource",
-    "ResilienceScore", "AutomationRule",
+    "ResilienceScore", "AutomationRule", "Organization", "APIKey", "AuditEvent", "WebhookEvent",
 ]

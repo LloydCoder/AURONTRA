@@ -19,7 +19,7 @@ class LLMGateway:
     async def complete(
         self,
         prompt: str,
-        system: str = "You are ResilientAI, an expert IT support and security agent.",
+        system: str = "You are Aurontra, an expert IT support and security assistant.",
         max_tokens: int = 1024,
     ) -> dict:
         """

@@ -4,7 +4,7 @@ ReconOS: 6,277 lines, 129/129 tests, ArcadeDB graph, D3.js dashboard.
 
 What flows IN from ReconOS:
   - Device relationship graph → DeviceTopology dashboard component
-  - TemporalCorrelator results → enriches ResilientAI's failure prediction
+  - TemporalCorrelator results → enriches Aurontra's failure prediction
   - Entity resolution → maps IPs to known assets
   - Confidence scores → weights resilience scoring
 """
@@ -38,7 +38,7 @@ async def get_temporal_correlation(
 ) -> dict:
     """
     Send device events to ReconOS TemporalCorrelator.
-    Returns time-series correlation results to enrich ResilientAI's 72hr predictor.
+    Returns time-series correlation results to enrich Aurontra's 72hr predictor.
     """
     if not settings.RECONOS_URL:
         return {"correlated": False, "source": "reconos_unavailable"}

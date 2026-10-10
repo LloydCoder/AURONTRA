@@ -9,9 +9,9 @@ What flows OUT to FadeReach:
   - ROI report data → FadeReach outreach personalisation
 
 What flows IN from FadeReach:
-  - Trial signup events → onboard new ResilientAI orgs
-  - IT/MSP prospect data → ResilientAI waitlist
-  - Campaign performance → improves ResilientAI messaging
+  - Trial signup events → onboard new Aurontra orgs
+  - IT/MSP prospect data → Aurontra waitlist
+  - Campaign performance → improves Aurontra messaging
 """
 import httpx
 import logging
@@ -28,7 +28,7 @@ async def send_trial_signup(
     device_count: int,
 ) -> bool:
     """
-    Notify FadeReach of a new ResilientAI trial signup.
+    Notify FadeReach of a new Aurontra trial signup.
     FadeReach starts a Day 0-90 nurture sequence immediately.
     """
     if not settings.FADEREACH_URL:

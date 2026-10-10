@@ -277,9 +277,8 @@ class TestAutomationAPI:
             "device_id": "srv-test-01",
             "context": {"disk_percent": 88},
         })
-        assert r.status_code in (200, 201)
-        data = r.json()
-        assert "status" in data
+        assert r.status_code == 503
+        assert "disabled" in r.json()["detail"]
 
     @pytest.mark.asyncio
     async def test_automation_trigger_unknown_raises_422(self, client):
@@ -288,7 +287,9 @@ class TestAutomationAPI:
             "device_id": "srv-01",
             "context": {},
         })
-        assert r.status_code == 422
+        # Execution is disabled regardless of playbook name until the
+        # authenticated endpoint-agent and policy controls are implemented.
+        assert r.status_code == 503
 
     @pytest.mark.asyncio
     async def test_automation_execution_history(self, client):
