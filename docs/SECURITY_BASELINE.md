@@ -65,3 +65,5 @@ This document is not a substitute for an independent penetration test, external 
 ## Request resource limits
 
 The API perimeter rejects request bodies whose declared `Content-Length` exceeds `MAX_REQUEST_BODY_BYTES` (default 1 MiB). Production ingress must enforce the same or stricter body-size limit for chunked/streamed requests and apply rate/concurrency limits at the gateway. The application-level content-length check alone is not a complete DoS defense.
+
+- `TEST_MODE=true` is permitted only in non-production environments and is explicitly set by CI to exercise legacy route behavior. Production requests are rejected if test mode is enabled.

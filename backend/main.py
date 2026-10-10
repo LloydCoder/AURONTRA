@@ -56,6 +56,8 @@ async def enforce_auth_and_data_plane(request: Request, call_next):
                 return JSONResponse(status_code=413, content={"detail": "Request body exceeds the configured limit.", "code": "REQUEST_BODY_TOO_LARGE"})
     if path == "/health/live" or request.method == "OPTIONS":
         return await call_next(request)
+    if settings.ENVIRONMENT.lower() == "production" and settings.TEST_MODE:
+        return JSONResponse(status_code=503, content={"detail": "Test mode is forbidden in production.", "code": "PRODUCTION_TEST_MODE_FORBIDDEN"})
     if settings.ENVIRONMENT.lower() == "production" and settings.AUTH_MODE == "disabled":
         return JSONResponse(status_code=503, content={"detail": "Authentication cannot be disabled in production.", "code": "PRODUCTION_AUTH_REQUIRED"})
     if settings.AUTH_MODE != "disabled":
@@ -78,8 +80,8 @@ async def enforce_auth_and_data_plane(request: Request, call_next):
         request.state.subject = subject
         request.state.claims = claims
     # Authentication alone does not fix cross-tenant in-memory storage.
-    if not settings.DATA_PLANE_ENABLED or not TENANT_ISOLATION_IMPLEMENTED:
-        return JSONResponse(status_code=503, content={"detail": "Business API unavailable until durable tenant isolation is enabled.", "code": "TENANT_DATA_PLANE_NOT_READY"})
+    if not settings.DATA_PLANE_ENABLED or (not TENANT_ISOLATION_IMPLEMENTED and not settings.TEST_MODE):
+        return JSONResponse(status_code=503, content={"detail": "Business API is disabled until durable tenant isolation is enabled.", "code": "TENANT_DATA_PLANE_NOT_READY"})
     return await call_next(request)
 
 

@@ -45,6 +45,7 @@ jobs:
           # Explicit test-only opt-out; production defaults remain auth-required and data-plane-closed.
           AUTH_MODE: disabled
           DATA_PLANE_ENABLED: "true"
+          TEST_MODE: "true"
         run: pytest tests/ -v --tb=short --cov=. --cov-report=term-missing --cov-report=html --cov-fail-under=60
 
       - name: Upload coverage report

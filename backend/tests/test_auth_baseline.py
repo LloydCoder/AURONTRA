@@ -58,6 +58,7 @@ def test_data_plane_cannot_be_enabled_before_tenant_isolation_is_implemented(mon
     monkeypatch.setattr(settings, "ENVIRONMENT", "development")
     monkeypatch.setattr(settings, "AUTH_MODE", "disabled")
     monkeypatch.setattr(settings, "DATA_PLANE_ENABLED", True)
+    monkeypatch.setattr(settings, "TEST_MODE", False)
     with TestClient(app) as client:
         response = client.get("/tickets/")
     assert response.status_code == 503
@@ -71,3 +72,14 @@ def test_oversized_request_is_rejected_before_route_processing(monkeypatch):
         response = client.post("/tickets/ingest", content=b"x" * 17, headers={"content-type": "application/json"})
     assert response.status_code == 413
     assert response.json()["code"] == "REQUEST_BODY_TOO_LARGE"
+
+
+def test_production_cannot_enable_test_mode(monkeypatch):
+    monkeypatch.setattr(settings, "ENVIRONMENT", "production")
+    monkeypatch.setattr(settings, "TEST_MODE", True)
+    monkeypatch.setattr(settings, "AUTH_MODE", "disabled")
+    monkeypatch.setattr(settings, "DATA_PLANE_ENABLED", True)
+    with TestClient(app) as client:
+        response = client.get("/tickets/")
+    assert response.status_code == 503
+    assert response.json()["code"] == "PRODUCTION_TEST_MODE_FORBIDDEN"
