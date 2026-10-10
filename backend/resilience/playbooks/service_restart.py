@@ -1,20 +1,5 @@
-"""
-Service Restart self-healing playbook.
-
-Actions:
-  1. Check service status
-  2. Attempt graceful stop → start
-  3. Verify service is back up
-  4. Report result
-
-Uses systemctl on Linux, sc on Windows, simulation mode elsewhere.
-"""
-import platform
-import subprocess
-import logging
+"""Service restart playbook — recommendation-only until a scoped agent exists."""
 from resilience.playbooks.base import BasePlaybook
-
-logger = logging.getLogger(__name__)
 
 _DEFAULT_SERVICE = "application"
 _SAFE_RESTARTABLE = {"nginx", "postgresql", "redis", "application", "api", "worker"}
@@ -24,50 +9,20 @@ class ServiceRestartPlaybook(BasePlaybook):
     name = "service_restart"
 
     async def execute(self, context: dict) -> dict:
-        device_id = context.get("device_id", "unknown")
+        """Never call systemctl/sc from the API process."""
         service_name = context.get("service_name", _DEFAULT_SERVICE)
-        actions_taken = []
-        success = False
-
-        os_type = platform.system().lower()
-
-        if os_type == "linux" and service_name in _SAFE_RESTARTABLE:
-            try:
-                # Check current status
-                check = subprocess.run(
-                    ["systemctl", "is-active", service_name],
-                    capture_output=True, text=True, timeout=5,
-                )
-                status_before = check.stdout.strip()
-                actions_taken.append(f"Status before: {status_before}")
-
-                # Restart
-                restart = subprocess.run(
-                    ["systemctl", "restart", service_name],
-                    capture_output=True, text=True, timeout=15,
-                )
-
-                if restart.returncode == 0:
-                    actions_taken.append(f"systemctl restart {service_name}: success")
-                    success = True
-                else:
-                    actions_taken.append(f"systemctl restart failed: {restart.stderr.strip()}")
-
-            except (subprocess.TimeoutExpired, FileNotFoundError, PermissionError) as e:
-                actions_taken.append(f"systemctl unavailable: {e} — simulating restart")
-                success = True  # Simulated success
-        else:
-            # Simulation mode — safe for all environments
-            actions_taken.append(f"Simulated restart of {service_name} (non-Linux or simulation mode)")
-            success = True
-
+        approved_name = service_name in _SAFE_RESTARTABLE
         result = self._base_result(
             context,
+            status="simulated" if approved_name else "approval_required",
             service_name=service_name,
-            actions_taken=actions_taken,
-            restart_successful=success,
-            status="executed" if success else "failed",
+            actions_taken=[
+                "No service command was executed on the API host.",
+                "Service restart requires an authenticated endpoint agent and an explicit target policy.",
+            ],
+            restart_successful=False,
+            enforcement_verified=False,
+            action_required="request_scoped_service_restart_approval" if approved_name else "review_unapproved_service_name",
         )
-
-        await self.audit(device_id, result)
+        await self.audit(context.get("device_id", "unknown"), result)
         return result
