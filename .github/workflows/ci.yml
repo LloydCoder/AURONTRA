@@ -52,13 +52,12 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
-  deployment-preflight:
-    name: Deployment configuration preflight
+  deploy:
+    name: Deploy to configured EC2 host
+    needs: [test]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && needs.test.result == 'success'
     environment: production
-    outputs:
-      deployment_ready: ${{ steps.check.outputs.deployment_ready }}
     env:
       EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
       EC2_HOST: ${{ vars.EC2_HOST }}
@@ -66,8 +65,10 @@ jobs:
       EC2_APP_DIR: ${{ vars.EC2_APP_DIR }}
       EC2_SERVICE_NAME: ${{ vars.EC2_SERVICE_NAME }}
     steps:
-      - name: Validate required deployment configuration without exposing secrets
-        id: check
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+
+      - name: Validate deployment configuration without exposing secrets
+        id: preflight
         shell: bash
         run: |
           missing=()
@@ -76,7 +77,6 @@ jobs:
           [[ -n "${EC2_SSH_HOST_FINGERPRINT}" ]] || missing+=("secret EC2_SSH_HOST_FINGERPRINT")
           [[ -n "${EC2_APP_DIR}" ]] || missing+=("variable EC2_APP_DIR")
           [[ -n "${EC2_SERVICE_NAME}" ]] || missing+=("variable EC2_SERVICE_NAME")
-
           if (( ${#missing[@]} == 0 )); then
             echo "deployment_ready=true" >> "$GITHUB_OUTPUT"
             echo "All required deployment configuration is present." >> "$GITHUB_STEP_SUMMARY"
@@ -88,22 +88,13 @@ jobs:
               echo "Missing required configuration:"
               for item in "${missing[@]}"; do echo "- $item"; done
               echo ""
-              echo "Configure these repository/environment values, then rerun the deployment workflow."
               echo "A skipped deployment is not a successful production deployment."
             } >> "$GITHUB_STEP_SUMMARY"
-            echo "::warning::Deployment skipped because required host, credential, fingerprint, or service configuration is missing."
+            echo "::warning::Deployment skipped because required configuration is missing."
           fi
 
-  deploy:
-    name: Deploy to configured EC2 host
-    needs: [test, deployment-preflight]
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && needs.test.result == 'success' && needs.deployment-preflight.outputs.deployment_ready == 'true'
-    environment: production
-    steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
-
       - name: Deploy via SSH
+        if: steps.preflight.outputs.deployment_ready == 'true'
         uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262
         with:
           host: ${{ vars.EC2_HOST }}
@@ -123,7 +114,7 @@ jobs:
             cd "$APP_DIR"
             REMOTE_URL="$(git remote get-url origin | sed -E 's/\.git$//; s#/$##')"
             case "$REMOTE_URL" in
-              https://github.com/LloydCoder/AURONTRA|git@github.com:LloydCoder/AURONTRA|ssh://git@github.com:LloydCoder/AURONTRA) ;;
+              https://github.com/LloydCoder/AURONTRA|git@github.com:LloydCoder/AURONTRA|ssh://git@github.com/LloydCoder/AURONTRA) ;;
               *) echo "Refusing deployment: origin is not the canonical Aurontra repository."; echo "Observed remote: $REMOTE_URL"; exit 1 ;;
             esac
             git fetch origin main
@@ -137,7 +128,7 @@ jobs:
             echo "Aurontra service health check passed."
 
       - name: Record deployment evidence
-        if: success()
+        if: steps.preflight.outputs.deployment_ready == 'true' && success()
         run: |
           {
             echo "## Deployment verification"

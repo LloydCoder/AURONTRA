@@ -22,6 +22,8 @@ The 2026-10-09 repository audit and workflow logs identified:
 4. Threat analysis is decision support only; it is not proof of blocking, containment or attacker attribution.
 5. Caller-supplied compliance and ROI metrics are not sufficient evidence of certification or realized savings.
 6. Internal bridge exceptions are not returned verbatim to clients.
+7. Public organization registration and checkout are disabled until tenant authorization, durable credential lifecycle, provider-backed checkout, and webhook idempotency are implemented.
+8. Public plan descriptions distinguish implemented/experimental capabilities from disabled or unverified features.
 
 ## Release gates
 
