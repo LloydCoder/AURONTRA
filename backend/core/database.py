@@ -1,5 +1,6 @@
 """Async database engine — schema changes are migration-controlled in production."""
 from sqlalchemy import inspect, text
+from fastapi import Request, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
 from core.config import settings
@@ -52,3 +53,30 @@ async def init_db() -> None:
     # Development and explicitly configured test environments only.
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+
+
+async def get_tenant_db(request: Request):
+    """Yield a session bound to the verified tenant and set PostgreSQL RLS context."""
+    tenant_id = getattr(request.state, "tenant_id", None)
+    if settings.TEST_MODE and not tenant_id:
+        tenant_id = "test-tenant"
+    if not isinstance(tenant_id, str) or not tenant_id:
+        raise HTTPException(status_code=401, detail="Verified tenant context is required.")
+
+    async with AsyncSessionLocal() as session:
+        try:
+            session.info["tenant_id"] = tenant_id
+            if session.get_bind().dialect.name == "postgresql":
+                # Transaction-local setting is cleared at commit/rollback; never use a session-wide tenant.
+                await session.execute(
+                    text("SELECT set_config('app.current_org_id', :tenant_id, true)"),
+                    {"tenant_id": tenant_id},
+                )
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
+        finally:
+            await session.close()

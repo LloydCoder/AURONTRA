@@ -1,6 +1,7 @@
 """Security regression tests for Aurontra's production-default API gate."""
 from fastapi.testclient import TestClient
 import pytest
+from fastapi import HTTPException
 from core.config import settings
 from main import app
 
@@ -203,3 +204,41 @@ def test_signed_webhook_is_not_required_to_present_user_bearer_token(monkeypatch
         response = client.post("/billing/webhook", content=b'{"meta":{}}', headers={"content-type": "application/json"})
     assert response.status_code == 503
     assert response.json()["code"] == "TENANT_DATA_PLANE_NOT_READY"
+
+
+def test_tenant_select_requires_verified_tenant_and_tenant_owned_model():
+    from repositories.tenant import tenant_select
+    from models.device import Device
+    from models.organization import Organization
+
+    with pytest.raises(ValueError):
+        tenant_select(Device, "")
+    with pytest.raises(TypeError):
+        tenant_select(Organization, "org_1")
+
+
+def test_tenant_select_binds_organization_predicate():
+    from repositories.tenant import tenant_select
+    from models.device import Device
+
+    statement = tenant_select(Device, "org_123")
+    compiled = statement.compile()
+    assert "devices.org_id" in str(statement)
+    assert "org_123" in compiled.params.values()
+
+
+@pytest.mark.asyncio
+async def test_tenant_db_dependency_requires_verified_tenant_outside_test_mode(monkeypatch):
+    from starlette.requests import Request
+    from core.database import get_tenant_db
+
+    monkeypatch.setattr(settings, "TEST_MODE", False)
+    request = Request({
+        "type": "http", "method": "GET", "path": "/tickets/",
+        "headers": [], "query_string": b"", "server": ("test", 80),
+        "client": ("test", 123), "scheme": "http",
+    })
+    dependency = get_tenant_db(request)
+    with pytest.raises(HTTPException) as exc:
+        await anext(dependency)
+    assert exc.value.status_code == 401
