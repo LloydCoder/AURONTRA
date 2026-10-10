@@ -92,6 +92,8 @@ async def threat_events_endpoint(limit: int = 50):
 @router.post("/export/siem")
 async def siem_export(payload: SIEMExportRequest):
     event = payload.model_dump(exclude={"format"})
+    # The public request is untrusted and cannot attest to enforcement.
+    event["enforcement_verified"] = False
     try:
         return export_siem(event, fmt=payload.format)
     except ValueError as e:
