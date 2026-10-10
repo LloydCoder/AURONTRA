@@ -90,6 +90,8 @@ class TestThreatsAPI:
         assert r.status_code in (200, 201)
         data = r.json()
         assert "format" in data
+        assert data["payload"]["blocked"] is False
+        assert data["payload"]["containment_verified"] is False
 
     @pytest.mark.asyncio
     async def test_threats_siem_export_splunk(self, client):
