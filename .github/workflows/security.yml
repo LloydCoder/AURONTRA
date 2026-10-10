@@ -31,7 +31,7 @@ jobs:
           tar -xzf "$archive" -C "$RUNNER_TEMP/gitleaks" gitleaks
           "$RUNNER_TEMP/gitleaks/gitleaks" version
 
-      - name: Inventory deployment archives safely
+      - name: Safely inspect deployment archives
         shell: bash
         run: |
           set -euo pipefail
@@ -39,19 +39,51 @@ jobs:
           while IFS= read -r -d '' archive; do
             archive_count=$((archive_count + 1))
             listing="$RUNNER_TEMP/archive-$archive_count.list"
+            extract_dir="$RUNNER_TEMP/archive-$archive_count"
             tar -tzf "$archive" > "$listing"
             if grep -Eq '(^/|(^|/)\.\.(/|$))' "$listing"; then
               echo "Unsafe path detected in archive: $archive"
               exit 1
             fi
+            mkdir -p "$extract_dir"
+            python3 - "$archive" "$extract_dir" <<'PY'
+          import pathlib
+          import sys
+          import tarfile
+
+          archive, destination = sys.argv[1], pathlib.Path(sys.argv[2])
+          with tarfile.open(archive, "r:gz") as bundle:
+              members = bundle.getmembers()
+              for member in members:
+                  path = pathlib.PurePosixPath(member.name)
+                  if path.is_absolute() or ".." in path.parts:
+                      raise SystemExit(f"Unsafe archive path: {member.name}")
+                  if member.issym() or member.islnk():
+                      raise SystemExit(f"Archive links require manual review: {member.name}")
+              bundle.extractall(destination, filter="data")
+          PY
             {
               echo "## Archive inventory: $archive"
               echo ""
               sed 's#^#- #' "$listing"
               echo ""
+              echo "### Static review"
+              echo "- Extracted using Python tarfile data filter; links are rejected."
+              echo "- Python syntax compilation: "
             } >> "$GITHUB_STEP_SUMMARY"
+            python3 -m compileall -q "$extract_dir"
+            echo "passed" >> "$GITHUB_STEP_SUMMARY"
+            "$RUNNER_TEMP/gitleaks/gitleaks" dir --redact --max-archive-depth=3 --timeout=300 "$extract_dir"
+            legacy_files="$(grep -RIlE 'ResilientAI|resilientai|13\.50\.16\.19' "$extract_dir" || true)"
+            if [[ -n "$legacy_files" ]]; then
+              {
+                echo "- Legacy branding/infrastructure references found in:"
+                while IFS= read -r item; do echo "  - `$item`"; done <<< "$legacy_files"
+              } >> "$GITHUB_STEP_SUMMARY"
+              echo "::warning::Archive contains legacy branding or infrastructure references; review before deployment."
+            fi
           done < <(find . -type f -name '*.tar.gz' -print0)
-          echo "Inventoried $archive_count tar.gz archive(s)."
+          echo "Safely inspected $archive_count tar.gz archive(s)."
 
       - name: Scan current files and nested archives
         shell: bash
