@@ -2,7 +2,7 @@
 Knowledge Base — self-service article store.
 
 Competitive gap: 69% of users prefer self-service but only 30% succeed.
-ResilientAI's KB is auto-seeded from ticket resolutions — every AI-resolved
+Aurontra's KB is auto-seeded from ticket resolutions — every AI-resolved
 ticket generates a candidate article. No manual authoring required to start.
 """
 import uuid

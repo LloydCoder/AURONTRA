@@ -24,6 +24,8 @@ The 2026-10-09 repository audit and workflow logs identified:
 6. Internal bridge exceptions are not returned verbatim to clients.
 7. Public organization registration and checkout are disabled until tenant authorization, durable credential lifecycle, provider-backed checkout, and webhook idempotency are implemented.
 8. Public plan descriptions distinguish implemented/experimental capabilities from disabled or unverified features.
+7. Public organization registration and checkout are disabled until tenant authorization, durable credential lifecycle, provider-backed checkout, and webhook idempotency are implemented.
+8. Public plan descriptions distinguish implemented/experimental capabilities from disabled or unverified features.
 
 ## Release gates
 
