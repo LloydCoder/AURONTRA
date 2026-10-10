@@ -126,8 +126,10 @@ class TestThreatBlockerAgent:
                 scenario="c2_beacon",
                 org_id="org-001",
             )
-        assert result["blocked"] is True
-        assert result["action_taken"] in ("blocked", "quarantined")
+        assert result["blocked"] is False
+        assert result["action_taken"] == "containment_pending"
+        assert result["status"] == "containment_pending"
+        assert result["enforcement_verified"] is False
 
     @pytest.mark.asyncio
     async def test_low_confidence_does_not_auto_block(self):
