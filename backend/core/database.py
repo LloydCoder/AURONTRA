@@ -3,9 +3,15 @@ from sqlalchemy import inspect, text
 from fastapi import Request, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.pool import NullPool
 from core.config import settings
 
-engine = create_async_engine(settings.DATABASE_URL, echo=settings.DEBUG, future=True)
+_engine_options = {"echo": settings.DEBUG, "future": True}
+# TestClient and async tests can use different event loops. Avoid retaining
+# async driver connections across loops in test mode.
+if settings.TEST_MODE:
+    _engine_options["poolclass"] = NullPool
+engine = create_async_engine(settings.DATABASE_URL, **_engine_options)
 AsyncSessionLocal = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 
@@ -53,7 +59,6 @@ async def init_db() -> None:
     # Development and explicitly configured test environments only.
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-
 
 
 async def get_tenant_db(request: Request):
