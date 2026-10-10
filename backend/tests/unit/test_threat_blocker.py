@@ -232,6 +232,22 @@ class TestSIEMExporter:
         cef_str = result["payload"]
         assert cef_str.startswith("CEF:")
 
+    def test_export_sanitizes_action_taken_even_when_blocked_flag_is_false(self):
+        from agents.threat_blocker import export_siem
+        event = {
+            "event_id": "evt-spoofed",
+            "src_ip": "192.0.2.20",
+            "threat_level": "high",
+            "blocked": False,
+            "action_taken": "blocked",
+            "status": "contained",
+        }
+        result = export_siem(event, fmt="json")
+        assert result["payload"]["blocked"] is False
+        assert result["payload"]["containment_verified"] is False
+        assert result["payload"]["status"] == "containment_pending"
+        assert result["payload"]["action_taken"] == "containment_pending"
+
     def test_export_only_marks_containment_when_enforcement_is_verified(self):
         from agents.threat_blocker import export_siem
         event = {
