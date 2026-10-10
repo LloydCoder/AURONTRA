@@ -1,5 +1,6 @@
 """Security regression tests for Aurontra's production-default API gate."""
 from fastapi.testclient import TestClient
+import pytest
 from core.config import settings
 from main import app
 
@@ -48,7 +49,7 @@ def test_production_cannot_disable_authentication(monkeypatch):
     monkeypatch.setattr(settings, "ENVIRONMENT", "production")
     monkeypatch.setattr(settings, "TEST_MODE", False)
     monkeypatch.setattr(settings, "AUTH_MODE", "disabled")
-    monkeypatch.setattr(settings, "DATA_PLANE_ENABLED", True)
+    monkeypatch.setattr(settings, "DATA_PLANE_ENABLED", False)
     with TestClient(app) as client:
         response = client.get("/tickets/")
     assert response.status_code == 503
@@ -79,8 +80,19 @@ def test_production_cannot_enable_test_mode(monkeypatch):
     monkeypatch.setattr(settings, "ENVIRONMENT", "production")
     monkeypatch.setattr(settings, "TEST_MODE", True)
     monkeypatch.setattr(settings, "AUTH_MODE", "disabled")
-    monkeypatch.setattr(settings, "DATA_PLANE_ENABLED", True)
+    monkeypatch.setattr(settings, "DATA_PLANE_ENABLED", False)
     with TestClient(app) as client:
         response = client.get("/tickets/")
     assert response.status_code == 503
     assert response.json()["code"] == "PRODUCTION_TEST_MODE_FORBIDDEN"
+
+
+@pytest.mark.asyncio
+async def test_production_closed_mode_does_not_mutate_database_schema(monkeypatch):
+    from core.database import Base, init_db
+    monkeypatch.setattr(settings, "ENVIRONMENT", "production")
+    monkeypatch.setattr(settings, "DATA_PLANE_ENABLED", False)
+    def forbidden_create_all(*args, **kwargs):
+        pytest.fail("production closed mode must not call metadata.create_all")
+    monkeypatch.setattr(Base.metadata, "create_all", forbidden_create_all)
+    await init_db()

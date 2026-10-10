@@ -102,7 +102,8 @@ jobs:
               echo ""
               echo "A skipped deployment is not a successful production deployment."
             } >> "$GITHUB_STEP_SUMMARY"
-            echo "::warning::Deployment skipped because required configuration is missing."
+            echo "::error::Deployment refused because required configuration is missing."
+            exit 1
           fi
 
       - name: Deploy via SSH
