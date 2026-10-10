@@ -39,4 +39,4 @@ Backend CI uses Python 3.12 and pytest. The CI workflow is the source of truth f
 
 ## Roadmap
 
-See [docs/ROADMAP.md](docs/ROADMAP.md) for the phase plan and [docs/SECURITY_BASELINE.md](docs/SECURITY_BASELINE.md) for current safety constraints and release gates.
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the canonical Tinlance Agent System boundary, [docs/ROADMAP.md](docs/ROADMAP.md) for the phase plan, and [docs/SECURITY_BASELINE.md](docs/SECURITY_BASELINE.md) for safety constraints and release gates.
