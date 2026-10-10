@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     JWT_JWKS_URL: str = ""
     JWT_ISSUER: str = ""
     JWT_AUDIENCE: str = ""
+    MAX_REQUEST_BODY_BYTES: int = 1048576
 
     # Local development default; production must explicitly configure PostgreSQL.
     DATABASE_URL: str = "sqlite+aiosqlite:///./aurontra_dev.db"

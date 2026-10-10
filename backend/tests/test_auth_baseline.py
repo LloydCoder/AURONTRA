@@ -62,3 +62,12 @@ def test_data_plane_cannot_be_enabled_before_tenant_isolation_is_implemented(mon
         response = client.get("/tickets/")
     assert response.status_code == 503
     assert response.json()["code"] == "TENANT_DATA_PLANE_NOT_READY"
+
+
+def test_oversized_request_is_rejected_before_route_processing(monkeypatch):
+    monkeypatch.setattr(settings, "AUTH_MODE", "disabled")
+    monkeypatch.setattr(settings, "MAX_REQUEST_BODY_BYTES", 16)
+    with TestClient(app) as client:
+        response = client.post("/tickets/ingest", content=b"x" * 17, headers={"content-type": "application/json"})
+    assert response.status_code == 413
+    assert response.json()["code"] == "REQUEST_BODY_TOO_LARGE"

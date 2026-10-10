@@ -47,3 +47,8 @@ The Tinlance Agent Developer conformance suite is a release gate for the four-re
 ## Authentication rollout gate
 
 Aurontra's production default requires a configured JWT verifier and keeps the business data plane closed. A valid bearer token alone is insufficient to enable the API: current handlers use in-memory state and cannot yet guarantee organization-level data separation. The data plane must remain disabled until durable tenant-scoped repositories, migrations, object-level authorization, and cross-tenant isolation tests are complete. CI's explicit test-mode override exists only to keep unit tests deterministic.
+
+
+## Resource consumption
+
+The application rejects oversized declared request bodies before routing. The production reverse proxy/API gateway must also enforce maximum streamed body size, per-tenant rate limits, concurrency budgets, and upstream timeouts; these controls are not yet certified as deployed.

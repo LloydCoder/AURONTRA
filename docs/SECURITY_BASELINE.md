@@ -60,3 +60,8 @@ This document is not a substitute for an independent penetration test, external 
 - `ENVIRONMENT=production` cannot be combined with `AUTH_MODE=disabled`; the request gate returns a fail-closed 503.
 - JWT verification distinguishes invalid credentials (401) from JWKS provider unavailability (503).
 - The tenant-isolation implementation gate is a code-level release switch, not an environment variable. Setting `DATA_PLANE_ENABLED=true` alone cannot open the production business API.
+
+
+## Request resource limits
+
+The API perimeter rejects request bodies whose declared `Content-Length` exceeds `MAX_REQUEST_BODY_BYTES` (default 1 MiB). Production ingress must enforce the same or stricter body-size limit for chunked/streamed requests and apply rate/concurrency limits at the gateway. The application-level content-length check alone is not a complete DoS defense.
