@@ -290,17 +290,29 @@ def export_siem(event: dict, fmt: str = "json") -> dict:
     # carry a positive containment claim. Public route input cannot set this flag.
     event = dict(event)
     enforcement_verified = event.get("enforcement_verified") is True
-    requested_block = event.get("blocked") is True
-    verified_block = requested_block and enforcement_verified
+    caller_claimed_containment = (
+        event.get("blocked") is True
+        or event.get("requested_action") == "block"
+        or event.get("status") in {"blocked", "contained", "quarantined"}
+        or event.get("action_taken") in {"blocked", "contained", "quarantined"}
+    )
+    verified_block = caller_claimed_containment and enforcement_verified
+    event["enforcement_verified"] = enforcement_verified
     event["blocked"] = verified_block
     event["containment_verified"] = verified_block
     if verified_block:
         event["status"] = "contained"
         event["action_taken"] = "blocked"
-    elif requested_block or event.get("requested_action") == "block":
+    elif caller_claimed_containment:
         event["status"] = "containment_pending"
         event["action_taken"] = "containment_pending"
     else:
+        # Untrusted event input cannot preserve a false "contained" status or
+        # blocked action label when there is no verified enforcement record.
+        if event.get("status") in {"blocked", "contained", "quarantined"}:
+            event["status"] = "assessed"
+        if event.get("action_taken") in {"blocked", "contained", "quarantined"}:
+            event["action_taken"] = "monitor"
         event.setdefault("status", "assessed")
         event.setdefault("action_taken", "monitor")
 
