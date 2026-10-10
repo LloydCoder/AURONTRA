@@ -21,6 +21,7 @@ Until secure endpoint execution and authorization are implemented and tested:
 - The threat-containment endpoint is disabled; analysis must not be represented as containment.
 - Billing webhooks are rejected when signature verification cannot be performed.
 - Public organization registration and checkout are disabled until secure tenant lifecycle and provider-backed billing are implemented.
+- The production business data plane is disabled by default until JWT verification and durable tenant isolation are configured.
 - ROI outputs are illustrative models, not measured savings; control mappings are not compliance certification.
 - Deployment status is reported separately from test status.
 

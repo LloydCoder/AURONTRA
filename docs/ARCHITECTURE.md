@@ -42,3 +42,8 @@ The current Aurontra repository has not yet completed the SDK integration. The p
 ## Conformance and release
 
 The Tinlance Agent Developer conformance suite is a release gate for the four-repository system, and TSIC is the canonical ecosystem certification authority. Aurontra should add product-specific contract tests against the reviewed SDK/Platform wire contract and must keep those tests green alongside its own CI/security workflows. Passing repository conformance does not prove production database, secrets, sandbox, TLS, telemetry, backups, or incident response are deployed.
+
+
+## Authentication rollout gate
+
+Aurontra's production default requires a configured JWT verifier and keeps the business data plane closed. A valid bearer token alone is insufficient to enable the API: current handlers use in-memory state and cannot yet guarantee organization-level data separation. The data plane must remain disabled until durable tenant-scoped repositories, migrations, object-level authorization, and cross-tenant isolation tests are complete. CI's explicit test-mode override exists only to keep unit tests deterministic.

@@ -1,10 +1,14 @@
 """Aurontra — FastAPI application entry point."""
 import logging
+import asyncio
+from fastapi import Request
+from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from core.config import settings
 from core.database import init_db
+from core.auth import verify_bearer_token
 import models  # noqa: F401 — register SQLAlchemy models before metadata creation
 from api.routes import (
     health, tickets, devices, resilience,
@@ -22,7 +26,7 @@ async def lifespan(app: FastAPI):
     await init_db()
     logger.info("Database initialised")
     yield
-    logger.info("[ResilientAI] Shutting down")
+    logger.info("Shutting down %s", settings.APP_NAME)
 
 
 app = FastAPI(
@@ -31,6 +35,35 @@ app = FastAPI(
     description="IT service operations, resilience analysis, and governed remediation orchestration.",
     lifespan=lifespan,
 )
+
+@app.middleware("http")
+async def enforce_auth_and_data_plane(request: Request, call_next):
+    """Default-deny business APIs until authentication and tenant isolation are configured."""
+    path = request.url.path
+    if path == "/health/live" or request.method == "OPTIONS":
+        return await call_next(request)
+    if settings.AUTH_MODE != "disabled":
+        if not (settings.JWT_JWKS_URL and settings.JWT_ISSUER and settings.JWT_AUDIENCE):
+            return JSONResponse(status_code=503, content={"detail": "Business API unavailable: authentication provider is not configured.", "code": "AUTH_PROVIDER_NOT_CONFIGURED"})
+        authorization = request.headers.get("Authorization", "")
+        if not authorization.startswith("Bearer "):
+            return JSONResponse(status_code=401, headers={"WWW-Authenticate": "Bearer"}, content={"detail": "Bearer authentication required.", "code": "AUTHENTICATION_REQUIRED"})
+        try:
+            claims = await asyncio.to_thread(verify_bearer_token, authorization[7:].strip())
+        except Exception:
+            return JSONResponse(status_code=401, headers={"WWW-Authenticate": 'Bearer error="invalid_token"'}, content={"detail": "Invalid or expired access token.", "code": "INVALID_TOKEN"})
+        tenant_id = claims.get("org_id") or claims.get("tenant_id")
+        subject = claims.get("sub")
+        if not isinstance(tenant_id, str) or not tenant_id or not isinstance(subject, str) or not subject:
+            return JSONResponse(status_code=403, content={"detail": "Token must identify a subject and organization.", "code": "TENANT_CONTEXT_REQUIRED"})
+        request.state.tenant_id = tenant_id
+        request.state.subject = subject
+        request.state.claims = claims
+    # Authentication alone does not fix cross-tenant in-memory storage.
+    if not settings.DATA_PLANE_ENABLED:
+        return JSONResponse(status_code=503, content={"detail": "Business API unavailable until durable tenant isolation is enabled.", "code": "TENANT_DATA_PLANE_NOT_READY"})
+    return await call_next(request)
+
 
 app.add_middleware(
     CORSMiddleware,

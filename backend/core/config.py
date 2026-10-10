@@ -11,6 +11,13 @@ class Settings(BaseSettings):
     VERSION: str = "0.1.0"
     DEBUG: bool = False
 
+    # Secure-by-default: the business data plane stays closed until auth and tenant-scoped persistence are ready.
+    AUTH_MODE: str = "required"
+    DATA_PLANE_ENABLED: bool = False
+    JWT_JWKS_URL: str = ""
+    JWT_ISSUER: str = ""
+    JWT_AUDIENCE: str = ""
+
     # Local development default; production must explicitly configure PostgreSQL.
     DATABASE_URL: str = "sqlite+aiosqlite:///./aurontra_dev.db"
     REDIS_URL: str = "redis://localhost:6379"
@@ -54,8 +61,7 @@ class Settings(BaseSettings):
     LS_ENTERPRISE_VARIANT_ID: str = ""
     LS_CHECKOUT_BASE_URL: str = ""
 
-    # Clerk keys are not themselves sufficient for JWT verification; the auth
-    # phase must add and validate JWKS, issuer, audience and authorized-party config.
+    # Configure JWKS URL, issuer and audience for the selected Clerk JWT template.
     CLERK_SECRET_KEY: str = ""
     CLERK_PUBLISHABLE_KEY: str = ""
 

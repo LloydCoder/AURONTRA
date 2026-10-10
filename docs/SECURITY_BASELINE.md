@@ -44,3 +44,14 @@ A production release must not be approved until all of the following are demonst
 ## Limitations
 
 This document is not a substitute for an independent penetration test, external compliance assessment, production environment verification or review of every commit and binary artifact. Phase completion requires implementation and test evidence, not documentation alone.
+
+
+## Authentication and tenant data-plane gate
+
+- Production defaults are `AUTH_MODE=required` and `DATA_PLANE_ENABLED=false`.
+- Configure `JWT_JWKS_URL`, `JWT_ISSUER`, and `JWT_AUDIENCE` for the selected identity provider before business APIs can authenticate.
+- Bearer JWTs must pass asymmetric signature, issuer, audience, and expiry validation. A verified token must contain a subject and organization/tenant claim.
+- This middleware is a perimeter control, not a substitute for resource-level authorization. Current handlers still contain process-local collections and therefore do not yet have durable tenant isolation.
+- The business data plane remains closed by default even when a token is valid. It must not be enabled in production until durable tenant-scoped repositories, migrations, object-level authorization, and cross-tenant isolation tests are complete.
+- CI explicitly opts into the legacy in-process test mode. That setting is test-only and must not be copied to production.
+- Only `/health/live` is unauthenticated. Readiness, bridge inventory, docs, reports, telemetry, and all business endpoints remain behind the auth/data-plane gate.

@@ -41,6 +41,10 @@ jobs:
         run: python -m compileall -q .
 
       - name: Run full test suite with coverage
+        env:
+          # Explicit test-only opt-out; production defaults remain auth-required and data-plane-closed.
+          AUTH_MODE: disabled
+          DATA_PLANE_ENABLED: "true"
         run: pytest tests/ -v --tb=short --cov=. --cov-report=term-missing --cov-report=html --cov-fail-under=60
 
       - name: Upload coverage report
@@ -122,9 +126,9 @@ jobs:
             "$APP_DIR/.venv/bin/python" -m pip install -r backend/requirements.txt
             sudo systemctl restart "$SERVICE_NAME"
             sleep 4
-            STATUS=$(curl --fail --silent --show-error http://127.0.0.1:8003/health/ |
-              python3 -c "import json,sys; print(json.load(sys.stdin).get('status','fail'))")
-            test "$STATUS" = "ok"
+            STATUS=$(curl --fail --silent --show-error http://127.0.0.1:8003/health/live |
+              python3 -c "import json,sys; print(str(json.load(sys.stdin).get('alive',False)).lower())")
+            test "$STATUS" = "true"
             echo "Aurontra service health check passed."
 
       - name: Record deployment evidence
