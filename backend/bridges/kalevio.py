@@ -4,12 +4,12 @@ KalevioAI: FastAPI + Next.js 15 + PostgreSQL 16 + pgvector + LangChain,
 €49/€199/€499 pricing, Supabase SQL migration with RLS + pgvector complete.
 
 What flows IN from KalevioAI:
-  - NIS2/DORA compliance gaps → auto-tickets in ResilientAI
-  - Compliance score → appears in ResilientAI dashboard
+  - NIS2/DORA compliance gaps → auto-tickets in Aurontra
+  - Compliance score → appears in Aurontra dashboard
   - Evidence gaps → self-healing playbook triggers
 
 What flows OUT to KalevioAI:
-  - ResilientAI compliance report → updates KalevioAI compliance score
+  - Aurontra compliance report → updates KalevioAI compliance score
   - ThreatFade events → KalevioAI incident evidence log
   - Resilience scores → KalevioAI's device health evidence
 """
@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 async def get_compliance_gaps(org_id: str, framework: str = "NIS2") -> list[dict]:
     """
     Pull active compliance gaps from KalevioAI for an org.
-    Each gap becomes a ResilientAI remediation ticket.
+    Each gap becomes a Aurontra remediation ticket.
     """
     if not settings.KALEVIO_URL:
         return []
@@ -47,7 +47,7 @@ async def push_resilience_report(
     resilience_scores: list[dict],
 ) -> bool:
     """
-    Push ResilientAI's compliance report + device scores to KalevioAI.
+    Push Aurontra's compliance report + device scores to KalevioAI.
     KalevioAI updates the org's compliance evidence bundle.
     """
     if not settings.KALEVIO_URL:

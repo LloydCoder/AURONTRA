@@ -1,12 +1,12 @@
 """
-Olvrix Platform Bridge — client device events → ResilientAI ticket queue.
+Olvrix Platform Bridge — client device events → Aurontra ticket queue.
 Olvrix: v0.3.1, 93 files, 15,064 lines, 5 payment gateways including
 NOWPayments USDT/USDC, deployment-ready.
 
 What flows IN from Olvrix:
-  - Client device events → auto-tickets in ResilientAI
-  - Agency client ticket signals → ResilientAI resolution queue
-  - Olvrix widget errors → ResilientAI incident tickets
+  - Client device events → auto-tickets in Aurontra
+  - Agency client ticket signals → Aurontra resolution queue
+  - Olvrix widget errors → Aurontra incident tickets
 
 What flows OUT to Olvrix:
   - Resolved tickets → Olvrix client health dashboard
@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 async def receive_client_event(event: dict) -> dict:
     """
     Process a client event from Olvrix's flywheel orchestrator.
-    Maps it to a ResilientAI ticket or threat event.
+    Maps it to a Aurontra ticket or threat event.
     """
     event_type = event.get("event_type", "")
     if "error" in event_type or "crash" in event_type:

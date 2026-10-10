@@ -1,11 +1,11 @@
 """
-TwinGuard Bridge — AI containment verdicts → ResilientAI threat events.
+TwinGuard Bridge — AI containment verdicts → Aurontra threat events.
 TwinGuard: NVIDIA OpenShell/NemoClaw, Parliament Ensemble, 22 modules,
 5 defense layers, React GUI, domain twinguard.ai.
 ThreatFade feeds TwinGuard as the network threat oracle.
 
 What flows IN from TwinGuard:
-  - AI containment verdicts → creates threat events in ResilientAI
+  - AI containment verdicts → creates threat events in Aurontra
   - Boundary violation alerts → high-priority tickets
   - Parliament Ensemble decisions → enriches threat scoring
 
@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 async def receive_containment_verdict(verdict: dict) -> dict:
     """
     Process an AI containment verdict from TwinGuard.
-    Converts it to a ResilientAI threat event for blocking + SIEM export.
+    Converts it to a Aurontra threat event for blocking + SIEM export.
     """
     threat_level_map = {
         "contained":    "high",
@@ -71,7 +71,7 @@ async def get_parliament_decision(scenario: str) -> dict:
     """
     Query TwinGuard's Parliament Ensemble (Claude+Grok+ThreatFade voting)
     for a threat classification decision.
-    Used to strengthen ResilientAI's auto-block confidence.
+    Used to strengthen Aurontra's auto-block confidence.
     """
     if not settings.TWINGUARD_URL:
         return {"decision": "unavailable", "confidence": 0, "source": "twinguard_unavailable"}
