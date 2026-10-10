@@ -52,7 +52,7 @@ class Settings(BaseSettings):
     LS_STARTER_VARIANT_ID: str = ""
     LS_BUSINESS_VARIANT_ID: str = ""
     LS_ENTERPRISE_VARIANT_ID: str = ""
-    LS_CHECKOUT_BASE_URL: str = "https://resilientai.lemonsqueezy.com/checkout"
+    LS_CHECKOUT_BASE_URL: str = ""
 
     # Clerk keys are not themselves sufficient for JWT verification; the auth
     # phase must add and validate JWKS, issuer, audience and authorized-party config.
