@@ -67,10 +67,19 @@ def _config() -> dict[str, str]:
     return raw
 
 
+_SERVICE_ORIGIN_SETTINGS = {
+    "threatfade": "THREATFADE_URL",
+    "fusionops": "FUSIONOPS_URL",
+}
+
+
 def _validate_origin(service: str, base_url: str) -> str:
-    if not isinstance(service, str) or not service or len(service) > 64:
+    if not isinstance(service, str) or service not in _SERVICE_ORIGIN_SETTINGS:
         raise EcosystemIntegrationError("bridge_service_invalid", 503)
     if not isinstance(base_url, str) or not base_url:
+        raise EcosystemIntegrationError("bridge_not_configured", 503)
+    configured_url = getattr(settings, _SERVICE_ORIGIN_SETTINGS[service], "")
+    if not isinstance(configured_url, str) or not configured_url:
         raise EcosystemIntegrationError("bridge_not_configured", 503)
     parsed = urlsplit(base_url)
     if (
@@ -88,7 +97,15 @@ def _validate_origin(service: str, base_url: str) -> str:
         raise EcosystemIntegrationError("bridge_https_required", 503)
     if parsed.path not in {"", "/"}:
         raise EcosystemIntegrationError("bridge_origin_must_not_include_path", 503)
-    return f"{parsed.scheme}://{parsed.netloc}"
+    origin = f"{parsed.scheme}://{parsed.netloc}"
+    configured = urlsplit(configured_url)
+    configured_origin = (
+        f"{configured.scheme}://{configured.netloc}"
+        if configured.scheme and configured.netloc else ""
+    )
+    if origin != configured_origin:
+        raise EcosystemIntegrationError("bridge_origin_not_allowlisted", 403)
+    return origin
 
 
 def _circuit(service: str) -> _Circuit:
