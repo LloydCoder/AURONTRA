@@ -64,6 +64,15 @@ def test_release_gate_accepts_only_digest_verified_evidence(monkeypatch, tmp_pat
     monkeypatch.setattr(release_readiness, "MANIFEST_PATH", manifest_path)
     monkeypatch.setattr(release_readiness, "EVIDENCE_ROOT", evidence_dir.resolve())
 
+    # A subset of otherwise valid gates must never satisfy the full release contract.
+    incomplete = dict(manifest)
+    incomplete["gates"] = manifest["gates"][:-1]
+    manifest_path.write_text(json.dumps(incomplete), encoding="utf-8")
+    result = release_readiness.evaluate()
+    assert result["production_release_ready"] is False
+    assert any(item["id"] == "phase24_production_deployment_and_rollback" for item in result["blockers"])
+
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
     result = release_readiness.evaluate()
     assert result["production_release_ready"] is True
     assert result["blockers"] == []
