@@ -26,7 +26,7 @@ Turn the legacy ticket resolver into a risk-based drafting assistant backed by a
 - `backend/agents/ticket_resolver.py`: deterministic risk triage, bounded/redacted prompt construction, safe response validation, timeout/fallback handling and draft-only result contract.
 - `backend/knowledge/retrieval.py`: tenant/global published-article retrieval, deterministic lexical ranking, content-digest validation and safe source URL filtering.
 - `backend/models/knowledge_article.py`: versioned knowledge article record with approval metadata, status, tenant scope and content digest.
-- `backend/models/ticket.py` and Alembic revision `0008_ticket_ai_provenance_knowledge`: durable suggestion and knowledge-reference provenance.
+- `backend/models/ticket.py` and Alembic revision `0008_ticket_ai_knowledge`: durable suggestion and knowledge-reference provenance.
 - `backend/api/routes/tickets.py`: retrieves approved references, refuses model invocation on knowledge-integrity failure, and persists suggestion provenance without resolving the ticket.
 - CI adds tenant-RLS assertions for published knowledge visibility, cross-tenant denial, tenant self-publication denial and backup/restore preservation of the table's RLS policies.
 
