@@ -349,9 +349,10 @@ class TestTicketResolverSecurityControls:
         assert result["outcome_verified"] is False
 
 
-    def test_prompt_stays_within_total_configured_character_budget(self):
+    @pytest.mark.parametrize("budget", [1000, 2000])
+    def test_prompt_stays_within_total_configured_character_budget(self, budget):
         from agents.ticket_resolver import build_resolution_prompt
-        with patch("agents.ticket_resolver.settings.LLM_MAX_INPUT_CHARS", 2000):
+        with patch("agents.ticket_resolver.settings.LLM_MAX_INPUT_CHARS", budget):
             prompt = build_resolution_prompt(
                 title="VPN issue " * 50,
                 description="Troubleshooting details " * 1000,
@@ -365,7 +366,7 @@ class TestTicketResolverSecurityControls:
                     "content_sha256": hashlib.sha256(("Article content " * 1000).encode("utf-8")).hexdigest(),
                 } for index in range(5)],
             )
-        assert len(prompt) <= 2000
+        assert len(prompt) <= budget
         assert isinstance(json.loads(prompt), dict)
 
     @pytest.mark.asyncio
