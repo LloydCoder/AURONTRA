@@ -23,8 +23,13 @@ EVIDENCE_ID = UUID("1e54fd16-ec29-4b67-b8f8-86ac85e0d64a")
 AUDIT_ID = UUID("1f7f1905-5f4a-4f57-a9b6-6b6a0aee40b4")
 
 
-def _context(tenant_id="trusted-tenant", subject_id="aurontra-service"):
-    return TrustedPlatformContext(tenant_id=tenant_id, subject_id=subject_id)
+def _context(tenant_id="trusted-tenant", subject_id="aurontra-service", agent_id=AGENT_ID, task_id=TASK_ID):
+    return TrustedPlatformContext(
+        tenant_id=tenant_id,
+        subject_id=subject_id,
+        agent_id=agent_id,
+        task_id=task_id,
+    )
 
 
 def _definition(**overrides):
@@ -289,6 +294,8 @@ def test_platform_sdk_configuration_is_rejected_without_https_in_production(monk
     monkeypatch.setattr(settings, "AGENT_PLATFORM_BEARER_TOKEN", "injected-test-token")
     monkeypatch.setattr(settings, "AGENT_PLATFORM_TENANT_ID", "tenant-test")
     monkeypatch.setattr(settings, "AGENT_PLATFORM_SUBJECT_ID", "subject-test")
+    monkeypatch.setattr(settings, "AGENT_PLATFORM_AGENT_ID", str(AGENT_ID))
+    monkeypatch.setattr(settings, "AGENT_PLATFORM_TASK_ID", str(TASK_ID))
     monkeypatch.setattr(settings, "AGENT_PLATFORM_API_VERSION", "1.1")
     monkeypatch.setattr(settings, "AGENT_PLATFORM_TIMEOUT_SECONDS", 10.0)
     monkeypatch.setattr(settings, "AGENT_PLATFORM_ALLOW_INSECURE_HTTP", True)
@@ -345,6 +352,8 @@ def test_client_factory_binds_trusted_context_and_w3c_trace(monkeypatch):
     monkeypatch.setattr(settings, "AGENT_PLATFORM_BEARER_TOKEN", "test-injected-credential")
     monkeypatch.setattr(settings, "AGENT_PLATFORM_TENANT_ID", "trusted-tenant")
     monkeypatch.setattr(settings, "AGENT_PLATFORM_SUBJECT_ID", "aurontra-service")
+    monkeypatch.setattr(settings, "AGENT_PLATFORM_AGENT_ID", str(AGENT_ID))
+    monkeypatch.setattr(settings, "AGENT_PLATFORM_TASK_ID", str(TASK_ID))
     monkeypatch.setattr(settings, "AGENT_PLATFORM_API_VERSION", "1.1")
     monkeypatch.setattr(settings, "AGENT_PLATFORM_TIMEOUT_SECONDS", 7.0)
     monkeypatch.setattr(settings, "AGENT_PLATFORM_ALLOW_INSECURE_HTTP", False)
@@ -370,6 +379,8 @@ def test_client_factory_rejects_noncanonical_base_url(monkeypatch):
     monkeypatch.setattr(settings, "AGENT_PLATFORM_BEARER_TOKEN", "test-injected-credential")
     monkeypatch.setattr(settings, "AGENT_PLATFORM_TENANT_ID", "trusted-tenant")
     monkeypatch.setattr(settings, "AGENT_PLATFORM_SUBJECT_ID", "aurontra-service")
+    monkeypatch.setattr(settings, "AGENT_PLATFORM_AGENT_ID", str(AGENT_ID))
+    monkeypatch.setattr(settings, "AGENT_PLATFORM_TASK_ID", str(TASK_ID))
     monkeypatch.setattr(settings, "AGENT_PLATFORM_API_VERSION", "1.1")
     monkeypatch.setattr(settings, "AGENT_PLATFORM_TIMEOUT_SECONDS", 7.0)
     monkeypatch.setattr(settings, "AGENT_PLATFORM_ALLOW_INSECURE_HTTP", False)
@@ -440,6 +451,8 @@ def test_platform_client_rejects_nonfinite_timeout(monkeypatch):
     monkeypatch.setattr(settings, "AGENT_PLATFORM_BEARER_TOKEN", "test-injected-credential")
     monkeypatch.setattr(settings, "AGENT_PLATFORM_TENANT_ID", "trusted-tenant")
     monkeypatch.setattr(settings, "AGENT_PLATFORM_SUBJECT_ID", "aurontra-service")
+    monkeypatch.setattr(settings, "AGENT_PLATFORM_AGENT_ID", str(AGENT_ID))
+    monkeypatch.setattr(settings, "AGENT_PLATFORM_TASK_ID", str(TASK_ID))
     monkeypatch.setattr(settings, "AGENT_PLATFORM_API_VERSION", "1.1")
     monkeypatch.setattr(settings, "AGENT_PLATFORM_TIMEOUT_SECONDS", float("nan"))
     monkeypatch.setattr(settings, "AGENT_PLATFORM_ALLOW_INSECURE_HTTP", False)
@@ -539,6 +552,8 @@ def test_static_platform_credential_cannot_cross_tenant_context(monkeypatch):
     monkeypatch.setattr(settings, "AGENT_PLATFORM_BEARER_TOKEN", "tenant-a-credential")
     monkeypatch.setattr(settings, "AGENT_PLATFORM_TENANT_ID", "tenant-a")
     monkeypatch.setattr(settings, "AGENT_PLATFORM_SUBJECT_ID", "service-a")
+    monkeypatch.setattr(settings, "AGENT_PLATFORM_AGENT_ID", str(AGENT_ID))
+    monkeypatch.setattr(settings, "AGENT_PLATFORM_TASK_ID", str(TASK_ID))
     monkeypatch.setattr(settings, "AGENT_PLATFORM_API_VERSION", "1.1")
     monkeypatch.setattr(settings, "AGENT_PLATFORM_TIMEOUT_SECONDS", 10.0)
     monkeypatch.setattr(settings, "AGENT_PLATFORM_ALLOW_INSECURE_HTTP", False)
