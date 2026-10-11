@@ -14,6 +14,8 @@ def upgrade():
     columns = {item["name"] for item in inspector.get_columns("devices")}
     if "agent_key_thumbprint" not in columns:
         op.add_column("devices", sa.Column("agent_key_thumbprint", sa.String(128), nullable=True))
+    if "agent_key_rotated_at" not in columns:
+        op.add_column("devices", sa.Column("agent_key_rotated_at", sa.DateTime(timezone=True), nullable=True))
 
     tables = set(sa.inspect(bind).get_table_names())
     if "agent_request_replays" not in tables:
