@@ -119,7 +119,7 @@ class FakeVerifier:
         self.stale = stale
         self.calls = []
 
-    async def verify(self, *, tenant_id, device, finding, execution):
+    async def verify(self, *, db, tenant_id, device, finding, execution):
         self.calls.append((tenant_id, device.id, finding.id, execution.execution_id))
         return ContainmentVerification(
             verified=self.verified,
