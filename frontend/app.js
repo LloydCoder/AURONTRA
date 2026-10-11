@@ -80,12 +80,64 @@ async function pkceChallenge(verifier) {
   return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
 
-function decodeJwtPayload(token) {
+function decodeBase64Url(segment) {
+  const base64 = String(segment).replace(/-/g, "+").replace(/_/g, "/");
+  const padded = base64 + "=".repeat((4 - base64.length % 4) % 4);
+  const binary = atob(padded);
+  return Uint8Array.from(binary, character => character.charCodeAt(0));
+}
+
+function parseJwtSegment(segment) {
+  return JSON.parse(new TextDecoder().decode(decodeBase64Url(segment)));
+}
+
+async function verifyIdToken(token, metadata, expectedNonce) {
   const parts = String(token).split(".");
   if (parts.length !== 3) throw new Error("Invalid identity token.");
-  const base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
-  const padded = base64 + "=".repeat((4 - base64.length % 4) % 4);
-  return JSON.parse(atob(padded));
+  const header = parseJwtSegment(parts[0]);
+  if (header.alg !== "RS256" || typeof header.kid !== "string") {
+    throw new Error("Unsupported identity-token signature.");
+  }
+  const jwksUrl = safeUrl(metadata.jwks_uri);
+  if (jwksUrl.origin !== new URL(config.oidcIssuer).origin) {
+    throw new Error("Identity provider key endpoint origin mismatch.");
+  }
+  const { response, body } = await fetchJson(jwksUrl.href);
+  if (!response.ok || !Array.isArray(body?.keys)) throw new Error("Identity provider keys unavailable.");
+  const jwk = body.keys.find(key =>
+    key.kid === header.kid &&
+    key.kty === "RSA" &&
+    key.use !== "enc" &&
+    (!key.alg || key.alg === "RS256")
+  );
+  if (!jwk) throw new Error("No matching identity-token verification key.");
+  const publicKey = await crypto.subtle.importKey(
+    "jwk", jwk, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["verify"]
+  );
+  const validSignature = await crypto.subtle.verify(
+    { name: "RSASSA-PKCS1-v1_5" },
+    publicKey,
+    decodeBase64Url(parts[2]),
+    new TextEncoder().encode(parts[0] + "." + parts[1])
+  );
+  if (!validSignature) throw new Error("Identity-token signature is invalid.");
+
+  const claims = parseJwtSegment(parts[1]);
+  const audience = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
+  const now = Date.now() / 1000;
+  if (
+    claims.iss !== config.oidcIssuer ||
+    !audience.includes(config.oidcClientId) ||
+    (audience.length > 1 && claims.azp !== config.oidcClientId) ||
+    claims.nonce !== expectedNonce ||
+    typeof claims.sub !== "string" || !claims.sub ||
+    !Number.isFinite(claims.exp) || claims.exp <= now ||
+    !Number.isFinite(claims.iat) || claims.iat > now + 60 ||
+    (claims.nbf !== undefined && (!Number.isFinite(claims.nbf) || claims.nbf > now))
+  ) {
+    throw new Error("Identity-token claims did not match the OIDC transaction.");
+  }
+  return claims;
 }
 
 function withTimeout(ms = 10000) {
@@ -120,7 +172,10 @@ async function discoverOidc() {
   if (!response.ok || !body || body.issuer !== config.oidcIssuer) {
     throw new Error("Identity provider discovery failed.");
   }
-  for (const key of ["authorization_endpoint", "token_endpoint"]) {
+  if (!Array.isArray(body.id_token_signing_alg_values_supported) || !body.id_token_signing_alg_values_supported.includes("RS256")) {
+    throw new Error("Identity provider must support RS256 ID-token signatures.");
+  }
+  for (const key of ["authorization_endpoint", "token_endpoint", "jwks_uri"]) {
     const endpoint = safeUrl(body[key]);
     if (endpoint.origin !== issuer.origin) {
       throw new Error("Identity provider endpoints must share the configured issuer origin.");
@@ -214,12 +269,7 @@ async function handleOidcCallback() {
       throw new Error("Token exchange failed.");
     }
 
-    const claims = decodeJwtPayload(tokenResponse.id_token);
-    const audience = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
-    if (claims.iss !== config.oidcIssuer || !audience.includes(config.oidcClientId) ||
-        claims.nonce !== nonce || !Number.isFinite(claims.exp) || claims.exp <= Date.now() / 1000) {
-      throw new Error("Identity token claims did not match the OIDC transaction.");
-    }
+    await verifyIdToken(tokenResponse.id_token, metadata, nonce);
 
     // Access token stays in this page's memory; it is never persisted to browser storage.
     state.accessToken = tokenResponse.access_token;
