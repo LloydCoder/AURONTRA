@@ -245,19 +245,22 @@ async def request_json(
                     timeout=httpx.Timeout(timeout), transport=transport, follow_redirects=False,
                     limits=httpx.Limits(max_connections=20, max_keepalive_connections=10),
                 ) as client:
-                    response = await client.request(
+                    async with client.stream(
                         method, f"{origin}{path}", json=payload, params=params, headers=headers,
-                    )
-                if len(response.content) > MAX_RESPONSE_BYTES:
-                    raise EcosystemIntegrationError("bridge_response_too_large", 502)
-                if response.status_code in RETRYABLE_STATUS:
-                    raise EcosystemIntegrationError("bridge_upstream_retryable", 503)
-                if response.status_code < 200 or response.status_code >= 300:
-                    # A valid 4xx is a contract/auth/business rejection, not evidence
-                    # that the service is unhealthy; don't trip the circuit breaker.
-                    raise EcosystemIntegrationError("bridge_upstream_rejected", 502)
+                    ) as response:
+                        if response.status_code in RETRYABLE_STATUS:
+                            raise EcosystemIntegrationError("bridge_upstream_retryable", 503)
+                        if response.status_code < 200 or response.status_code >= 300:
+                            # A valid 4xx is a contract/auth/business rejection, not evidence
+                            # that the service is unhealthy; don't trip the circuit breaker.
+                            raise EcosystemIntegrationError("bridge_upstream_rejected", 502)
+                        body = bytearray()
+                        async for chunk in response.aiter_bytes():
+                            if len(body) + len(chunk) > MAX_RESPONSE_BYTES:
+                                raise EcosystemIntegrationError("bridge_response_too_large", 502)
+                            body.extend(chunk)
                 try:
-                    result = response.json()
+                    result = json.loads(body)
                 except (ValueError, json.JSONDecodeError):
                     raise EcosystemIntegrationError("bridge_response_invalid_json", 502) from None
                 async with circuit.lock:
