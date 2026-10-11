@@ -297,3 +297,25 @@ async def test_expired_job_lease_can_be_reclaimed_but_old_worker_cannot_commit()
                 session, job_id=job.id, org_id="test-tenant",
                 worker_id="worker-old", result_metadata={},
             )
+
+
+
+@pytest.mark.asyncio
+async def test_queue_rejects_non_json_numbers_and_oversized_payloads():
+    async with AsyncSessionLocal() as session:
+        with pytest.raises(ValueError):
+            await enqueue_job(
+                session, org_id="test-tenant", job_type="test.invalid",
+                idempotency_key="nan-payload", payload={"metric": float("nan")},
+            )
+        with pytest.raises(ValueError, match="64 KiB"):
+            await enqueue_job(
+                session, org_id="test-tenant", job_type="test.oversized",
+                idempotency_key="large-payload", payload={"body": "x" * 70000},
+            )
+        with pytest.raises(ValueError, match="64 KiB"):
+            await enqueue_outbox_event(
+                session, org_id="test-tenant", aggregate_type="ticket",
+                aggregate_id="tkt-large", event_type="ticket.created",
+                idempotency_key="large-outbox-payload", payload={"body": "x" * 70000},
+            )
