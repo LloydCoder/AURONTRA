@@ -66,7 +66,7 @@ def _valid_public_domain(value: Any) -> bool:
     if not isinstance(value, str):
         return False
     normalized = value.rstrip(".").lower()
-    pattern = r"(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}"
+    pattern = r"(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}"
     return re.fullmatch(pattern, normalized) is not None
 
 
