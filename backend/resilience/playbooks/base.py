@@ -24,10 +24,13 @@ class BasePlaybook(ABC):
 
     async def audit(self, device_id: str, result: dict) -> None:
         """Log minimal recommendation metadata; this is not authoritative audit evidence."""
+        safe_device_id = device_id if isinstance(device_id, str) and re.fullmatch(r"[A-Za-z0-9:_-]{1,64}", device_id) else "unknown"
         logger.info(
-            f"[playbook:{self.name}] device={device_id} "
-            f"status={result.get('status')} "
-            f"at={datetime.now(timezone.utc).isoformat()}"
+            "playbook_recommendation name=%s device=%s status=%s at=%s",
+            self.name,
+            safe_device_id,
+            result.get("status"),
+            datetime.now(timezone.utc).isoformat(),
         )
 
     def _base_result(self, context: dict, **kwargs) -> dict:
@@ -35,7 +38,9 @@ class BasePlaybook(ABC):
         return {
             "playbook": self.name,
             "device_id": context.get("device_id", "unknown"),
+            "created_at": datetime.now(timezone.utc).isoformat(),
             "executed_at": datetime.now(timezone.utc).isoformat(),
+            "timestamp_semantics": "recommendation_created",
             "status": "simulated",
             "execution_mode": "recommendation_only",
             "execution_enabled": False,
