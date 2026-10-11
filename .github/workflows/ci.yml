@@ -133,7 +133,7 @@ jobs:
           test "$restored_rls" = "true:true"
           policy_count="$(psql "$restore_dsn" -tA -v ON_ERROR_STOP=1 -c "SELECT COUNT(*) FROM pg_policies WHERE tablename='devices'")"
           test "$policy_count" -ge 1
-          for table in durable_jobs outbox_events agent_request_replays remediation_intents telemetry_records knowledge_articles threat_findings threat_containment_attempts; do
+          for table in durable_jobs outbox_events agent_request_replays remediation_intents telemetry_records knowledge_articles threat_findings threat_containment_attempts containment_verification_evidence; do
             restored_policy="$(psql "$restore_dsn" -tA -v ON_ERROR_STOP=1 -c "SELECT relrowsecurity::text || ':' || relforcerowsecurity::text FROM pg_class WHERE oid='$table'::regclass")"
             test "$restored_policy" = "true:true"
             policy_count="$(psql "$restore_dsn" -tA -v ON_ERROR_STOP=1 -c "SELECT COUNT(*) FROM pg_policies WHERE tablename='$table'")"
