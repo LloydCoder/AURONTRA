@@ -32,6 +32,7 @@ def _article(*, article_id, org_id, title, content, status="published", source_u
 async def test_retrieval_returns_only_published_global_and_current_tenant_articles():
     async with AsyncSessionLocal() as db:
         db.add(Organization(id="other-tenant", name="Other Tenant", status="active"))
+        await db.commit()
         db.add_all([
             _article(article_id="own-vpn", org_id="test-tenant", title="VPN troubleshooting", content="Reconnect to the approved VPN client."),
             _article(article_id="global-vpn", org_id=None, title="VPN basics", content="Check network access and reconnect."),
