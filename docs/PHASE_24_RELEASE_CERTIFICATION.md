@@ -4,7 +4,7 @@
 
 ## Implemented
 
-- Added a versioned release acceptance manifest with explicit blocked gates for Platform integration, authenticated console, billing, runtime API-key authentication, compliance review, production SLO/DR, frontend dependency reproducibility, and production deployment/rollback.
+- Added a versioned release acceptance manifest for Platform integration, authenticated console, billing, runtime API-key authentication, compliance review, production SLO/DR, frontend dependency reproducibility, and production deployment/rollback. Phase 23 is accepted at repository/CI level with digest-verified evidence; the other gates remain blocked.
 - Added `scripts/release_readiness.py` to validate manifest shape, gate uniqueness, evidence paths confined to `release/evidence/`, SHA-256 digests, fail-closed feature defaults, and configured-vs-checked-in migration revision consistency.
 - Added a CI-safe report mode that prints blockers without pretending production is ready, and a strict mode that exits non-zero unless every gate is accepted with digest-verified evidence.
 - Added a manual production certification workflow with an explicit strict go/no-go input.
@@ -28,7 +28,7 @@
 - Phase 20 API-key runtime authentication and negative JWT role-policy tests.
 - Phase 21 qualified legal/control-owner review of NIS2/DORA mappings.
 - Phase 22 durable telemetry, alert delivery, and measured production RTO/RPO.
-- Phase 23 committed frontend lockfile and `npm ci` reproducibility.
+- Phase 23 repository/CI acceptance is recorded with digest-verified evidence; this does not remove any external runtime acceptance requirement.
 - Phase 24 production deployment, rollback, and go/no-go evidence.
 
 ## Non-claims
