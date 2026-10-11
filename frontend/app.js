@@ -322,6 +322,7 @@ async function apiGet(path) {
     if (response.status === 401) {
       state.accessToken = null;
       state.expiresAt = 0;
+      state.authError = "Your session was not accepted. Sign in again.";
     }
     throw Object.assign(new Error(errorMessage(code, response.status)), {
       code,
@@ -619,6 +620,12 @@ function renderLogin() {
   app.replaceChildren(shell);
 }
 
+function navFocusAfterRender(key) {
+  const tab = app.querySelector('[role="tab"][aria-selected="true"]');
+  const labels = { overview: "Overview", devices: "Devices", tickets: "Tickets", threats: "Threat evidence" };
+  if (tab && labels[key] && tab.textContent.includes(labels[key])) tab.focus();
+}
+
 function renderDashboard() {
   const shell = element("div", "", "console-shell");
   const sidebar = element("aside", "", "sidebar", { "aria-label": "Primary navigation" });
@@ -645,6 +652,26 @@ function renderDashboard() {
     append(tab, element("span", short, "nav-glyph"), element("span", label, "nav-label"));
     nav.append(tab);
   }
+  nav.addEventListener("keydown", event => {
+    const keys = ["ArrowDown", "ArrowRight", "ArrowUp", "ArrowLeft", "Home", "End"];
+    if (!keys.includes(event.key)) return;
+    event.preventDefault();
+    const buttons = Array.from(nav.querySelectorAll('[role="tab"]'));
+    const current = buttons.indexOf(document.activeElement);
+    let next = current;
+    if (event.key === "Home") next = 0;
+    else if (event.key === "End") next = buttons.length - 1;
+    else if (["ArrowDown", "ArrowRight"].includes(event.key)) next = (current + 1) % buttons.length;
+    else next = (current - 1 + buttons.length) % buttons.length;
+    const target = buttons[next];
+    const label = target.querySelector(".nav-label")?.textContent;
+    const key = tabs.find(item => item[1] === label)?.[0];
+    if (key) {
+      state.activeTab = key;
+      render();
+      navFocusAfterRender(key);
+    }
+  });
   sidebar.append(nav);
   const sidebarFooter = element("div", "", "sidebar-footer");
   append(sidebarFooter,
@@ -667,7 +694,7 @@ function renderDashboard() {
   append(topbar, heading, actions);
   main.append(topbar);
 
-  const statusLine = element("div", "", "status-line");
+  const statusLine = element("div", "", "status-line", { role: "status", "aria-live": "polite" });
   append(statusLine,
     element("span", "", "status-indicator" + (state.loading ? " is-loading" : "")),
     element("span", state.loading ? "Refreshing authenticated API data" : "Authenticated · API data only", "status-text"),
