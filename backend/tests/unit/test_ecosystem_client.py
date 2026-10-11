@@ -104,6 +104,11 @@ async def test_client_preserves_valid_trace_context_and_correlation_id(identity_
     assert seen["x-trace-id"] == "4bf92f3577b34da6a3ce929d0e0e4736"
     assert seen["x-span-id"] == "00f067aa0ba902b7"
     assert seen["x-correlation-id"] == "correlation-1"
+    assert seen["x-tinlance-tenant-id"] == "tenant-1"
+    assert seen["x-tinlance-organization-id"] == "org-1"
+    assert seen["x-tinlance-workspace-id"] == "workspace-1"
+    assert seen["x-tinlance-actor-id"] == "service:aurontra"
+    assert seen["x-tinlance-execution-id"] == "execution-1"
 
 
 @pytest.mark.asyncio
