@@ -10,6 +10,7 @@ import json
 import logging
 import math
 import re
+from types import MappingProxyType
 from dataclasses import dataclass
 from typing import Any, Callable
 from urllib.parse import urlsplit
@@ -102,16 +103,33 @@ class GovernedActionDefinition:
             "blast_radius",
         ):
             value = getattr(self, field_name)
-            if not isinstance(value, str) or not value.strip():
-                raise ValueError(f"{field_name} must be non-empty")
+            if not _bounded_text(value, maximum=256):
+                raise ValueError(f"{field_name} must be normalized non-empty text")
+        if not isinstance(self.allowed_arguments, frozenset) or not isinstance(
+            self.required_arguments, frozenset
+        ):
+            raise ValueError("action argument sets must be immutable frozensets")
+        if any(not _bounded_text(key, maximum=128) for key in self.allowed_arguments):
+            raise ValueError("allowed argument names must be normalized text")
+        if any(not _bounded_text(key, maximum=128) for key in self.required_arguments):
+            raise ValueError("required argument names must be normalized text")
         if not self.required_arguments.issubset(self.allowed_arguments):
             raise ValueError("required arguments must be a subset of allowed arguments")
         if len(self.allowed_arguments) > _MAX_ARGUMENTS:
             raise ValueError("action argument allowlist is too large")
-        if not 0 < self.requested_timeout_seconds <= 120:
-            raise ValueError("requested timeout must be between 0 and 120 seconds")
-        if not 1 <= self.requested_tool_calls <= 10:
-            raise ValueError("requested tool-call budget must be between 1 and 10")
+        if (
+            isinstance(self.requested_timeout_seconds, bool)
+            or not isinstance(self.requested_timeout_seconds, (int, float))
+            or not math.isfinite(self.requested_timeout_seconds)
+            or not 0 < self.requested_timeout_seconds <= 120
+        ):
+            raise ValueError("requested timeout must be finite and between 0 and 120 seconds")
+        if (
+            isinstance(self.requested_tool_calls, bool)
+            or not isinstance(self.requested_tool_calls, int)
+            or not 1 <= self.requested_tool_calls <= 10
+        ):
+            raise ValueError("requested tool-call budget must be an integer between 1 and 10")
 
 
 class GovernedActionRegistry:
@@ -123,7 +141,7 @@ class GovernedActionRegistry:
             if definition.key in items:
                 raise ValueError(f"duplicate governed action key: {definition.key}")
             items[definition.key] = definition
-        self._items = items
+        self._items = MappingProxyType(items)
 
     def get(self, key: str) -> GovernedActionDefinition:
         if not isinstance(key, str) or not key or len(key) > 128:
@@ -154,6 +172,8 @@ class GovernedActionResult:
 
 def _traceparent(action_id: UUID) -> str:
     """Create a valid W3C traceparent with stable trace ID and fresh span ID."""
+    if action_id.int == 0:
+        raise GovernedActionError("action_id_invalid")
     return f"00-{action_id.hex}-{uuid4().hex[:16]}-01"
 
 
@@ -191,8 +211,16 @@ def _new_platform_client(action_id: UUID, operation: str) -> AsyncAgentPlatform:
         raise GovernedActionError("platform_base_url_invalid")
     if settings.AGENT_PLATFORM_API_VERSION != "1.1":
         raise GovernedActionError("platform_api_version_unsupported")
-    if settings.AGENT_PLATFORM_TIMEOUT_SECONDS <= 0:
+    if (
+        isinstance(settings.AGENT_PLATFORM_TIMEOUT_SECONDS, bool)
+        or not math.isfinite(settings.AGENT_PLATFORM_TIMEOUT_SECONDS)
+        or settings.AGENT_PLATFORM_TIMEOUT_SECONDS <= 0
+    ):
         raise GovernedActionError("platform_timeout_invalid")
+    if not _bounded_text(settings.AGENT_PLATFORM_TENANT_ID, maximum=128):
+        raise GovernedActionError("platform_tenant_id_invalid")
+    if not _bounded_text(settings.AGENT_PLATFORM_SUBJECT_ID, maximum=256):
+        raise GovernedActionError("platform_subject_id_invalid")
     if settings.ENVIRONMENT.lower() == "production":
         if not settings.AGENT_PLATFORM_BASE_URL.startswith("https://"):
             raise GovernedActionError("platform_https_required")
@@ -247,6 +275,8 @@ class PlatformGovernedActionExecutor:
     ) -> GovernedActionResult:
         if not isinstance(action_id, UUID):
             raise GovernedActionError("action_id_must_be_uuid")
+        if action_id.int == 0:
+            raise GovernedActionError("action_id_invalid")
         definition = self._registry.get(action_key)
         if not _bounded_text(resource, maximum=_MAX_TEXT_LENGTH):
             raise GovernedActionError("resource_invalid")
@@ -268,6 +298,9 @@ class PlatformGovernedActionExecutor:
             raise GovernedActionError("action_arguments_not_json") from exc
         if len(encoded_arguments) > _MAX_ARGUMENT_BYTES:
             raise GovernedActionError("action_arguments_too_large")
+        # Snapshot the validated JSON before the first await to prevent caller
+        # mutation from changing the intent between validation and dispatch.
+        normalized_arguments = json.loads(encoded_arguments.decode("utf-8"))
 
         agent_id, task_id = _configured_ids()
         run_id: UUID | None = None
@@ -305,7 +338,7 @@ class PlatformGovernedActionExecutor:
                     capability=definition.capability_id,
                     action=definition.action,
                     resource=resource,
-                    arguments=arguments,
+                    arguments=normalized_arguments,
                 ),
                 capability_version=definition.capability_version,
                 tool_version=definition.tool_version,
