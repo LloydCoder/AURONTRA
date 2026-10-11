@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import hmac
 import json
 import re
 from typing import Any
@@ -166,9 +167,9 @@ def build_resolution_prompt(
         "general": "Ask clarifying questions and avoid assumptions.",
     }.get(category, "Use conservative, reversible troubleshooting guidance and escalate uncertainty.")
 
-    max_input = max(1000, min(int(settings.LLM_MAX_INPUT_CHARS), 20000))
-    safe_title = _redact_sensitive_text(title, min(300, max_input))
-    safe_description = _redact_sensitive_text(description, min(4000, max_input))
+    max_input = max(2000, min(int(settings.LLM_MAX_INPUT_CHARS), 20000))
+    safe_title = _redact_sensitive_text(title, min(300, max_input // 20))
+    safe_description = _redact_sensitive_text(description, max_input // 3)
     article_payload = []
     for article in (knowledge_articles or [])[:5]:
         if not isinstance(article, dict):
@@ -177,7 +178,7 @@ def build_resolution_prompt(
             "article_id": str(article.get("article_id", ""))[:128],
             "version": article.get("version"),
             "title": _redact_sensitive_text(str(article.get("title", "")), 300),
-            "content": _redact_sensitive_text(str(article.get("content", "")), 3000),
+            "content": _redact_sensitive_text(str(article.get("content", "")), min(1000, max_input // 12)),
             "content_sha256": str(article.get("content_sha256", ""))[:64],
         })
     payload = {
@@ -200,7 +201,32 @@ def build_resolution_prompt(
             "Output plain text only and keep the draft concise.",
         ],
     }
-    return json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    serialized = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    # Keep the complete serialized request under the configured bound without
+    # truncating JSON into an invalid document. Drop least-relevant references
+    # first, then shrink untrusted descriptions while preserving valid JSON.
+    while len(serialized) > max_input:
+        articles = payload["untrusted_knowledge_references"]
+        if articles:
+            last = articles[-1]
+            content = last.get("content", "")
+            if len(content) > 100:
+                last["content"] = content[: max(100, len(content) // 2)]
+            else:
+                articles.pop()
+        elif len(payload["untrusted_ticket_data"]["description"]) > 100:
+            value = payload["untrusted_ticket_data"]["description"]
+            payload["untrusted_ticket_data"]["description"] = value[: max(100, len(value) // 2)]
+        elif len(payload["untrusted_ticket_data"]["title"]) > 40:
+            value = payload["untrusted_ticket_data"]["title"]
+            payload["untrusted_ticket_data"]["title"] = value[: max(40, len(value) // 2)]
+        else:
+            # This branch is only reachable with an impractically small configured
+            # limit; remove optional article metadata rather than emit oversized input.
+            payload["untrusted_knowledge_references"] = []
+            payload["untrusted_ticket_data"]["description"] = ""
+        serialized = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return serialized
 
 
 def _base_result(ticket_id: str, classification: dict) -> dict:
@@ -261,6 +287,19 @@ async def resolve_ticket(
             "The automated triage did not attempt a resolution."
         )
         return _escalation_result(base, reason, response)
+
+    # Validate again at the model boundary; callers must not be able to bypass
+    # retrieval's integrity check by supplying a forged article dictionary.
+    for article in (knowledge_articles or [])[:5]:
+        if not isinstance(article, dict):
+            return _escalation_result(base, "invalid_knowledge_reference", "Knowledge reference validation failed. Human review is required.")
+        article_content = article.get("content")
+        article_digest = article.get("content_sha256")
+        if not isinstance(article_content, str) or not isinstance(article_digest, str):
+            return _escalation_result(base, "invalid_knowledge_reference", "Knowledge reference validation failed. Human review is required.")
+        actual_digest = hashlib.sha256(article_content.encode("utf-8")).hexdigest()
+        if not hmac.compare_digest(actual_digest, article_digest.lower()):
+            return _escalation_result(base, "knowledge_integrity_failure", "Knowledge integrity verification failed. Human review is required.")
 
     prompt = build_resolution_prompt(
         title=title,
