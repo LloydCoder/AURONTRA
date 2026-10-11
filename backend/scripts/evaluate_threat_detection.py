@@ -34,6 +34,13 @@ def main() -> int:
         output_path = Path(args.output)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(rendered, encoding="utf-8")
+        print(json.dumps({
+            "report_sha256": report["report_sha256"],
+            "dataset_sha256": report["dataset"]["dataset_sha256"],
+            "production_validation": report["production_validation"],
+            "raw_score_threshold": report["metrics"]["raw_score_threshold"],
+            "calibrated_probability_threshold": report["metrics"]["calibrated_probability_threshold"],
+        }, sort_keys=True))
     else:
         print(rendered, end="")
     return 0
