@@ -1,6 +1,6 @@
 """Tenant-owned IT support ticket model."""
 import enum
-from sqlalchemy import Column, String, Boolean, DateTime, Text, Enum, ForeignKey, ForeignKeyConstraint, func
+from sqlalchemy import Column, String, Boolean, DateTime, Text, Enum, ForeignKey, ForeignKeyConstraint, JSON, func
 from core.database import Base
 
 
@@ -51,6 +51,7 @@ class Ticket(Base):
     ai_prompt_version = Column(String(64), nullable=True)
     ai_prompt_sha256 = Column(String(64), nullable=True)
     ai_response_sha256 = Column(String(64), nullable=True)
+    ai_knowledge_refs = Column(JSON, nullable=True)
     ai_generated_at = Column(DateTime(timezone=True), nullable=True)
     resolved_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
