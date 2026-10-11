@@ -100,7 +100,7 @@ class TestServiceRestartPlaybook:
         assert "service_name" in result or result["status"] in ("executed", "simulated", "ok")
 
     @pytest.mark.asyncio
-    async def test_service_restart_missing_service_uses_default(self):
+    async def test_service_restart_missing_service_does_not_default(self):
         from resilience.playbooks.service_restart import ServiceRestartPlaybook
         p = ServiceRestartPlaybook()
         # Should not raise even without service_name
@@ -140,7 +140,7 @@ class TestCertExpiryPlaybook:
         assert result.get("domain") == "tinlance.com" or result["status"] in ("executed", "simulated")
 
     @pytest.mark.asyncio
-    async def test_cert_expiry_no_domain_uses_default(self):
+    async def test_cert_expiry_missing_domain_does_not_default(self):
         from resilience.playbooks.cert_expiry import CertExpiryPlaybook
         p = CertExpiryPlaybook()
         result = await p.execute({"device_id": "srv-01"})
@@ -343,3 +343,52 @@ class TestPlaybookSafetyEnvelope:
         cpu = await HighCPUPlaybook().execute({"device_id": "srv-01", "cpu_percent": 98})
         assert disk["disk_percent_source"] == "caller_supplied_unverified"
         assert cpu["cpu_percent_source"] == "caller_supplied_unverified"
+
+
+    def test_base_result_cannot_be_overridden_into_execution(self):
+        from resilience.playbooks.base import BasePlaybook
+
+        class ConcretePlaybook(BasePlaybook):
+            name = "safety-test"
+            async def execute(self, context):
+                return self._base_result(context)
+
+        result = ConcretePlaybook()._base_result(
+            {"device_id": "srv-01"},
+            status="executed",
+            execution_mode="actual",
+            execution_enabled=True,
+            business_outcome_verified=True,
+            actions_taken=["restart service"],
+            device_id="forged-device",
+        )
+        assert result["status"] == "simulated"
+        assert result["execution_mode"] == "recommendation_only"
+        assert result["execution_enabled"] is False
+        assert result["business_outcome_verified"] is False
+        assert result["actions_taken"] == []
+        assert result["device_id"] == "srv-01"
+        assert result["device_id_source"] == "caller_supplied_unverified"
+
+    @pytest.mark.asyncio
+    async def test_dispatcher_overrides_contradictory_legacy_playbook_result(self, monkeypatch):
+        from resilience.playbooks import executor
+
+        class UnsafeLegacyPlaybook:
+            async def execute(self, context):
+                return {
+                    "status": "executed",
+                    "execution_mode": "actual",
+                    "execution_enabled": True,
+                    "business_outcome_verified": True,
+                    "actions_taken": ["restart service"],
+                }
+
+        monkeypatch.setitem(executor._REGISTRY, "unsafe_legacy_test", UnsafeLegacyPlaybook)
+        result = await executor.execute_playbook("unsafe_legacy_test", {"device_id": "srv-01"})
+        assert result["status"] == "simulated"
+        assert result["execution_mode"] == "recommendation_only"
+        assert result["execution_enabled"] is False
+        assert result["business_outcome_verified"] is False
+        assert result["actions_taken"] == []
+        assert result["timestamp_semantics"] == "recommendation_created"
