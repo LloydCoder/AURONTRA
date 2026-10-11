@@ -64,6 +64,10 @@ Main CI and the secret/archive scan passed on the audit baseline. Historical pha
 
 The original CI had dependency consistency checks but no resolved-package vulnerability audit. A pinned `pip-audit==2.10.1` workflow and CI discovery step are now in the candidate branch. The first scan reported 78 vulnerability findings across 10 packages, including LangChain packages not referenced by the inspected application code, PyJWT, pytest, python-dotenv, python-multipart, and Starlette. The candidate removes the LangChain packages from the dependency set and upgrades affected packages, including FastAPI/Starlette, Pydantic, PyJWT, pytest/pytest-asyncio, python-dotenv, and python-multipart. The post-upgrade audit on candidate `0bf5efbb41ac9c730d51d687ade88c0a2808b6b4` passed with “No known vulnerabilities found” ([workflow run 38122655191](https://github.com/LloydCoder/AURONTRA/actions/runs/38122655191)). The main CI dependency audit is now being made blocking; final same-SHA regression validation remains required.
 
+### F-10 — TSIC trace-context contract version drift
+
+The TSIC contract registry listed `trace-context` as `1.0.0`, while `contracts/telemetry/trace-context.json` declares `schema_version: 1.1.0`. This is a cross-system compatibility defect. TSIC PR #54 updates the registry to `1.1.0` and pins the Aurontra adapter's per-contract versions. The change remains pending final workflow completion and review. Aurontra's shared client now emits a semver contract header and propagates validated W3C trace context, with regression tests.
+
 ## Security and architecture invariants
 
 1. Tinlance Agent Platform remains the authoritative identity, authorization, policy, approvals, sandbox, secrets, execution, and evidence authority.
