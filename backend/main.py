@@ -71,6 +71,10 @@ async def enforce_auth_and_data_plane(request: Request, call_next):
             agent_origin = urlparse(settings.AGENT_PUBLIC_ORIGIN)
             if agent_origin.scheme != "https" or not agent_origin.hostname or agent_origin.username or agent_origin.password or agent_origin.path not in {"", "/"} or agent_origin.query or agent_origin.fragment:
                 return JSONResponse(status_code=503, content={"detail": "Production agent public origin must be a canonical HTTPS origin.", "code": "AGENT_ORIGIN_INVALID"})
+            agent_jwks = urlparse(settings.AGENT_JWKS_URL)
+            agent_issuer = urlparse(settings.AGENT_JWT_ISSUER)
+            if agent_jwks.scheme != "https" or not agent_jwks.hostname or agent_issuer.scheme != "https" or not agent_issuer.hostname:
+                return JSONResponse(status_code=503, content={"detail": "Production agent issuer and JWKS must use HTTPS.", "code": "AGENT_IDENTITY_CONFIG_INVALID"})
     signature_only = path == "/billing/webhook"
     if settings.AUTH_MODE != "disabled" and not signature_only and not agent_endpoint:
         if not (settings.JWT_JWKS_URL and settings.JWT_ISSUER and settings.JWT_AUDIENCE):
