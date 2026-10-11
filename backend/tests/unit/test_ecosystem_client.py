@@ -3,6 +3,7 @@ import json
 
 import httpx
 import pytest
+from pydantic import ValidationError
 
 from core.config import settings
 from core.tsic_contracts import TSICIdentityContext
