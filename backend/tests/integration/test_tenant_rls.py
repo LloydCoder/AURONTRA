@@ -35,7 +35,7 @@ async def test_rls_scopes_organization_and_device_rows_and_rejects_cross_tenant_
     try:
         await admin.execute(f'CREATE ROLE "{role}" LOGIN PASSWORD \'{password}\' NOSUPERUSER NOBYPASSRLS')
         await admin.execute(f'GRANT USAGE ON SCHEMA public TO "{role}"')
-        await admin.execute(f'GRANT SELECT, INSERT, UPDATE, DELETE ON organizations, devices, tickets, durable_jobs, outbox_events, agent_request_replays, remediation_intents, telemetry_records, knowledge_articles, threat_findings, threat_containment_attempts TO "{role}"')
+        await admin.execute(f'GRANT SELECT, INSERT, UPDATE, DELETE ON organizations, devices, tickets, durable_jobs, outbox_events, agent_request_replays, remediation_intents, telemetry_records, knowledge_articles, threat_findings, threat_containment_attempts, containment_verification_evidence TO "{role}"')
         await admin.execute(
             "INSERT INTO organizations (id, name, status) VALUES ($1, $1, 'active'), ($2, $2, 'active')",
             org_a, org_b,
@@ -102,6 +102,17 @@ async def test_rls_scopes_organization_and_device_rows_and_rejects_cross_tenant_
             f"contain-b-{suffix}", org_b, threat_b, device_b, f"contain-b-{suffix}",
         )
         await admin.execute(
+            "INSERT INTO containment_verification_evidence (id, org_id, attempt_id, finding_id, device_id, action_id, execution_id, source_id, key_id, source_type, nonce, evidence_id, payload_sha256, signature_valid, isolation_active, reason_code, observed_at) "
+            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'key-a', 'network_control_plane', $9, $10, repeat('d', 64), true, true, 'isolation_confirmed', now()), "
+            "($11, $12, $13, $14, $15, $16, $17, $18, 'key-b', 'cloud_control_plane', $19, $20, repeat('e', 64), true, false, 'isolation_unconfirmed', now())",
+            f"evidence-a-{suffix}", org_a, f"contain-a-{suffix}", threat_a, device_a,
+            f"contain-a-{suffix}", f"execution-a-{suffix}", f"control-a-{suffix}",
+            f"nonce-a-long-{suffix}", f"evidence-a-{suffix}",
+            f"evidence-b-{suffix}", org_b, f"contain-b-{suffix}", threat_b, device_b,
+            f"contain-b-{suffix}", f"execution-b-{suffix}", f"control-b-{suffix}",
+            f"nonce-b-long-{suffix}", f"evidence-b-{suffix}",
+        )
+        await admin.execute(
             "INSERT INTO remediation_intents (id, org_id, device_id, plan_id, idempotency_key, playbook, source_evidence_id, plan_payload, status, version, platform_evidence_ids, audit_event_ids, postcondition_evidence_ids, result_metadata) "
             "VALUES ($1, $2, $3, $1, $4, 'high_cpu', 'evidence-a', '{}'::jsonb, 'proposed', 0, '[]'::jsonb, '[]'::jsonb, '[]'::jsonb, '{}'::jsonb), "
             "($5, $6, $7, $5, $8, 'high_cpu', 'evidence-b', '{}'::jsonb, 'proposed', 0, '[]'::jsonb, '[]'::jsonb, '[]'::jsonb, '{}'::jsonb)",
@@ -133,6 +144,8 @@ async def test_rls_scopes_organization_and_device_rows_and_rejects_cross_tenant_
         assert [row["id"] for row in visible_threats] == [threat_a]
         visible_containments = await app.fetch("SELECT id FROM threat_containment_attempts")
         assert [row["id"] for row in visible_containments] == [f"contain-a-{suffix}"]
+        visible_verification = await app.fetch("SELECT id FROM containment_verification_evidence")
+        assert [row["id"] for row in visible_verification] == [f"evidence-a-{suffix}"]
         visible_knowledge = await app.fetch("SELECT id FROM knowledge_articles ORDER BY id")
         assert [row["id"] for row in visible_knowledge] == [kb_a, kb_draft_a, kb_global]
 
@@ -146,6 +159,7 @@ async def test_rls_scopes_organization_and_device_rows_and_rejects_cross_tenant_
         assert await app.fetch("SELECT id FROM telemetry_records") == []
         assert await app.fetch("SELECT id FROM threat_findings") == []
         assert await app.fetch("SELECT id FROM threat_containment_attempts") == []
+        assert await app.fetch("SELECT id FROM containment_verification_evidence") == []
         assert await app.fetch("SELECT id FROM knowledge_articles") == []
 
         await app.execute("SELECT set_config('app.current_org_id', $1, false)", org_a)
@@ -206,6 +220,13 @@ async def test_rls_scopes_organization_and_device_rows_and_rejects_cross_tenant_
                 "INSERT INTO threat_containment_attempts (id, org_id, finding_id, device_id, idempotency_key, status, version, platform_action_id, platform_evidence_ids, audit_event_ids, verification_evidence_ids) "
                 "VALUES ($1, $2, $3, $4, $1, 'submitting', 0, $1, '[]'::jsonb, '[]'::jsonb, '[]'::jsonb)",
                 f"forbidden-containment-{suffix}", org_b, threat_b, device_b,
+            )
+        with pytest.raises(asyncpg.InsufficientPrivilegeError):
+            await app.execute(
+                "INSERT INTO containment_verification_evidence (id, org_id, attempt_id, finding_id, device_id, action_id, execution_id, source_id, key_id, source_type, nonce, evidence_id, payload_sha256, signature_valid, isolation_active, reason_code, observed_at) "
+                "VALUES ($1, $2, $3, $4, $5, $6, $7, 'control-b-forbidden', 'key-b', 'network_control_plane', 'nonce-forbidden-long', 'evidence-forbidden', repeat('f', 64), true, true, 'isolation_confirmed', now())",
+                f"evidence-forbidden-{suffix}", org_b, f"contain-b-{suffix}", threat_b, device_b,
+                f"contain-b-{suffix}", f"execution-b-{suffix}",
             )
         with pytest.raises(asyncpg.InsufficientPrivilegeError):
             await app.execute(
