@@ -46,16 +46,17 @@ def test_release_gate_accepts_only_digest_verified_evidence(monkeypatch, tmp_pat
     evidence_path = evidence_dir / "platform-acceptance.json"
     evidence_path.write_text('{"verified":true}', encoding="utf-8")
     digest = hashlib.sha256(evidence_path.read_bytes()).hexdigest()
+    evidence = {"path": "release/evidence/platform-acceptance.json", "sha256": digest}
     manifest = {
         "schema_version": 1,
         "product": "Aurontra",
         "release_status": "ready",
         "gates": [{
-            "id": "phase17",
+            "id": gate_id,
             "status": "accepted",
             "owner": "platform-operator",
-            "evidence": {"path": "release/evidence/platform-acceptance.json", "sha256": digest},
-        }],
+            "evidence": evidence,
+        } for gate_id in sorted(release_readiness.REQUIRED_GATE_IDS)],
     }
     manifest_path = root / "release/acceptance-manifest.json"
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
