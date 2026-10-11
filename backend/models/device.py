@@ -16,6 +16,9 @@ class Device(Base):
     is_active = Column(Boolean, default=True, nullable=False)
     resilience_score = Column(Integer, default=100, nullable=False)
     last_seen_at = Column(DateTime(timezone=True), nullable=True)
+    enrolled_at = Column(DateTime(timezone=True), nullable=True)
+    revoked_at = Column(DateTime(timezone=True), nullable=True)
+    agent_version = Column(String(64), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
