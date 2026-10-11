@@ -46,9 +46,13 @@ Phase 11 persists remediation intents with deterministic plan/idempotency keys, 
 
 Phase 12 adds tenant-scoped telemetry evidence with DPoP replay protection, event idempotency, payload provenance hashes, timestamp freshness/order checks, partial-metric safeguards, per-device rate limiting, forced PostgreSQL RLS, and a bounded retention primitive. Production ingestion and retention scheduling remain disabled until the approved identity provider, signed endpoint-agent release, evidence consumers, scheduler and customer environment are verified.
 
-Phase 13 adds strict predictor input validation, time-aware trend slopes, trusted-digest checks before model artifact deserialization, and offline evaluation reports for anomaly detection and temporal forecast errors. Anomaly confidence is explicitly uncalibrated; 72-hour forecasts remain linear heuristics. CI passed **409 tests, 1 skipped, 85.14% coverage**, plus PostgreSQL tenant RLS/backup-restore and secret/history/archive scans. Deployment was skipped.
+Phase 13 adds strict predictor input validation, time-aware trend slopes, trusted-digest checks before model artifact deserialization, and offline evaluation reports for anomaly detection and temporal forecast errors. Anomaly confidence is explicitly uncalibrated; 72-hour forecasts remain linear heuristics. CI passed **411 tests, 1 skipped, 85.19% coverage**, plus PostgreSQL tenant RLS/backup-restore and secret/history/archive scans. Deployment was skipped.
 
 These checks validate code paths and synthetic fixtures, not real-world predictive performance. Production decisioning remains blocked on a representative, authorized, labeled holdout dataset, calibration/drift evaluation, monitoring and human-approved thresholds. See [Phase 12 design](docs/PHASE_12_TELEMETRY_EVIDENCE.md), [Phase 12 audit](docs/audits/PHASE_12_FORENSIC_AUDIT.md), [Phase 13 design](docs/PHASE_13_PREDICTIVE_EVALUATION.md), and [Phase 13 audit](docs/audits/PHASE_13_FORENSIC_AUDIT.md).
+
+## AI service desk and knowledge retrieval (Phase 14)
+
+The Phase 14 implementation changes the resolver to risk-based draft generation only: unknown, security and high-impact tickets require human review; reporter email and common secrets are redacted before inference and from generated drafts; provider calls are bounded; output is validated; and no generated answer can close a ticket. Retrieval is limited to approved, published global or same-tenant knowledge articles with SHA-256 integrity checks. Prompt/response digests, prompt version, generation time and article references are persisted. The implementation and evidence gates are documented in [Phase 14 design](docs/PHASE_14_AI_SERVICE_DESK.md). This phase is not production certification; CI must pass before it is marked complete.
 
 ## Governed action engine (Phase 09)
 
