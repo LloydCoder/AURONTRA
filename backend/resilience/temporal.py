@@ -1,159 +1,174 @@
-"""
-Temporal Correlator — time-series trend analysis for resilience prediction.
+"""Time-aware trend heuristic for telemetry.
 
-Analyses a sequence of telemetry readings to:
-  1. Identify current trend (stable / rising / degrading)
-  2. Project 72-hour future resilience score
-  3. Flag specific risk factors (disk growth, memory leak pattern, CPU spike trend)
-
-Inspired by ReconOS OFE's TemporalCorrelator — adapted for IT resilience metrics
-rather than OSINT event streams.
+This is a transparent linear projection, not a validated or calibrated predictive model.
+All slopes are computed per elapsed hour from timezone-aware timestamps.
 """
-import numpy as np
+from __future__ import annotations
+
+from datetime import datetime, timezone
+from numbers import Real
 from typing import Any
-from resilience.scorer import score_device, score_to_status
 
+import numpy as np
 
+_FEATURE_KEYS = ("cpu_percent", "memory_percent", "disk_percent")
 _MIN_SERIES_LENGTH = 2
-_TREND_WINDOW = 5          # readings for trend calculation
-_RISE_THRESHOLD = 2.0      # avg increase per reading to flag as "rising"
-_DISK_RISK_THRESHOLD = 3.0 # disk growth per reading to flag as risk
+_TREND_WINDOW = 5
+_RISE_THRESHOLD = 2.0
+_DISK_RISK_THRESHOLD = 3.0
 
 
-def _linear_slope(values: list[float]) -> float:
-    """Compute slope of a linear regression through the values."""
+def _parse_timestamp(value: Any) -> datetime:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError("Every telemetry reading requires an ISO-8601 timestamp.")
+    try:
+        parsed = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ValueError("Telemetry timestamps must be valid ISO-8601 values.") from exc
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise ValueError("Telemetry timestamps must include a timezone.")
+    return parsed.astimezone(timezone.utc)
+
+
+def _validate_series(series: list[dict]) -> tuple[list[datetime], dict[str, list[float]]]:
+    if not isinstance(series, list):
+        raise ValueError("Series must be a list of telemetry readings.")
+    timestamps: list[datetime] = []
+    values: dict[str, list[float]] = {key: [] for key in _FEATURE_KEYS}
+    for index, reading in enumerate(series):
+        if not isinstance(reading, dict):
+            raise ValueError(f"Telemetry reading {index} must be an object.")
+        timestamps.append(_parse_timestamp(reading.get("timestamp")))
+        for key in _FEATURE_KEYS:
+            if key not in reading:
+                raise ValueError(f"Telemetry reading {index} is missing {key}.")
+            value = reading[key]
+            if isinstance(value, bool) or not isinstance(value, Real):
+                raise ValueError(f"{key} must be a numeric percentage.")
+            number = float(value)
+            if not np.isfinite(number) or not 0.0 <= number <= 100.0:
+                raise ValueError(f"{key} must be finite and between 0 and 100.")
+            values[key].append(number)
+    for previous, current in zip(timestamps, timestamps[1:]):
+        if current <= previous:
+            raise ValueError("Telemetry timestamps must be strictly increasing.")
+    return timestamps, values
+
+
+def _linear_slope(values: list[float], elapsed_hours: list[float] | None = None) -> float:
+    """Compute least-squares slope per hour; default x-values are hourly sample indices."""
     if len(values) < 2:
         return 0.0
-    x = np.arange(len(values), dtype=float)
-    y = np.array(values, dtype=float)
-    # Least-squares slope
-    slope = float(np.polyfit(x, y, 1)[0])
-    return slope
+    x = np.asarray(elapsed_hours if elapsed_hours is not None else range(len(values)), dtype=float)
+    y = np.asarray(values, dtype=float)
+    if len(x) != len(y) or not np.isfinite(x).all() or not np.isfinite(y).all():
+        raise ValueError("Slope input must contain finite, equally sized arrays.")
+    if np.ptp(x) <= 0:
+        raise ValueError("Slope timestamps must span a positive duration.")
+    return float(np.polyfit(x, y, 1)[0])
 
 
 def _extract_metric(series: list[dict], key: str) -> list[float]:
-    """Extract a named metric from a telemetry series."""
-    return [float(r.get(key, 0.0)) for r in series]
-
-
-async def _score_from_reading(reading: dict) -> int:
-    """Get resilience score for a single reading."""
-    result = await score_device("_temporal", reading)
-    return result["score"]
+    """Extract a required metric; missing readings are never silently replaced with zero."""
+    if key not in _FEATURE_KEYS:
+        raise ValueError(f"Unsupported telemetry metric: {key}")
+    values: list[float] = []
+    for index, reading in enumerate(series):
+        if key not in reading:
+            raise ValueError(f"Telemetry reading {index} is missing {key}.")
+        value = reading[key]
+        if isinstance(value, bool) or not isinstance(value, Real):
+            raise ValueError(f"{key} must be numeric.")
+        number = float(value)
+        if not np.isfinite(number) or not 0.0 <= number <= 100.0:
+            raise ValueError(f"{key} must be finite and between 0 and 100.")
+        values.append(number)
+    return values
 
 
 class TemporalCorrelator:
-    """
-    Analyses sequences of device telemetry to predict future resilience.
+    """Compute a transparent, time-aware 72-hour trend projection."""
 
-    Usage:
-        tc = TemporalCorrelator()
-        result = tc.analyse(series)  # series: list of telemetry dicts
-    """
+    def __init__(self, forecast_horizon_hours: int = 72):
+        if isinstance(forecast_horizon_hours, bool) or not isinstance(forecast_horizon_hours, int) or forecast_horizon_hours < 1 or forecast_horizon_hours > 720:
+            raise ValueError("forecast_horizon_hours must be an integer between 1 and 720")
+        self.forecast_horizon_hours = forecast_horizon_hours
 
     def analyse(self, series: list[dict]) -> dict:
-        """
-        Analyse a time-ordered telemetry series and predict 72h resilience.
-
-        Args:
-            series: list of dicts, each with timestamp + metric fields.
-                    Must be in chronological order (oldest first).
-
-        Returns:
-            dict: trend, predicted_score_72h, risk_factors, slopes, current_score
-
-        Raises:
-            ValueError: if series has fewer than 2 readings
-        """
+        """Analyze complete, ordered, timestamped readings and return an unvalidated heuristic forecast."""
         if not series:
-            raise ValueError("Series cannot be empty")
+            raise ValueError("Series cannot be empty.")
         if len(series) < _MIN_SERIES_LENGTH:
-            raise ValueError(
-                f"Need at least {_MIN_SERIES_LENGTH} readings for trend analysis. "
-                f"Got {len(series)}."
-            )
+            raise ValueError(f"Need at least {_MIN_SERIES_LENGTH} readings for trend analysis. Got {len(series)}.")
 
-        # ── Extract metric arrays ──────────────────────────────────────
-        cpu_vals    = _extract_metric(series, "cpu_percent")
-        memory_vals = _extract_metric(series, "memory_percent")
-        disk_vals   = _extract_metric(series, "disk_percent")
+        timestamps, metrics = _validate_series(series)
+        start = timestamps[0]
+        elapsed_hours = [(timestamp - start).total_seconds() / 3600.0 for timestamp in timestamps]
+        window_start = max(0, len(series) - _TREND_WINDOW)
+        window_hours = elapsed_hours[window_start:]
+        cpu_vals = metrics["cpu_percent"]
+        memory_vals = metrics["memory_percent"]
+        disk_vals = metrics["disk_percent"]
+        cpu_slope = _linear_slope(cpu_vals[window_start:], window_hours)
+        memory_slope = _linear_slope(memory_vals[window_start:], window_hours)
+        disk_slope = _linear_slope(disk_vals[window_start:], window_hours)
 
-        # ── Compute slopes ─────────────────────────────────────────────
-        window = series[-_TREND_WINDOW:] if len(series) >= _TREND_WINDOW else series
-        cpu_slope    = _linear_slope(_extract_metric(window, "cpu_percent"))
-        memory_slope = _linear_slope(_extract_metric(window, "memory_percent"))
-        disk_slope   = _linear_slope(_extract_metric(window, "disk_percent"))
-
-        # ── Current score from latest reading ──────────────────────────
-        latest = series[-1]
-        latest_telemetry = {
-            k: v for k, v in latest.items()
-            if k in ("cpu_percent", "memory_percent", "disk_percent")
-        }
-
-        # Synchronous score computation for temporal analysis
+        latest_cpu = cpu_vals[-1]
+        latest_memory = memory_vals[-1]
+        latest_disk = disk_vals[-1]
         from resilience.scorer import _metric_to_score
-        cpu_s  = _metric_to_score(latest_telemetry.get("cpu_percent", 0), 50, 80)
-        mem_s  = _metric_to_score(latest_telemetry.get("memory_percent", 0), 60, 85)
-        disk_s = _metric_to_score(latest_telemetry.get("disk_percent", 0), 65, 85)
+
+        cpu_score = _metric_to_score(latest_cpu, 50, 80)
+        memory_score = _metric_to_score(latest_memory, 60, 85)
+        disk_score = _metric_to_score(latest_disk, 65, 85)
         weights = {"cpu": 0.25, "memory": 0.25, "disk": 0.5}
         current_score = int(
-            (cpu_s * weights["cpu"] + mem_s * weights["memory"] + disk_s * weights["disk"])
+            cpu_score * weights["cpu"]
+            + memory_score * weights["memory"]
+            + disk_score * weights["disk"]
         )
-        if disk_s <= 20:
+        if disk_score <= 20:
             current_score = min(current_score, 59)
 
-        # ── Determine overall trend ────────────────────────────────────
-        avg_slope = (cpu_slope + memory_slope + disk_slope) / 3
-
-        if avg_slope > _RISE_THRESHOLD:
+        average_slope = (cpu_slope + memory_slope + disk_slope) / 3.0
+        if average_slope > _RISE_THRESHOLD:
             trend = "degrading"
-        elif avg_slope > 0.5:
+        elif average_slope > 0.5:
             trend = "rising"
-        elif avg_slope < -0.5:
+        elif average_slope < -0.5:
             trend = "improving"
         else:
             trend = "stable"
 
-        # ── Project 72h score ──────────────────────────────────────────
-        # Estimate metric values 72 readings ahead (1 reading ≈ 1 hour)
-        projected_cpu    = min(100, latest_telemetry.get("cpu_percent", 0)    + cpu_slope    * 72)
-        projected_memory = min(100, latest_telemetry.get("memory_percent", 0) + memory_slope * 72)
-        projected_disk   = min(100, latest_telemetry.get("disk_percent", 0)   + disk_slope   * 72)
-
-        proj_cpu_s  = _metric_to_score(projected_cpu,    50, 80)
-        proj_mem_s  = _metric_to_score(projected_memory, 60, 85)
-        proj_disk_s = _metric_to_score(projected_disk,   65, 85)
+        horizon = float(self.forecast_horizon_hours)
+        projected_cpu = float(np.clip(latest_cpu + cpu_slope * horizon, 0.0, 100.0))
+        projected_memory = float(np.clip(latest_memory + memory_slope * horizon, 0.0, 100.0))
+        projected_disk = float(np.clip(latest_disk + disk_slope * horizon, 0.0, 100.0))
+        projected_cpu_score = _metric_to_score(projected_cpu, 50, 80)
+        projected_memory_score = _metric_to_score(projected_memory, 60, 85)
+        projected_disk_score = _metric_to_score(projected_disk, 65, 85)
         predicted_score = int(
-            proj_cpu_s * weights["cpu"] +
-            proj_mem_s * weights["memory"] +
-            proj_disk_s * weights["disk"]
+            projected_cpu_score * weights["cpu"]
+            + projected_memory_score * weights["memory"]
+            + projected_disk_score * weights["disk"]
         )
-        if proj_disk_s <= 20:
+        if projected_disk_score <= 20:
             predicted_score = min(predicted_score, 59)
         predicted_score = max(0, min(100, predicted_score))
 
-        # ── Risk factor detection ──────────────────────────────────────
-        risk_factors = []
-
+        risk_factors: list[str] = []
         if cpu_slope > _RISE_THRESHOLD:
-            risk_factors.append(
-                f"CPU usage trending up {cpu_slope:.1f}%/hr — possible runaway process"
-            )
+            risk_factors.append(f"CPU usage trending up {cpu_slope:.1f} percentage points/hour — possible runaway process")
         if memory_slope > _RISE_THRESHOLD:
-            risk_factors.append(
-                f"Memory usage trending up {memory_slope:.1f}%/hr — possible memory leak"
-            )
+            risk_factors.append(f"Memory usage trending up {memory_slope:.1f} percentage points/hour — possible memory leak")
         if disk_slope > _DISK_RISK_THRESHOLD:
-            risk_factors.append(
-                f"Disk usage growing {disk_slope:.1f}%/hr — will fill in "
-                f"{int((100 - latest_telemetry.get('disk_percent', 50)) / disk_slope)}hr"
-            )
+            hours_to_full = max(0, int((100.0 - latest_disk) / disk_slope))
+            risk_factors.append(f"Disk usage growing {disk_slope:.1f} percentage points/hour — linear estimate {hours_to_full}h to full")
         if max(cpu_vals) - min(cpu_vals) > 40:
             risk_factors.append("High CPU variance — possible intermittent spike")
-        if latest_telemetry.get("disk_percent", 0) > 85:
+        if latest_disk > 85:
             risk_factors.append("Disk above 85% — approaching critical threshold")
-        if latest_telemetry.get("memory_percent", 0) > 85:
+        if latest_memory > 85:
             risk_factors.append("Memory above 85% — approaching critical threshold")
 
         return {
@@ -167,4 +182,9 @@ class TemporalCorrelator:
                 "disk": round(disk_slope, 3),
             },
             "readings_analysed": len(series),
+            "data_span_hours": round(elapsed_hours[-1], 3),
+            "forecast_horizon_hours": self.forecast_horizon_hours,
+            "forecast_type": "linear_trend_heuristic",
+            "calibration_status": "not_calibrated",
+            "production_validation": False,
         }
