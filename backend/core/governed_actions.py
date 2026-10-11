@@ -16,7 +16,6 @@ from urllib.parse import urlsplit
 from uuid import UUID, uuid4
 
 from tinlance_agent_platform_sdk.async_client import AsyncAgentPlatform
-from tinlance_agent_platform_sdk.config import ClientConfig
 from tinlance_agent_platform_sdk.errors import SdkError
 from tinlance_agent_platform_sdk.tools import ToolInvocation
 
@@ -200,7 +199,12 @@ def _new_platform_client(action_id: UUID, operation: str) -> AsyncAgentPlatform:
         if settings.AGENT_PLATFORM_ALLOW_INSECURE_HTTP:
             raise GovernedActionError("platform_insecure_transport_forbidden")
     try:
-        config = ClientConfig(
+        # Use the SDK's validated public constructor. At the pinned SDK revision,
+        # ClientConfig.as_client_kwargs currently includes tracestate/trace_context
+        # arguments that AgentPlatform.__init__ does not accept; using the direct
+        # constructor avoids that upstream compatibility defect without reimplementing
+        # the transport or weakening the SDK's URL/token/timeout validation.
+        return AsyncAgentPlatform(
             base_url=settings.AGENT_PLATFORM_BASE_URL,
             bearer_token=settings.AGENT_PLATFORM_BEARER_TOKEN,
             tenant_id=settings.AGENT_PLATFORM_TENANT_ID,
@@ -213,7 +217,6 @@ def _new_platform_client(action_id: UUID, operation: str) -> AsyncAgentPlatform:
                 and settings.ENVIRONMENT.lower() != "production"
             ),
         )
-        return AsyncAgentPlatform(config=config)
     except (TypeError, ValueError) as exc:
         raise GovernedActionError("platform_client_configuration_invalid") from exc
 
