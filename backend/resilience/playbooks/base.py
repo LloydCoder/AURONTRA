@@ -1,4 +1,4 @@
-"""Base playbook executor — all self-healing playbooks inherit from this."""
+"""Base recommendation planner — playbooks never execute local side effects."""
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
 import logging
@@ -12,18 +12,18 @@ class BasePlaybook(ABC):
     @abstractmethod
     async def execute(self, context: dict) -> dict:
         """
-        Execute the playbook.
+        Build a recommendation only; this method must not perform side effects.
 
         Args:
-            context: dict with device_id and trigger-specific fields
+            context: untrusted legacy input; never sufficient to authorize execution
 
         Returns:
-            Result dict with at minimum: status, playbook, device_id, executed_at
+            Result envelope explicitly marked recommendation-only and unverified.
         """
         raise NotImplementedError
 
     async def audit(self, device_id: str, result: dict) -> None:
-        """Log execution to audit trail."""
+        """Log minimal recommendation metadata; this is not authoritative audit evidence."""
         logger.info(
             f"[playbook:{self.name}] device={device_id} "
             f"status={result.get('status')} "
@@ -36,7 +36,7 @@ class BasePlaybook(ABC):
             "playbook": self.name,
             "device_id": context.get("device_id", "unknown"),
             "executed_at": datetime.now(timezone.utc).isoformat(),
-            "status": "executed",
+            "status": "simulated",
             "execution_mode": "recommendation_only",
             "execution_enabled": False,
             "business_outcome_verified": False,
