@@ -150,6 +150,9 @@ class DatabaseContainmentVerifier:
         ).order_by(ContainmentVerificationEvidence.observed_at.desc()).limit(1))
         if evidence is None:
             raise VerificationPending("independent_control_plane_evidence_pending")
+        observed_at = evidence.observed_at
+        if observed_at.tzinfo is None or observed_at.utcoffset() is None:
+            observed_at = observed_at.replace(tzinfo=timezone.utc)
         return ContainmentVerification(
             verified=evidence.isolation_active is True,
             isolation_active=evidence.isolation_active is True,
@@ -157,7 +160,7 @@ class DatabaseContainmentVerifier:
             device_id=device.id,
             finding_id=finding.id,
             execution_id=str(execution.execution_id),
-            observed_at=evidence.observed_at,
+            observed_at=observed_at,
             evidence_source=evidence.source_type,
             evidence_ids=(evidence.evidence_id,),
             reason_code=evidence.reason_code,
