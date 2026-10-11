@@ -104,9 +104,13 @@ class DatabaseContainmentVerifier:
 
     def __init__(self) -> None:
         import json
+        from core.containment_webhook import configured_source
         try:
             parsed = json.loads(settings.THREAT_VERIFIER_HMAC_KEYS_JSON or "{}")
             self._configured = isinstance(parsed, dict) and bool(parsed)
+            if self._configured:
+                for source_id in parsed:
+                    configured_source(source_id)
         except (TypeError, ValueError):
             self._configured = False
 
