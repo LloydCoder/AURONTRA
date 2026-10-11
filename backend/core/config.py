@@ -15,12 +15,24 @@ class Settings(BaseSettings):
     # Secure-by-default: the business data plane stays closed until auth and tenant-scoped persistence are ready.
     AUTH_MODE: str = "required"
     DATA_PLANE_ENABLED: bool = False
-    DB_SCHEMA_REVISION: str = "0004_device_lifecycle"
+    DB_SCHEMA_REVISION: str = "0005_agent_dpop_identity"
     TEST_MODE: bool = False
     JWT_JWKS_URL: str = ""
     JWT_ISSUER: str = ""
     JWT_AUDIENCE: str = ""
     MAX_REQUEST_BODY_BYTES: int = 1048576
+
+    # Endpoint-agent identity is verified against the Platform-approved issuer.
+    # Aurontra never mints agent credentials or stores private keys.
+    AGENT_AUTH_ENABLED: bool = False
+    AGENT_JWKS_URL: str = ""
+    AGENT_JWT_ISSUER: str = ""
+    AGENT_JWT_AUDIENCE: str = ""
+    AGENT_PUBLIC_ORIGIN: str = ""
+    AGENT_DPOP_MAX_AGE_SECONDS: int = 60
+    AGENT_CLOCK_SKEW_SECONDS: int = 30
+    AGENT_ACCESS_TOKEN_MAX_TTL_SECONDS: int = 600
+    AGENT_REPLAY_RETENTION_SECONDS: int = 300
 
     # Local development default; production must explicitly configure PostgreSQL.
     DATABASE_URL: str = "sqlite+aiosqlite:///./aurontra_dev.db"
