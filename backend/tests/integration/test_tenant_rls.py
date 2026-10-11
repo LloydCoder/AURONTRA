@@ -22,6 +22,8 @@ async def test_rls_scopes_organization_and_device_rows_and_rejects_cross_tenant_
     replay_a = f"replay-a-{suffix}"
     kb_a = f"kb-a-{suffix}"
     kb_b = f"kb-b-{suffix}"
+    kb_draft_a = f"kb-draft-a-{suffix}"
+    kb_draft_b = f"kb-draft-b-{suffix}"
     replay_b = f"replay-b-{suffix}"
     role = f"aurontra_rls_{suffix}"
     password = f"test-{suffix}-only"
@@ -40,6 +42,12 @@ async def test_rls_scopes_organization_and_device_rows_and_rejects_cross_tenant_
             "VALUES ($1, $2, $3, $4, 'A approved', 'connectivity', 'a', repeat('a', 64), 'published', 1, 'admin', now()), "
             "($5, $6, $7, $8, 'B approved', 'connectivity', 'b', repeat('b', 64), 'published', 1, 'admin', now())",
             kb_a, org_a, kb_a, kb_a, kb_b, org_b, kb_b, kb_b,
+        )
+        await admin.execute(
+            "INSERT INTO knowledge_articles (id, org_id, article_key, slug, title, category, content, content_sha256, status, version) "
+            "VALUES ($1, $2, $3, $4, 'A draft', 'connectivity', 'draft-a', repeat('d', 64), 'draft', 1), "
+            "($5, $6, $7, $8, 'B draft', 'connectivity', 'draft-b', repeat('e', 64), 'draft', 1)",
+            kb_draft_a, org_a, kb_draft_a, kb_draft_a, kb_draft_b, org_b, kb_draft_b, kb_draft_b,
         )
         await admin.execute(
             "INSERT INTO devices (id, org_id, name) VALUES ($1, $2, $1), ($3, $4, $3)",
@@ -105,7 +113,7 @@ async def test_rls_scopes_organization_and_device_rows_and_rejects_cross_tenant_
         visible_telemetry = await app.fetch("SELECT id FROM telemetry_records")
         assert [row["id"] for row in visible_telemetry] == [f"telemetry-a-{suffix}"]
         visible_knowledge = await app.fetch("SELECT id FROM knowledge_articles ORDER BY id")
-        assert [row["id"] for row in visible_knowledge] == [kb_a]
+        assert [row["id"] for row in visible_knowledge] == [kb_a, kb_draft_a]
 
         await app.execute("SELECT set_config('app.current_org_id', '', false)")
         assert await app.fetch("SELECT id FROM devices") == []
@@ -128,6 +136,11 @@ async def test_rls_scopes_organization_and_device_rows_and_rejects_cross_tenant_
                 "INSERT INTO knowledge_articles (id, org_id, article_key, slug, title, category, content, content_sha256, status, version, approved_by, approved_at) "
                 "VALUES ($1, $2, $3, $4, 'self-approved', 'connectivity', 'unsafe', repeat('c', 64), 'published', 1, 'tenant-user', now())",
                 f"forbidden-kb-{suffix}", org_a, f"forbidden-kb-{suffix}", f"forbidden-kb-{suffix}",
+            )
+        with pytest.raises(asyncpg.InsufficientPrivilegeError):
+            await app.execute(
+                "UPDATE knowledge_articles SET status='published', approved_by='tenant-user', approved_at=now() WHERE id=$1",
+                kb_draft_a,
             )
         with pytest.raises(asyncpg.InsufficientPrivilegeError):
             await app.execute(
