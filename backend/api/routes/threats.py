@@ -10,7 +10,7 @@ import ipaddress
 import json
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from sqlalchemy import func, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -106,6 +106,15 @@ class SignalAnalyseRequest(BaseModel):
     @classmethod
     def normalize_protocol(cls, value: str | None) -> str | None:
         return value.strip().upper() if value is not None else None
+
+    @model_validator(mode="after")
+    def require_scoring_signal(self):
+        if all(
+            getattr(self, field) is None
+            for field in ("protocol", "entropy", "z_score", "beacon_interval", "jitter")
+        ):
+            raise ValueError("At least one scoring signal field is required.")
+        return self
 
 
 class BlockRequest(BaseModel):
