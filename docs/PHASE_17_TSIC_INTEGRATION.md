@@ -1,6 +1,6 @@
 # Phase 17 — Tinlance Ecosystem Integration
 
-**Status:** In progress; TSIC registration and trace-context version correction are merged. Contract hardening is implemented and CI-validated on the candidate branch; live cross-system verification and operational acceptance remain open.  
+**Status:** Code-level implementation and CI acceptance are green on candidate `a125f77fd12d623207698faac427d2fdce554ca7`; live cross-system verification and operational acceptance remain open.  
 **Aurontra baseline:** `c804dc7d72da163c0fe3db928b753d5cc826544c`  
 **TSIC registration PR:** [LloydCoder/tinlance-system-integration#53](https://github.com/LloydCoder/tinlance-system-integration/pull/53)  
 **TSIC candidate commit:** `ae961f1cf6ea26ac0d468283b03159f016613caf`  
@@ -24,9 +24,8 @@ Register Aurontra in the canonical TSIC ecosystem and prove versioned, tenant-sa
 - [x] Successful response bodies are streamed with a strict 1 MiB cap before JSON parsing; redirects remain disabled.
 - [x] W3C `traceparent` is validated and propagated; event envelopes are validated against the pinned TSIC contract snapshot; unsafe correlation/idempotency values are rejected.
 - [x] ThreatFade and FusionOps data operations now require typed tenant context; health probes remain non-tenant-scoped.
-- [x] Regression tests cover unknown services, spoofed origins, untyped identity context, oversized responses, cross-tenant envelope mismatches, and header injection.
-- [x] Earlier candidate `161a0fa988a02ddd7ffe134bddcacff8d8d2f540` passed CI with 503 tests passed, 1 skipped, and 85.08% coverage; PostgreSQL RLS/restore checks, dependency audit, and secret/archive scan passed.
-- [ ] Validate the subsequent SSRF, bounded-response, typed-context, and bridge-propagation changes on one exact SHA; record the resulting test count and coverage below.
+- [x] Regression tests cover unknown services, spoofed origins, untyped identity context, oversized responses, cross-tenant envelope mismatches, header injection, and half-open circuit recovery.
+- [x] Candidate `a125f77fd12d623207698faac427d2fdce554ca7` passed CI with 515 tests passed, 1 skipped, and 85.28% coverage; PostgreSQL RLS/restore checks, dependency audit, and secret/archive scan all passed on the same SHA.
 - [ ] Complete controlled sandbox contracts, independent-verifier integration, and operational release gates.
 
 ## Required implementation gates
@@ -74,6 +73,13 @@ Phase 17 is complete only when:
 6. Worker/scheduler processing and recovery are demonstrated, with observability and operational runbooks.
 7. Main-branch CI, PostgreSQL migration/RLS/restore checks, dependency checks, secret/history/archive scan, and forensic audit are green on the exact candidate.
 8. Release documentation distinguishes repository validation, sandbox integration, production deployment, and customer readiness.
+
+## Exact-SHA validation evidence
+
+- AURONTRA CI and Deployment: [run 38126903577](https://github.com/LloydCoder/AURONTRA/actions/runs/38126903577) — success; 515 passed, 1 skipped, 85.28% coverage; PostgreSQL tenant-isolation/RLS and restore checks passed.
+- Python dependency audit: [run 38126903568](https://github.com/LloydCoder/AURONTRA/actions/runs/38126903568) — success.
+- Secret/history/archive scan: [run 38126903534](https://github.com/LloydCoder/AURONTRA/actions/runs/38126903534) — success.
+- Candidate SHA: `a125f77fd12d623207698faac427d2fdce554ca7`.
 
 ## Current non-claims
 
