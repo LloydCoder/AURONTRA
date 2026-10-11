@@ -122,3 +122,12 @@ class TestThreatsAPI:
             "format": "cef",
         })
         assert r.status_code in (200, 201)
+
+
+    @pytest.mark.asyncio
+    async def test_threat_containment_endpoint_is_closed_by_default(self, client, monkeypatch):
+        from core.config import settings
+        monkeypatch.setattr(settings, "THREAT_CONTAINMENT_ENABLED", False)
+        r = await client.post("/threats/findings/not-a-real-finding/contain")
+        assert r.status_code == 503
+        assert r.json()["detail"] == "containment_disabled"
