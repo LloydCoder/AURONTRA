@@ -17,7 +17,7 @@ def upgrade():
             sa.Column("id", sa.String(36), primary_key=True),
             sa.Column("org_id", sa.String(64), sa.ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False),
             sa.Column("event_id", sa.String(128), nullable=False),
-            sa.Column("source", sa.String(32), nullable=False, server_default="api_signal"),
+            sa.Column("source", sa.String(32), nullable=False, server_default="network_signal"),
             sa.Column("detector_version", sa.String(64), nullable=False),
             sa.Column("observed_at", sa.DateTime(timezone=True), nullable=False),
             sa.Column("received_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
