@@ -19,9 +19,9 @@ Those results validate the recorded repository checks. They do not prove product
 
 ### F-01 — Phase numbering inconsistency
 
-- `docs/ROADMAP.md` defines Phase 0 through Phase 17 (18 phases).
+- `docs/ROADMAP.md` defines 24 sequential phases (01–24). Older text in this audit incorrectly described an 18-phase Phase 0–17 sequence; the canonical roadmap table contains Phases 01–24.
 - `docs/audits/PHASE_16_FORENSIC_AUDIT.md` says “Phase 16 of 24.”
-- This change reconciles the Phase 16 audit header with the roadmap's enumerated Phase 0–17 sequence. Any additional phases must be explicitly added to the canonical roadmap before they are treated as release gates.
+- The Phase 16 audit header and all roadmap references must use the canonical Phase 01–24 sequence. Phases 18–24 already exist in the roadmap and must not be omitted from project completion tracking.
 
 ### F-02 — TSIC registration and end-to-end integration remain incomplete
 
