@@ -74,6 +74,7 @@ class FakePlatform:
 
 
 def _executor(monkeypatch, *, run_state="created", execution=None, execute_error=None, factory_calls=None):
+    monkeypatch.setattr(settings, "AGENT_PLATFORM_ENABLED", True)
     monkeypatch.setattr(settings, "AGENT_PLATFORM_AGENT_ID", str(AGENT_ID))
     monkeypatch.setattr(settings, "AGENT_PLATFORM_TASK_ID", str(TASK_ID))
     calls = []
@@ -152,6 +153,7 @@ async def test_non_executable_platform_run_state_is_never_promoted_or_executed(m
 
 @pytest.mark.asyncio
 async def test_unregistered_action_fails_before_any_platform_request(monkeypatch):
+    monkeypatch.setattr(settings, "AGENT_PLATFORM_ENABLED", True)
     calls = []
     executor = PlatformGovernedActionExecutor(
         GovernedActionRegistry(),
@@ -213,8 +215,8 @@ async def test_platform_transport_failure_is_sanitized_and_retains_run_correlati
 @pytest.mark.asyncio
 async def test_default_client_factory_is_disabled_by_default(monkeypatch):
     monkeypatch.setattr(settings, "AGENT_PLATFORM_ENABLED", False)
-    monkeypatch.setattr(settings, "AGENT_PLATFORM_AGENT_ID", str(AGENT_ID))
-    monkeypatch.setattr(settings, "AGENT_PLATFORM_TASK_ID", str(TASK_ID))
+    monkeypatch.setattr(settings, "AGENT_PLATFORM_AGENT_ID", "")
+    monkeypatch.setattr(settings, "AGENT_PLATFORM_TASK_ID", "")
     executor = PlatformGovernedActionExecutor(GovernedActionRegistry((_definition(),)))
     with pytest.raises(GovernedActionError) as caught:
         await executor.submit(
@@ -285,6 +287,7 @@ def test_platform_sdk_configuration_is_rejected_without_https_in_production(monk
 
 @pytest.mark.asyncio
 async def test_platform_run_identity_mismatch_never_executes_tool(monkeypatch):
+    monkeypatch.setattr(settings, "AGENT_PLATFORM_ENABLED", True)
     monkeypatch.setattr(settings, "AGENT_PLATFORM_AGENT_ID", str(AGENT_ID))
     monkeypatch.setattr(settings, "AGENT_PLATFORM_TASK_ID", str(TASK_ID))
     calls = []
@@ -369,6 +372,7 @@ def test_action_definition_rejects_mutable_allowlist():
 
 @pytest.mark.asyncio
 async def test_action_intent_is_snapshotted_before_first_await(monkeypatch):
+    monkeypatch.setattr(settings, "AGENT_PLATFORM_ENABLED", True)
     monkeypatch.setattr(settings, "AGENT_PLATFORM_AGENT_ID", str(AGENT_ID))
     monkeypatch.setattr(settings, "AGENT_PLATFORM_TASK_ID", str(TASK_ID))
     calls = []
