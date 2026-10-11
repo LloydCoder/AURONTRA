@@ -237,6 +237,10 @@ async def contain_threat_finding(
     service: ThreatContainmentService = Depends(get_threat_containment_service),
 ):
     """Request endpoint isolation through the Agent Platform; never run local enforcement."""
+    if not settings.THREAT_CONTAINMENT_ENABLED:
+        raise HTTPException(status_code=503, detail="containment_disabled")
+    if not settings.AGENT_PLATFORM_ENABLED:
+        raise HTTPException(status_code=503, detail="platform_integration_disabled")
     if request.state.role not in {"org:owner", "org:admin", "security:admin", "security:analyst"}:
         raise HTTPException(status_code=403, detail="Security-administrator role is required.")
     try:
