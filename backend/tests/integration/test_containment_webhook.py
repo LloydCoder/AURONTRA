@@ -89,7 +89,7 @@ def _signed_request(payload, secret, *, nonce="nonce-containment-000001", timest
 async def test_signed_control_plane_evidence_verifies_containment(monkeypatch):
     ids = await _seed_completed_attempt()
     secret = "s" * 48
-    monkeypatch.setattr(settings, "THREAT_VERIFIER_HMAC_KEYS_JSON", json.dumps({
+    monkeypatch.setattr(settings, "THREAT_VERIFIER_INTEGRATION_CONFIG_JSON", json.dumps({
         "firewall-prod": {
             "tenant_id": "test-tenant", "key_id": "key-2026-01",
             "secret": secret, "source_type": "network_control_plane",
@@ -124,7 +124,7 @@ async def test_signed_control_plane_evidence_verifies_containment(monkeypatch):
 async def test_invalid_hmac_cannot_create_verification_evidence(monkeypatch):
     ids = await _seed_completed_attempt()
     secret = "t" * 48
-    monkeypatch.setattr(settings, "THREAT_VERIFIER_HMAC_KEYS_JSON", json.dumps({
+    monkeypatch.setattr(settings, "THREAT_VERIFIER_INTEGRATION_CONFIG_JSON", json.dumps({
         "firewall-prod": {
             "tenant_id": "test-tenant", "key_id": "key-2026-01",
             "secret": secret, "source_type": "network_control_plane",
@@ -153,7 +153,7 @@ async def test_invalid_hmac_cannot_create_verification_evidence(monkeypatch):
 async def test_signed_but_stale_control_plane_evidence_never_marks_contained(monkeypatch):
     ids = await _seed_completed_attempt()
     secret = "u" * 48
-    monkeypatch.setattr(settings, "THREAT_VERIFIER_HMAC_KEYS_JSON", json.dumps({
+    monkeypatch.setattr(settings, "THREAT_VERIFIER_INTEGRATION_CONFIG_JSON", json.dumps({
         "firewall-prod": {
             "tenant_id": "test-tenant", "key_id": "key-2026-01",
             "secret": secret, "source_type": "network_control_plane",
