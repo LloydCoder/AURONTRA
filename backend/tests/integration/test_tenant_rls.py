@@ -26,7 +26,7 @@ async def test_rls_scopes_organization_and_device_rows_and_rejects_cross_tenant_
     try:
         await admin.execute(f'CREATE ROLE "{role}" LOGIN PASSWORD \'{password}\' NOSUPERUSER NOBYPASSRLS')
         await admin.execute(f'GRANT USAGE ON SCHEMA public TO "{role}"')
-        await admin.execute(f'GRANT SELECT, INSERT, UPDATE, DELETE ON organizations, devices, tickets TO "{role}"')
+        await admin.execute(f'GRANT SELECT, INSERT, UPDATE, DELETE ON organizations, devices, tickets, durable_jobs, outbox_events TO "{role}"')
         await admin.execute(
             "INSERT INTO organizations (id, name, status) VALUES ($1, $1, 'active'), ($2, $2, 'active')",
             org_a, org_b,
@@ -41,6 +41,18 @@ async def test_rls_scopes_organization_and_device_rows_and_rejects_cross_tenant_
             "($3, $4, 'B tenant ticket', 'private', 'b@example.invalid', 'OPEN', 'MEDIUM', 'MANUAL')",
             ticket_a, org_a, ticket_b, org_b,
         )
+        await admin.execute(
+            "INSERT INTO durable_jobs (id, org_id, job_type, schema_version, idempotency_key, payload, status, attempts, max_attempts, result_metadata) "
+            "VALUES ($1, $2, 'test.job', '1', $3, '{}'::jsonb, 'pending', 0, 3, '{}'::jsonb), "
+            "($4, $5, 'test.job', '1', $6, '{}'::jsonb, 'pending', 0, 3, '{}'::jsonb)",
+            f"job-a-{suffix}", org_a, f"job-a-{suffix}", f"job-b-{suffix}", org_b, f"job-b-{suffix}",
+        )
+        await admin.execute(
+            "INSERT INTO outbox_events (id, org_id, aggregate_type, aggregate_id, event_type, schema_version, idempotency_key, payload, status, attempts) "
+            "VALUES ($1, $2, 'ticket', $1, 'ticket.created', '1', $3, '{}'::jsonb, 'pending', 0), "
+            "($4, $5, 'ticket', $4, 'ticket.created', '1', $6, '{}'::jsonb, 'pending', 0)",
+            f"event-a-{suffix}", org_a, f"event-a-{suffix}", f"event-b-{suffix}", org_b, f"event-b-{suffix}",
+        )
 
         app_dsn = dsn.replace("postgresql://postgres:postgres@", f"postgresql://{role}:{password}@")
         app = await asyncpg.connect(app_dsn)
@@ -52,10 +64,16 @@ async def test_rls_scopes_organization_and_device_rows_and_rejects_cross_tenant_
         assert [row["id"] for row in visible_orgs] == [org_a]
         visible_tickets = await app.fetch("SELECT id FROM tickets ORDER BY id")
         assert [row["id"] for row in visible_tickets] == [ticket_a]
+        visible_jobs = await app.fetch("SELECT id FROM durable_jobs")
+        assert [row["id"] for row in visible_jobs] == [f"job-a-{suffix}"]
+        visible_outbox = await app.fetch("SELECT id FROM outbox_events")
+        assert [row["id"] for row in visible_outbox] == [f"event-a-{suffix}"]
 
         await app.execute("SELECT set_config('app.current_org_id', '', false)")
         assert await app.fetch("SELECT id FROM devices") == []
         assert await app.fetch("SELECT id FROM tickets") == []
+        assert await app.fetch("SELECT id FROM durable_jobs") == []
+        assert await app.fetch("SELECT id FROM outbox_events") == []
 
         await app.execute("SELECT set_config('app.current_org_id', $1, false)", org_a)
         with pytest.raises(asyncpg.InsufficientPrivilegeError):
@@ -68,6 +86,18 @@ async def test_rls_scopes_organization_and_device_rows_and_rejects_cross_tenant_
                 "INSERT INTO tickets (id, org_id, title, description, reporter_email, status, priority, source) "
                 "VALUES ($1, $2, 'forbidden', 'cross-tenant', 'x@example.invalid', 'OPEN', 'MEDIUM', 'MANUAL')",
                 f"forbidden-ticket-{suffix}", org_b,
+            )
+        with pytest.raises(asyncpg.InsufficientPrivilegeError):
+            await app.execute(
+                "INSERT INTO durable_jobs (id, org_id, job_type, schema_version, idempotency_key, payload, status, attempts, max_attempts, result_metadata) "
+                "VALUES ($1, $2, 'forbidden', '1', $1, '{}'::jsonb, 'pending', 0, 3, '{}'::jsonb)",
+                f"forbidden-job-{suffix}", org_b,
+            )
+        with pytest.raises(asyncpg.InsufficientPrivilegeError):
+            await app.execute(
+                "INSERT INTO outbox_events (id, org_id, aggregate_type, aggregate_id, event_type, schema_version, idempotency_key, payload, status, attempts) "
+                "VALUES ($1, $2, 'ticket', $1, 'ticket.created', '1', $1, '{}'::jsonb, 'pending', 0)",
+                f"forbidden-event-{suffix}", org_b,
             )
     finally:
         if app is not None:
