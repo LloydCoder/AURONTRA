@@ -1,43 +1,70 @@
-# Python
+# Python bytecode and environments
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+*.py[cod]
+*$py.class
 .Python
 *.egg-info/
 .venv/
 venv/
 env/
 
-# Environment — NEVER commit this
+# Secrets and local environment configuration
 .env
-*.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+secrets/
+.secret/
+secrets.json
+credentials.json
 
-# Testing
+# Testing and coverage
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
 htmlcov/
 .coverage
-*.coverage
+.coverage.*
+coverage.xml
+test-results/
+junit.xml
 
-# ML models
+# Local databases and model artifacts
+*.db
+*.sqlite
+*.sqlite3
 *.pkl
 *.joblib
+*.onnx
+*.pt
+*.pth
 
-# SQLite dev DB
-*.db
-*.sqlite3
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Editor
-.vscode/
-.idea/
-*.swp
-
-# Build
-dist/
+# Build and package output
 build/
+dist/
+site/
+.eggs/
+wheels/
 node_modules/
 .next/
+out/
+*.tar.gz
+
+# Logs and temporary files
+*.log
+*.tmp
+*.swp
+*.swo
+*~
+
+# Operating systems and editors
+.DS_Store
+Thumbs.db
+Desktop.ini
+.vscode/
+.idea/
