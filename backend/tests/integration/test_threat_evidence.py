@@ -151,3 +151,44 @@ async def test_block_endpoint_stays_fail_closed():
             "org_id": "test-tenant",
         })
     assert response.status_code == 503
+
+
+
+@pytest.mark.asyncio
+async def test_siem_export_rejects_log_injection_and_never_trusts_blocked_claim():
+    from main import app
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        safe = await client.post("/threats/export/siem", json={
+            "event_id": "siem-event-001",
+            "src_ip": "192.0.2.50",
+            "threat_level": "high",
+            "mitre_ttp": "T1071.001",
+            "blocked": True,
+            "timestamp": "2026-10-11T12:00:00Z",
+            "format": "json",
+            "action_taken": "containment_pending",
+        })
+        injected_reason = await client.post("/threats/export/siem", json={
+            "event_id": "siem-event-002",
+            "src_ip": "192.0.2.50",
+            "threat_level": "high",
+            "mitre_ttp": "T1071.001",
+            "blocked": False,
+            "timestamp": "2026-10-11T12:00:00Z",
+            "reason": "safe message\\nCEF:0|fake",
+        })
+        naive_timestamp = await client.post("/threats/export/siem", json={
+            "event_id": "siem-event-003",
+            "src_ip": "192.0.2.50",
+            "threat_level": "high",
+            "mitre_ttp": "T1071.001",
+            "blocked": False,
+            "timestamp": "2026-10-11T12:00:00",
+        })
+
+    assert safe.status_code == 200
+    assert safe.json()["payload"]["blocked"] is False
+    assert safe.json()["payload"]["containment_verified"] is False
+    assert safe.json()["payload"]["status"] == "containment_pending"
+    assert injected_reason.status_code == 422
+    assert naive_timestamp.status_code == 422
