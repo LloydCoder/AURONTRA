@@ -15,9 +15,10 @@ from models.knowledge_article import KnowledgeArticle
 from models.threat_finding import ThreatFinding
 from models.threat_containment_attempt import ThreatContainmentAttempt
 from models.containment_verification_evidence import ContainmentVerificationEvidence
+from models.billing_subscription import BillingCheckoutIntent, BillingSubscription
 
 __all__ = [
     "Device", "Ticket", "TicketStatus", "TicketPriority", "TicketSource",
     "ResilienceScore", "AutomationRule", "Organization", "APIKey", "AuditEvent", "WebhookEvent",
-    "DurableJob", "OutboxEvent", "AgentRequestReplay", "RemediationIntent", "TelemetryRecord", "KnowledgeArticle", "ThreatFinding", "ThreatContainmentAttempt", "ContainmentVerificationEvidence",
+    "DurableJob", "OutboxEvent", "AgentRequestReplay", "RemediationIntent", "TelemetryRecord", "KnowledgeArticle", "ThreatFinding", "ThreatContainmentAttempt", "ContainmentVerificationEvidence", "BillingCheckoutIntent", "BillingSubscription",
 ]
