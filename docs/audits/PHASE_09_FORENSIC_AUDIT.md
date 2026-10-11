@@ -1,10 +1,10 @@
 # Phase 09 — Forensic Audit
 
-**Result:** Pass for implementation and repository CI acceptance. Not a production deployment certification.  
+**Result:** Merged and passed repository CI acceptance. Not a production deployment certification.  
 **PR:** [#4 — Phase 09: governed action engine](https://github.com/LloydCoder/AURONTRA/pull/4)  
 **Audited branch head:** `8dc412742f6c2c946e1c358d63d359855017a329`  
 **CI:** [Run 38100757131](https://github.com/LloydCoder/AURONTRA/actions/runs/38100757131)  
-**Secret/history/archive scan:** [Run 38100757158](https://github.com/LloydCoder/AURONTRA/actions/runs/38100757158)
+**Secret/history/archive scan:** [PR scan 38100757158](https://github.com/LloydCoder/AURONTRA/actions/runs/38100757158)\n**Merge commit:** `90b8760560b7efb773861e0297c86235638a014a`\n**Post-merge main CI:** [Run 38101019351](https://github.com/LloydCoder/AURONTRA/actions/runs/38101019351) — success\n**Post-merge secret/history/archive scan:** [Run 38101019352](https://github.com/LloydCoder/AURONTRA/actions/runs/38101019352) — success
 
 ## Acceptance evidence
 
@@ -42,4 +42,4 @@
 
 ## Phase boundary decision
 
-Phase 09 is complete at the implementation/CI level and may be merged after the required PR checks remain green. Phase 10 may now build safe playbook-to-action mappings, but must keep the public route disabled until verified tenant context, Platform credentials, tool registrations, durable state and postcondition verification are wired. The Platform remains the only authority for identity, policy, approvals, sandbox, secrets, budgets, execution and authoritative evidence.
+Phase 09 was merged at `90b8760560b7efb773861e0297c86235638a014a`; the post-merge main CI and secret/history/archive scan are green. Phase 10 may now build safe playbook-to-action mappings, but must keep the public route disabled until verified tenant context, Platform credentials, tool registrations, durable state and postcondition verification are wired. The Platform remains the only authority for identity, policy, approvals, sandbox, secrets, budgets, execution and authoritative evidence.
