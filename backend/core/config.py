@@ -98,6 +98,8 @@ class Settings(BaseSettings):
     FADEREACH_URL: str = ""
     FADEREACH_API_KEY: str = ""
     BRIDGE_TIMEOUT: int = 5
+    BRIDGE_AUTH_TOKENS_JSON: str = ""
+    BRIDGE_ALLOW_INSECURE_HTTP: bool = False
 
     # Billing provider configuration. Production webhook verification fails closed.
     LEMONSQUEEZY_API_KEY: str = ""
