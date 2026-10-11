@@ -262,7 +262,16 @@ async def ingest_agent_telemetry(
         quality_flags.append("partial_metrics")
     if payload.observed_at > now:
         quality_flags.append("agent_clock_ahead_within_skew")
-    out_of_order = latest is not None and payload.observed_at < latest.observed_at
+    latest_observed_at = latest.observed_at if latest is not None else None
+    # SQLite drops timezone metadata for DateTime(timezone=True); normalize
+    # persisted values before comparing them with the timezone-aware payload.
+    if latest_observed_at is not None and (
+        latest_observed_at.tzinfo is None or latest_observed_at.utcoffset() is None
+    ):
+        latest_observed_at = latest_observed_at.replace(tzinfo=timezone.utc)
+    out_of_order = (
+        latest_observed_at is not None and payload.observed_at < latest_observed_at
+    )
     if out_of_order:
         quality_flags.append("out_of_order")
 
