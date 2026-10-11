@@ -25,7 +25,7 @@ Those results validate the recorded repository checks. They do not prove product
 
 ### F-02 — TSIC registration and end-to-end integration remain incomplete
 
-The roadmap and README state that AURONTRA is not yet registered in the TSIC ecosystem manifest and that cross-repository contracts remain Phase 17 gates. Phase 09's pinned SDK and adapter baseline do not prove current TSIC registration or live end-to-end integration.
+TSIC registration is now merged and documented in the README and roadmap. Cross-repository contract conformance, live telemetry/finding flow, independent containment verification, and operational acceptance remain Phase 17 gates. Phase 09's pinned SDK and adapter baseline do not prove live end-to-end integration.
 
 TSIC PR #53 merged as `f12105f5a64fc365eae1bd151d01eed509f3108d` after TSIC CI and associated certification workflows passed on candidate `ae961f1cf6ea26ac0d468283b03159f016613caf`. The manifest, capability authority registry, canonical architecture, dependency graph, service registry, and reference adapter now include Aurontra. Runtime contract conformance is a separate requirement and remains open.
 
@@ -62,7 +62,11 @@ Main CI and the secret/archive scan passed on the audit baseline. Historical pha
 
 ### F-09 — Dependency vulnerability auditing is not evidenced by the current CI definition
 
-The original CI had dependency consistency checks but no resolved-package vulnerability audit. A pinned `pip-audit==2.10.1` workflow and CI discovery step are now in the candidate branch. The first scan reported 78 vulnerability findings across 10 packages, including LangChain packages not referenced by the inspected application code, PyJWT, pytest, python-dotenv, python-multipart, and Starlette. The candidate removes the unused LangChain requirements and upgrades affected packages, including FastAPI/Starlette, Pydantic, PyJWT, pytest/pytest-asyncio, python-dotenv, and python-multipart. The post-upgrade audit reports no known vulnerabilities, and the dependency audit is now blocking in both the dedicated workflow and main CI. Candidate `161a0fa988a02ddd7ffe134bddcacff8d8d2f540` passed with 503 tests passed, 1 skipped, 85.08% coverage, PostgreSQL RLS/restore checks, dependency audit, and secret/archive scan. Final docs-only reconciliation still requires a fresh same-SHA run.
+The original CI had dependency consistency checks but no resolved-package vulnerability audit. A pinned `pip-audit==2.10.1` workflow and CI discovery step are now in the candidate branch. The first scan reported 78 vulnerability findings across 10 packages, including LangChain packages not referenced by the inspected application code, PyJWT, pytest, python-dotenv, python-multipart, and Starlette. The candidate removes the unused LangChain requirements and upgrades affected packages, including FastAPI/Starlette, Pydantic, PyJWT, pytest/pytest-asyncio, python-dotenv, and python-multipart. The post-upgrade audit reports no known vulnerabilities, and the dependency audit is now blocking in both the dedicated workflow and main CI. Candidate `a125f77fd12d623207698faac427d2fdce554ca7` passed with 515 tests passed, 1 skipped, 85.28% coverage, PostgreSQL RLS/restore checks, dependency audit, and secret/archive scan. The forensic audit and Phase 17 plan are being reconciled; the documentation commit must receive its own exact-SHA validation before merge.
+
+### F-10 — TSIC trace-context contract version drift
+
+The TSIC contract registry listed `trace-context` as `1.0.0`, while `contracts/telemetry/trace-context.json` declares `schema_version: 1.1.0`. This is a cross-system compatibility defect. TSIC PR #54 updates the registry to `1.1.0` and pins the Aurontra adapter's per-contract versions. TSIC PR #54 merged as `619db9e264cdc71369de621c981bfc2ba1615a1d` after all 32 associated workflows passed on the reviewed candidate. The registry and Aurontra adapter now agree on trace-context `1.1.0`. Aurontra's shared client now validates typed identity context and event envelopes, binds tenant/execution/trace/correlation fields, emits a semver contract header, propagates W3C trace context, and rejects unsafe correlation/idempotency header values. Regression tests pass; live end-to-end propagation remains unverified.
 
 ### F-11 — Ecosystem client origin trust and response resource bounds
 
@@ -72,9 +76,9 @@ The previous response-size check ran after `httpx` had buffered the full body, s
 
 W3C trace-context parsing follows the current `00` format and rejects zero trace/span IDs, consistent with the [W3C Trace Context specification](https://www.w3.org/TR/trace-context/). Event-envelope shape is pinned to the TSIC contract rather than silently assumed from generic CloudEvents defaults.
 
-### F-10 — TSIC trace-context contract version drift
+### F-12 — Half-open circuit breaker did not restart its cooldown after probe failure
 
-The TSIC contract registry listed `trace-context` as `1.0.0`, while `contracts/telemetry/trace-context.json` declares `schema_version: 1.1.0`. This is a cross-system compatibility defect. TSIC PR #54 updates the registry to `1.1.0` and pins the Aurontra adapter's per-contract versions. TSIC PR #54 merged as `619db9e264cdc71369de621c981bfc2ba1615a1d` after all 32 associated workflows passed on the reviewed candidate. The registry and Aurontra adapter now agree on trace-context `1.1.0`. Aurontra's shared client now validates typed identity context and event envelopes, binds tenant/execution/trace/correlation fields, emits a semver contract header, propagates W3C trace context, and rejects unsafe correlation/idempotency header values. Regression tests pass; live end-to-end propagation remains unverified.
+The circuit breaker opened after repeated upstream failures, but a failed half-open probe could leave the original `opened_at` timestamp unchanged. Once the original cooldown had elapsed, subsequent requests could immediately attempt another probe instead of observing a fresh cooldown. The client now restarts the cooldown after a failed half-open transport/retryable/oversized-response probe, while a real upstream HTTP rejection is treated as evidence of reachability and closes the half-open circuit. A regression test advances a controlled clock and verifies that a failed probe is followed by `bridge_circuit_open` without another network attempt.
 
 ## Security and architecture invariants
 
