@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from agents.ticket_resolver import resolve_ticket
+from knowledge.retrieval import KnowledgeIntegrityError, retrieve_knowledge_articles
 from core.database import get_tenant_db
 from core.job_queue import enqueue_outbox_event
 from ingestion.email_parser import parse_email
@@ -59,6 +60,11 @@ def _serialize(ticket: Ticket) -> dict:
         "status": ticket.status.value if hasattr(ticket.status, "value") else ticket.status,
         "ai_resolved": ticket.ai_resolved,
         "ai_response": ticket.ai_response,
+        "ai_prompt_version": ticket.ai_prompt_version,
+        "ai_prompt_sha256": ticket.ai_prompt_sha256,
+        "ai_response_sha256": ticket.ai_response_sha256,
+        "ai_knowledge_refs": ticket.ai_knowledge_refs or [],
+        "ai_generated_at": ticket.ai_generated_at.isoformat() if ticket.ai_generated_at else None,
         "escalated": (ticket.status == TicketStatus.ESCALATED),
         "created_at": ticket.created_at.isoformat() if ticket.created_at else None,
     }
@@ -164,17 +170,37 @@ async def resolve_ticket_endpoint(ticket_id: str, request: Request, db: AsyncSes
     )
     if ticket is None:
         raise HTTPException(status_code=404, detail="Ticket not found")
+    try:
+        knowledge_articles = await retrieve_knowledge_articles(
+            db,
+            tenant_id=request.state.tenant_id,
+            query=f"{ticket.title} {ticket.description}",
+            limit=3,
+        )
+    except KnowledgeIntegrityError as exc:
+        # Do not send unverified knowledge content to an external model.
+        raise HTTPException(
+            status_code=503,
+            detail="Approved knowledge integrity verification failed; human review is required.",
+        ) from exc
+
     result = await resolve_ticket(
         ticket_id=ticket.id,
         title=ticket.title,
         description=ticket.description,
         reporter_email=ticket.reporter_email,
         device_id=ticket.device_id,
+        knowledge_articles=knowledge_articles,
     )
     ticket.ai_response = result.get("response")
     ticket.ai_model_used = result.get("model_used")
     confidence = result.get("confidence")
     ticket.ai_confidence = str(confidence) if confidence is not None else None
+    ticket.ai_prompt_version = result.get("prompt_version")
+    ticket.ai_prompt_sha256 = result.get("prompt_sha256")
+    ticket.ai_response_sha256 = result.get("response_sha256")
+    ticket.ai_knowledge_refs = result.get("knowledge_article_refs", [])
+    ticket.ai_generated_at = datetime.now(timezone.utc)
     # A generated answer is not evidence that the underlying IT issue was fixed.
     ticket.ai_resolved = False
     ticket.status = TicketStatus.ESCALATED if result.get("escalated") else TicketStatus.OPEN
