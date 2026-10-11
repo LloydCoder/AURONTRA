@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from core.job_queue import (
     claim_jobs,
     claim_outbox_events,
+    dead_letter_job,
     complete_job,
     fail_job,
     fail_outbox_event,
@@ -70,7 +71,7 @@ async def process_job_batch(
         if handler is None:
             counts["unsupported"] += 1
             async with session_factory() as session:
-                await fail_job(
+                await dead_letter_job(
                     session, job_id=item["id"], org_id=item["org_id"],
                     worker_id=worker_id, error_code="unknown_job_type",
                 )
