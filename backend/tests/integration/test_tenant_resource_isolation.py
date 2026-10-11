@@ -1,6 +1,10 @@
 """Regression tests for tenant-scoped route lookups and device ownership."""
 import pytest
 from httpx import ASGITransport, AsyncClient
+from fastapi import HTTPException
+from types import SimpleNamespace
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from core.database import AsyncSessionLocal
 from models.device import Device
@@ -77,3 +81,55 @@ async def test_telemetry_cannot_update_device_owned_by_another_tenant():
     async with AsyncSessionLocal() as session:
         device = await session.get(Device, "private-device")
         assert device.resilience_score == 71
+
+
+@pytest.mark.asyncio
+async def test_inactive_tenant_cannot_open_a_tenant_database_session():
+    from core.database import get_tenant_db
+    async with AsyncSessionLocal() as session:
+        session.add(Organization(id="suspended-tenant", name="Suspended Tenant", status="suspended"))
+        await session.commit()
+
+    request = SimpleNamespace(state=SimpleNamespace(tenant_id="suspended-tenant"))
+    dependency = get_tenant_db(request)
+    with pytest.raises(HTTPException) as error:
+        await dependency.__anext__()
+    assert error.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_ticket_insert_obeys_database_foreign_keys():
+    async with AsyncSessionLocal() as session:
+        session.add(Ticket(
+            id="orphan-ticket",
+            org_id="missing-organization",
+            title="Orphan",
+            description="Must fail",
+            reporter_email="nobody@example.invalid",
+            source=TicketSource.MANUAL,
+            priority=TicketPriority.MEDIUM,
+            status=TicketStatus.OPEN,
+        ))
+        with pytest.raises(IntegrityError):
+            await session.commit()
+        await session.rollback()
+
+
+@pytest.mark.asyncio
+async def test_explicit_transaction_rollback_leaves_no_ticket():
+    async with AsyncSessionLocal() as session:
+        session.add(Ticket(
+            id="rolled-back-ticket",
+            org_id="test-tenant",
+            title="Temporary",
+            description="This write must be rolled back",
+            reporter_email="user@example.invalid",
+            source=TicketSource.MANUAL,
+            priority=TicketPriority.MEDIUM,
+            status=TicketStatus.OPEN,
+        ))
+        await session.flush()
+        await session.rollback()
+
+    async with AsyncSessionLocal() as session:
+        assert await session.get(Ticket, "rolled-back-ticket") is None

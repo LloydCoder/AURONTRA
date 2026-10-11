@@ -1,5 +1,5 @@
 """Async database engine — schema changes are migration-controlled in production."""
-from sqlalchemy import inspect, text
+from sqlalchemy import event, inspect, text
 from fastapi import Request, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
@@ -12,6 +12,17 @@ _engine_options = {"echo": settings.DEBUG, "future": True}
 if settings.TEST_MODE:
     _engine_options["poolclass"] = NullPool
 engine = create_async_engine(settings.DATABASE_URL, **_engine_options)
+
+
+@event.listens_for(engine.sync_engine, "connect")
+def _enable_sqlite_foreign_keys(dbapi_connection, _connection_record):
+    """SQLite disables FK enforcement by default; tests/dev must not silently skip it."""
+    if engine.dialect.name == "sqlite":
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+
+
 AsyncSessionLocal = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 
@@ -79,6 +90,12 @@ async def get_tenant_db(request: Request):
                     text("SELECT set_config('app.current_org_id', :tenant_id, true)"),
                     {"tenant_id": tenant_id},
                 )
+            # An authenticated token may name a deleted, suspended, or legacy
+            # tenant. Only explicitly active organizations can access the data plane.
+            from models.organization import Organization
+            organization = await session.get(Organization, tenant_id)
+            if organization is None or organization.status != "active":
+                raise HTTPException(status_code=403, detail="Organization is not active.")
             yield session
             await session.commit()
         except Exception:

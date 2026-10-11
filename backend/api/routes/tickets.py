@@ -95,9 +95,13 @@ async def _create_ticket(data: dict, request: Request, db: AsyncSession) -> Tick
         priority=priority,
         status=TicketStatus.OPEN,
         ai_resolved=False,
+        created_at=datetime.now(timezone.utc),
     )
     db.add(ticket)
     await db.flush()
+    # Commit before returning a success response so database errors are not
+    # deferred to dependency teardown after the response has been sent.
+    await db.commit()
     return ticket
 
 
@@ -164,6 +168,7 @@ async def resolve_ticket_endpoint(ticket_id: str, request: Request, db: AsyncSes
     ticket.status = TicketStatus.ESCALATED if result.get("escalated") else TicketStatus.OPEN
     ticket.resolved_at = None
     await db.flush()
+    await db.commit()
     return {
         **result,
         "resolved": False,

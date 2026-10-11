@@ -67,6 +67,7 @@ async def ingest_telemetry(
     device.resilience_score = int(max(0, min(100, score_result["score"])))
     device.last_seen_at = datetime.now(timezone.utc)
     await db.flush()
+    await db.commit()
 
     return {
         "device_id": device.id,
