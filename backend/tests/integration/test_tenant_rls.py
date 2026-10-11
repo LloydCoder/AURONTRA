@@ -35,7 +35,7 @@ async def test_rls_scopes_organization_and_device_rows_and_rejects_cross_tenant_
     try:
         await admin.execute(f'CREATE ROLE "{role}" LOGIN PASSWORD \'{password}\' NOSUPERUSER NOBYPASSRLS')
         await admin.execute(f'GRANT USAGE ON SCHEMA public TO "{role}"')
-        await admin.execute(f'GRANT SELECT, INSERT, UPDATE, DELETE ON organizations, devices, tickets, durable_jobs, outbox_events, agent_request_replays, remediation_intents, telemetry_records, knowledge_articles, threat_findings TO "{role}"')
+        await admin.execute(f'GRANT SELECT, INSERT, UPDATE, DELETE ON organizations, devices, tickets, durable_jobs, outbox_events, agent_request_replays, remediation_intents, telemetry_records, knowledge_articles, threat_findings, threat_containment_attempts TO "{role}"')
         await admin.execute(
             "INSERT INTO organizations (id, name, status) VALUES ($1, $1, 'active'), ($2, $2, 'active')",
             org_a, org_b,
@@ -89,10 +89,17 @@ async def test_rls_scopes_organization_and_device_rows_and_rejects_cross_tenant_
             f"telemetry-b-{suffix}", org_b, device_b, f"proof-b-{suffix}", "b" * 64,
         )
         await admin.execute(
-            "INSERT INTO threat_findings (id, org_id, event_id, source, detector_version, observed_at, signal_sha256, signal, assessment, score, threat_level, mitre_ttp, decision_status, containment_verified) "
-            "VALUES ($1, $2, $1, 'network_signal', 'threat-heuristic.v2', now(), repeat('a', 64), '{}'::jsonb, '{}'::jsonb, 70, 'high', 'T1071', 'assessed', false), "
-            "($3, $4, $3, 'network_signal', 'threat-heuristic.v2', now(), repeat('b', 64), '{}'::jsonb, '{}'::jsonb, 20, 'low', 'T1071', 'assessed', false)",
-            threat_a, org_a, threat_b, org_b,
+            "INSERT INTO threat_findings (id, org_id, event_id, device_id, source, detector_version, observed_at, signal_sha256, signal, assessment, score, threat_level, mitre_ttp, decision_status, containment_verified) "
+            "VALUES ($1, $2, $1, $3, 'network_signal', 'threat-heuristic.v2', now(), repeat('a', 64), '{}'::jsonb, '{}'::jsonb, 70, 'high', 'T1071', 'assessed', false), "
+            "($4, $5, $4, $6, 'network_signal', 'threat-heuristic.v2', now(), repeat('b', 64), '{}'::jsonb, '{}'::jsonb, 20, 'low', 'T1071', 'assessed', false)",
+            threat_a, org_a, device_a, threat_b, org_b, device_b,
+        )
+        await admin.execute(
+            "INSERT INTO threat_containment_attempts (id, org_id, finding_id, device_id, idempotency_key, status, version, platform_action_id, platform_evidence_ids, audit_event_ids, verification_evidence_ids) "
+            "VALUES ($1, $2, $3, $4, $5, 'submitting', 0, $1, '[]'::jsonb, '[]'::jsonb, '[]'::jsonb), "
+            "($6, $7, $8, $9, $10, 'submitting', 0, $6, '[]'::jsonb, '[]'::jsonb, '[]'::jsonb)",
+            f"contain-a-{suffix}", org_a, threat_a, device_a, f"contain-a-{suffix}",
+            f"contain-b-{suffix}", org_b, threat_b, device_b, f"contain-b-{suffix}",
         )
         await admin.execute(
             "INSERT INTO remediation_intents (id, org_id, device_id, plan_id, idempotency_key, playbook, source_evidence_id, plan_payload, status, version, platform_evidence_ids, audit_event_ids, postcondition_evidence_ids, result_metadata) "
@@ -124,6 +131,8 @@ async def test_rls_scopes_organization_and_device_rows_and_rejects_cross_tenant_
         assert [row["id"] for row in visible_telemetry] == [f"telemetry-a-{suffix}"]
         visible_threats = await app.fetch("SELECT id FROM threat_findings")
         assert [row["id"] for row in visible_threats] == [threat_a]
+        visible_containments = await app.fetch("SELECT id FROM threat_containment_attempts")
+        assert [row["id"] for row in visible_containments] == [f"contain-a-{suffix}"]
         visible_knowledge = await app.fetch("SELECT id FROM knowledge_articles ORDER BY id")
         assert [row["id"] for row in visible_knowledge] == [kb_a, kb_draft_a, kb_global]
 
@@ -136,6 +145,7 @@ async def test_rls_scopes_organization_and_device_rows_and_rejects_cross_tenant_
         assert await app.fetch("SELECT id FROM remediation_intents") == []
         assert await app.fetch("SELECT id FROM telemetry_records") == []
         assert await app.fetch("SELECT id FROM threat_findings") == []
+        assert await app.fetch("SELECT id FROM threat_containment_attempts") == []
         assert await app.fetch("SELECT id FROM knowledge_articles") == []
 
         await app.execute("SELECT set_config('app.current_org_id', $1, false)", org_a)
@@ -190,6 +200,12 @@ async def test_rls_scopes_organization_and_device_rows_and_rejects_cross_tenant_
                 "INSERT INTO threat_findings (id, org_id, event_id, source, detector_version, observed_at, signal_sha256, signal, assessment, score, threat_level, mitre_ttp, decision_status, containment_verified) "
                 "VALUES ($1, $2, $1, 'network_signal', 'threat-heuristic.v2', now(), repeat('c', 64), '{}'::jsonb, '{}'::jsonb, 70, 'high', 'T1071', 'assessed', false)",
                 f"forbidden-threat-{suffix}", org_b,
+            )
+        with pytest.raises(asyncpg.InsufficientPrivilegeError):
+            await app.execute(
+                "INSERT INTO threat_containment_attempts (id, org_id, finding_id, device_id, idempotency_key, status, version, platform_action_id, platform_evidence_ids, audit_event_ids, verification_evidence_ids) "
+                "VALUES ($1, $2, $3, $4, $1, 'submitting', 0, $1, '[]'::jsonb, '[]'::jsonb, '[]'::jsonb)",
+                f"forbidden-containment-{suffix}", org_b, threat_b, device_b,
             )
         with pytest.raises(asyncpg.InsufficientPrivilegeError):
             await app.execute(
