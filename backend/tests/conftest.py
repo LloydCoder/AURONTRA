@@ -1,10 +1,9 @@
-"""Isolated relational state for API tests.
+"""Isolated database fixture for API tests.
 
-Only TEST_MODE tests may reset records. Schema lifecycle in production remains
-owned by reviewed Alembic migrations, never by this fixture.
+The fixture is intentionally limited to TEST_MODE. Production data is never
+dropped or recreated by test helpers.
 """
 import pytest_asyncio
-from sqlalchemy import delete
 
 from core.config import settings
 from core.database import AsyncSessionLocal, Base, engine
@@ -17,15 +16,11 @@ async def isolated_tenant_database():
     if not settings.TEST_MODE:
         yield
         return
-
     async with engine.begin() as connection:
+        await connection.run_sync(Base.metadata.drop_all)
         await connection.run_sync(Base.metadata.create_all)
-        # Delete children before parents; retain the schema between tests to
-        # avoid repeated DDL and event-loop/pool churn.
-        for table in reversed(Base.metadata.sorted_tables):
-            await connection.execute(delete(table))
-
     async with AsyncSessionLocal() as session:
         session.add(Organization(id="test-tenant", name="Test Tenant", status="active"))
         await session.commit()
     yield
+    await engine.dispose()
