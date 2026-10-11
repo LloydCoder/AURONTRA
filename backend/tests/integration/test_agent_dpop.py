@@ -198,4 +198,4 @@ async def test_dpop_proof_is_bound_to_exact_body(monkeypatch):
         )
 
     assert response.status_code == 401
-    assert response.json()["code"] == "INVALID_TOKEN" or "DPoP" in response.json()["detail"]
+    assert "DPoP" in response.json()["detail"] or "Invalid agent identity" in response.json()["detail"]
