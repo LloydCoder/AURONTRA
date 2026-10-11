@@ -606,3 +606,101 @@ async def test_payload_device_id_is_only_a_hint_and_must_match_authenticated_ide
         assert await db.scalar(select(TelemetryRecord.id).where(
             TelemetryRecord.device_id == device_id
         )) is None
+
+
+@pytest.mark.asyncio
+async def test_schema_v2_network_signals_create_trusted_tenant_bound_findings(monkeypatch):
+    from models.threat_finding import ThreatFinding
+
+    device_id = "agent-network-signals-01"
+    key = ec.generate_private_key(ec.SECP256R1())
+    thumbprint = agent_auth.jwk_thumbprint(_jwk(key))
+    async with AsyncSessionLocal() as db:
+        db.add(Device(
+            id=device_id, org_id="test-tenant", name="network telemetry endpoint",
+            is_active=True, enrolled_at=datetime.now(timezone.utc),
+            agent_key_thumbprint=thumbprint, agent_version="2.1.0",
+        ))
+        await db.commit()
+
+    payload = _telemetry_payload(
+        schema_version="2",
+        cpu_percent=20.0,
+        memory_percent=45.0,
+        disk_percent=60.0,
+        network_signals=[{
+            "src_ip": "203.0.113.10",
+            "protocol": "QUIC",
+            "entropy": 7.8,
+            "z_score": 12.0,
+            "beacon_interval": 30,
+            "jitter": 0.1,
+        }],
+    )
+    body = _body(payload)
+    headers, _ = _headers(
+        monkeypatch,
+        device_id=device_id,
+        tenant_id="test-tenant",
+        scope="aurontra:telemetry:write aurontra:threat:write",
+        path="/agent/v1/telemetry",
+        body=body,
+        device_key=key,
+    )
+    async with await _client() as client:
+        response = await client.post("/agent/v1/telemetry", content=body, headers=headers)
+
+    assert response.status_code == 200, response.text
+    finding_result = response.json()["threat_findings"]
+    assert len(finding_result) == 1
+    async with AsyncSessionLocal() as db:
+        finding = await db.get(ThreatFinding, finding_result[0]["id"])
+        record = await db.get(TelemetryRecord, response.json()["telemetry_id"])
+        assert finding.source == "endpoint_agent"
+        assert finding.device_id == device_id
+        assert finding.telemetry_record_id == record.id
+        assert finding.containment_verified is False
+        assert finding.assessment["blocked"] is False
+        assert record.metrics["network_signals"][0]["protocol"] == "QUIC"
+
+
+@pytest.mark.asyncio
+async def test_network_signal_ingestion_requires_v2_and_explicit_scope(monkeypatch):
+    device_id = "agent-network-scope-01"
+    key = ec.generate_private_key(ec.SECP256R1())
+    thumbprint = agent_auth.jwk_thumbprint(_jwk(key))
+    async with AsyncSessionLocal() as db:
+        db.add(Device(
+            id=device_id, org_id="test-tenant", name="network scope endpoint",
+            is_active=True, enrolled_at=datetime.now(timezone.utc),
+            agent_key_thumbprint=thumbprint, agent_version="2.1.0",
+        ))
+        await db.commit()
+
+    invalid_v1 = _telemetry_payload(
+        schema_version="1", cpu_percent=20.0, memory_percent=45.0, disk_percent=60.0,
+        network_signals=[{"src_ip": "203.0.113.11", "protocol": "QUIC", "entropy": 7.2}],
+    )
+    body = _body(invalid_v1)
+    headers, _ = _headers(
+        monkeypatch, device_id=device_id, tenant_id="test-tenant",
+        scope="aurontra:telemetry:write aurontra:threat:write",
+        path="/agent/v1/telemetry", body=body, device_key=key,
+    )
+    async with await _client() as client:
+        version_response = await client.post("/agent/v1/telemetry", content=body, headers=headers)
+    assert version_response.status_code == 422
+
+    valid_v2 = _telemetry_payload(
+        schema_version="2", cpu_percent=20.0, memory_percent=45.0, disk_percent=60.0,
+        network_signals=[{"src_ip": "203.0.113.11", "protocol": "QUIC", "entropy": 7.2}],
+    )
+    body2 = _body(valid_v2)
+    headers2, _ = _headers(
+        monkeypatch, device_id=device_id, tenant_id="test-tenant",
+        scope="aurontra:telemetry:write",
+        path="/agent/v1/telemetry", body=body2, device_key=key,
+    )
+    async with await _client() as client:
+        scope_response = await client.post("/agent/v1/telemetry", content=body2, headers=headers2)
+    assert scope_response.status_code == 403
