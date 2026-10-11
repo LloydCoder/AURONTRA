@@ -333,21 +333,20 @@ def test_client_factory_binds_trusted_context_and_w3c_trace(monkeypatch):
     monkeypatch.setattr(settings, "ENVIRONMENT", "test")
 
     class FakeAsyncPlatform:
-        def __init__(self, *, config):
-            captured["config"] = config
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
 
     monkeypatch.setattr(governed, "AsyncAgentPlatform", FakeAsyncPlatform)
     action_id = uuid4()
     client = governed._new_platform_client(action_id, "execute")
-    config = captured["config"]
     assert isinstance(client, FakeAsyncPlatform)
-    assert config.base_url == "https://platform.example.invalid"
-    assert config.tenant_id == "trusted-tenant"
-    assert config.subject_id == "aurontra-service"
-    assert config.api_version == "1.1"
-    assert config.timeout == 7.0
-    assert re.fullmatch(r"00-[0-9a-f]{32}-[0-9a-f]{16}-01", config.traceparent)
-    assert config.traceparent.split("-")[1] == action_id.hex
+    assert captured["base_url"] == "https://platform.example.invalid"
+    assert captured["tenant_id"] == "trusted-tenant"
+    assert captured["subject_id"] == "aurontra-service"
+    assert captured["api_version"] == "1.1"
+    assert captured["timeout"] == 7.0
+    assert re.fullmatch(r"00-[0-9a-f]{32}-[0-9a-f]{16}-01", captured["traceparent"])
+    assert captured["traceparent"].split("-")[1] == action_id.hex
 
 
 def test_client_factory_rejects_noncanonical_base_url(monkeypatch):
