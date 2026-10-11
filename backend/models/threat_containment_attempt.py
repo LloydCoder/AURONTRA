@@ -26,7 +26,7 @@ class ThreatContainmentAttempt(Base):
         ),
         CheckConstraint(
             "status IN ('submitting','approval_pending','platform_pending','unknown_outcome',"
-            "'contained','failed','verification_failed','cancelled')",
+            "'awaiting_verification','contained','failed','verification_failed','cancelled')",
             name="ck_threat_containment_status",
         ),
         CheckConstraint("version >= 0", name="ck_threat_containment_version_nonnegative"),
