@@ -43,16 +43,21 @@ function actionButton(label, className, handler, disabled = false) {
 }
 
 function configIsReady() {
-  return Boolean(
-    typeof config.apiBaseUrl === "string" &&
-    typeof config.oidcIssuer === "string" &&
-    typeof config.oidcClientId === "string" &&
-    typeof config.oidcRedirectUri === "string" &&
-    config.apiBaseUrl &&
-    config.oidcIssuer &&
-    config.oidcClientId &&
-    config.oidcRedirectUri
-  );
+  if (
+    typeof config.apiBaseUrl !== "string" ||
+    typeof config.oidcIssuer !== "string" ||
+    typeof config.oidcClientId !== "string" ||
+    typeof config.oidcRedirectUri !== "string" ||
+    !config.apiBaseUrl || !config.oidcIssuer || !config.oidcClientId || !config.oidcRedirectUri
+  ) return false;
+  try {
+    safeUrl(config.apiBaseUrl, { allowHttpTest: true });
+    safeUrl(config.oidcIssuer);
+    const redirect = safeUrl(config.oidcRedirectUri, { allowHttpTest: true });
+    return redirect.origin === window.location.origin;
+  } catch {
+    return false;
+  }
 }
 
 function safeUrl(value, { allowHttpTest = false } = {}) {
@@ -342,6 +347,7 @@ async function loadDashboard() {
   if (!state.accessToken || Date.now() >= state.expiresAt) {
     state.accessToken = null;
     state.expiresAt = 0;
+    state.authError = "Your session expired. Sign in again.";
     render();
     return;
   }
