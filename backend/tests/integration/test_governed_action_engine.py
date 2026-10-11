@@ -23,8 +23,8 @@ EVIDENCE_ID = UUID("1e54fd16-ec29-4b67-b8f8-86ac85e0d64a")
 AUDIT_ID = UUID("1f7f1905-5f4a-4f57-a9b6-6b6a0aee40b4")
 
 
-def _context():
-    return TrustedPlatformContext(tenant_id="trusted-tenant", subject_id="aurontra-service")
+def _context(tenant_id="trusted-tenant", subject_id="aurontra-service"):
+    return TrustedPlatformContext(tenant_id=tenant_id, subject_id=subject_id)
 
 
 def _definition(**overrides):
@@ -184,6 +184,7 @@ async def test_argument_allowlist_required_fields_and_json_bounds_fail_closed(mo
     executor, calls, _ = _executor(monkeypatch)
     base = {
         "action_id": uuid4(),
+        "context": _context(),
         "action_key": "diagnostic.read",
         "resource": "device:device-123",
         "intent": "Read diagnostic metrics",
@@ -394,7 +395,7 @@ async def test_action_intent_is_snapshotted_before_first_await(monkeypatch):
             caller_arguments["metric"] = "disk"
             return await super().create_run(**kwargs)
 
-    def factory(action_id, operation):
+    def factory(action_id, operation, context):
         if operation == "run":
             return MutatingRunClient(calls)
         return FakePlatform(calls)
@@ -443,7 +444,7 @@ def test_platform_client_rejects_nonfinite_timeout(monkeypatch):
     monkeypatch.setattr(settings, "AGENT_PLATFORM_ALLOW_INSECURE_HTTP", False)
     monkeypatch.setattr(settings, "ENVIRONMENT", "test")
     with pytest.raises(GovernedActionError, match="platform_timeout_invalid"):
-        _new_platform_client(uuid4(), "run")
+        _new_platform_client(uuid4(), "run", _context())
 
 
 @pytest.mark.asyncio
