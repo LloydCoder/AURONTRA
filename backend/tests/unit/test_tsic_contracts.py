@@ -59,6 +59,11 @@ def test_identity_context_rejects_zero_or_malformed_trace_id():
         TSICIdentityContext.model_validate(_context(trace_id="ABCDEF"))
 
 
+def test_identity_context_rejects_header_injection_in_optional_ids():
+    with pytest.raises(ValidationError):
+        TSICIdentityContext.model_validate(_context(agent_id="agent-1\r\nX-Injected: yes"))
+
+
 def test_event_envelope_is_bound_to_verified_identity_context():
     context = TSICIdentityContext.model_validate(_context())
     event = validate_event_envelope(_event(_context()), context)
