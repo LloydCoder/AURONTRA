@@ -10,6 +10,7 @@ from core.governed_actions import (
     GovernedActionError,
     GovernedActionRegistry,
     PlatformGovernedActionExecutor,
+    TrustedPlatformContext,
 )
 from tinlance_agent_platform_sdk.errors import TransportError
 
@@ -20,6 +21,10 @@ RUN_ID = UUID("a89d6df6-5b0f-4c3f-a8d8-cf9a0a7b60e4")
 EXECUTION_ID = UUID("a0f9ecb0-4ef3-4b78-b6f0-f4a13e2cdb65")
 EVIDENCE_ID = UUID("1e54fd16-ec29-4b67-b8f8-86ac85e0d64a")
 AUDIT_ID = UUID("1f7f1905-5f4a-4f57-a9b6-6b6a0aee40b4")
+
+
+def _context():
+    return TrustedPlatformContext(tenant_id="trusted-tenant", subject_id="aurontra-service")
 
 
 def _definition(**overrides):
@@ -80,7 +85,7 @@ def _executor(monkeypatch, *, run_state="created", execution=None, execute_error
     calls = []
     clients = []
 
-    def factory(action_id, operation):
+    def factory(action_id, operation, context):
         if factory_calls is not None:
             factory_calls.append((action_id, operation))
         client = FakePlatform(
@@ -105,6 +110,7 @@ async def test_submits_allowlisted_action_through_platform_and_returns_evidence_
     action_id = uuid4()
     result = await executor.submit(
         action_id=action_id,
+        context=_context(),
         action_key="diagnostic.read",
         resource="device:device-123",
         intent="Read device diagnostic metrics",
@@ -140,6 +146,7 @@ async def test_non_executable_platform_run_state_is_never_promoted_or_executed(m
     executor, calls, _ = _executor(monkeypatch, run_state="waiting_approval")
     result = await executor.submit(
         action_id=uuid4(),
+        context=_context(),
         action_key="diagnostic.read",
         resource="device:device-123",
         intent="Read diagnostic metrics",
@@ -162,6 +169,7 @@ async def test_unregistered_action_fails_before_any_platform_request(monkeypatch
     with pytest.raises(GovernedActionError) as caught:
         await executor.submit(
             action_id=uuid4(),
+            context=_context(),
             action_key="arbitrary.command",
             resource="host:api",
             intent="Run a command",
@@ -200,6 +208,7 @@ async def test_platform_transport_failure_is_sanitized_and_retains_run_correlati
     with pytest.raises(GovernedActionError) as caught:
         await executor.submit(
             action_id=uuid4(),
+            context=_context(),
             action_key="diagnostic.read",
             resource="device:device-123",
             intent="Read diagnostic metrics",
@@ -221,6 +230,7 @@ async def test_default_client_factory_is_disabled_by_default(monkeypatch):
     with pytest.raises(GovernedActionError) as caught:
         await executor.submit(
             action_id=uuid4(),
+            context=_context(),
             action_key="diagnostic.read",
             resource="device:device-123",
             intent="Read diagnostic metrics",
@@ -282,7 +292,7 @@ def test_platform_sdk_configuration_is_rejected_without_https_in_production(monk
     monkeypatch.setattr(settings, "AGENT_PLATFORM_ALLOW_INSECURE_HTTP", True)
     monkeypatch.setattr(settings, "ENVIRONMENT", "production")
     with pytest.raises(GovernedActionError, match="platform_https_required"):
-        _new_platform_client(uuid4(), "run")
+        _new_platform_client(uuid4(), "run", _context())
 
 
 @pytest.mark.asyncio
@@ -302,7 +312,7 @@ async def test_platform_run_identity_mismatch_never_executes_tool(monkeypatch):
                 state="created",
             )
 
-    def factory(action_id, operation):
+    def factory(action_id, operation, context):
         return MismatchedRunClient(calls)
 
     executor = PlatformGovernedActionExecutor(
@@ -312,6 +322,7 @@ async def test_platform_run_identity_mismatch_never_executes_tool(monkeypatch):
     with pytest.raises(GovernedActionError, match="platform_run_identity_mismatch") as caught:
         await executor.submit(
             action_id=uuid4(),
+            context=_context(),
             action_key="diagnostic.read",
             resource="device:device-123",
             intent="Read diagnostic metrics",
@@ -338,7 +349,7 @@ def test_client_factory_binds_trusted_context_and_w3c_trace(monkeypatch):
     monkeypatch.setattr(settings, "ENVIRONMENT", "test")
 
     action_id = uuid4()
-    client = _new_platform_client(action_id, "execute")
+    client = _new_platform_client(action_id, "execute", _context())
     assert isinstance(client, AsyncAgentPlatform)
     assert client._sync._base_url == "https://platform.example.invalid"
     assert client._sync._tenant_id == "trusted-tenant"
@@ -362,7 +373,7 @@ def test_client_factory_rejects_noncanonical_base_url(monkeypatch):
     monkeypatch.setattr(settings, "AGENT_PLATFORM_ALLOW_INSECURE_HTTP", False)
     monkeypatch.setattr(settings, "ENVIRONMENT", "test")
     with pytest.raises(GovernedActionError, match="platform_base_url_invalid"):
-        _new_platform_client(uuid4(), "run")
+        _new_platform_client(uuid4(), "run", _context())
 
 
 def test_action_definition_rejects_mutable_allowlist():
@@ -394,6 +405,7 @@ async def test_action_intent_is_snapshotted_before_first_await(monkeypatch):
     )
     await executor.submit(
         action_id=uuid4(),
+        context=_context(),
         action_key="diagnostic.read",
         resource="device:device-123",
         intent="Read diagnostic metrics",
@@ -409,6 +421,7 @@ async def test_nil_uuid_action_id_is_rejected_before_network(monkeypatch):
     with pytest.raises(GovernedActionError, match="action_id_invalid"):
         await executor.submit(
             action_id=UUID(int=0),
+            context=_context(),
             action_key="diagnostic.read",
             resource="device:device-123",
             intent="Read diagnostic metrics",
@@ -439,6 +452,7 @@ async def test_unexpected_programming_error_is_not_advertised_as_retryable(monke
     with pytest.raises(GovernedActionError) as caught:
         await executor.submit(
             action_id=uuid4(),
+            context=_context(),
             action_key="diagnostic.read",
             resource="device:device-123",
             intent="Read diagnostic metrics",
@@ -464,6 +478,7 @@ async def test_untrusted_execution_error_text_is_not_returned_as_machine_code(mo
     executor, _, _ = _executor(monkeypatch, execution=execution)
     result = await executor.submit(
         action_id=uuid4(),
+        context=_context(),
         action_key="diagnostic.read",
         resource="device:device-123",
         intent="Read diagnostic metrics",
@@ -484,6 +499,7 @@ async def test_untrusted_sdk_error_code_is_replaced_with_generic_code(monkeypatc
     with pytest.raises(GovernedActionError) as caught:
         await executor.submit(
             action_id=uuid4(),
+            context=_context(),
             action_key="diagnostic.read",
             resource="device:device-123",
             intent="Read diagnostic metrics",
@@ -504,6 +520,7 @@ async def test_feature_flag_cannot_be_bypassed_by_custom_client_factory(monkeypa
     with pytest.raises(GovernedActionError, match="platform_integration_disabled"):
         await executor.submit(
             action_id=uuid4(),
+            context=_context(),
             action_key="diagnostic.read",
             resource="device:device-123",
             intent="Read diagnostic metrics",
