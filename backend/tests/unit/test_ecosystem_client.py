@@ -6,6 +6,7 @@ import pytest
 
 from core.config import settings
 from core.ecosystem_client import (
+    MAX_RESPONSE_BYTES,
     EcosystemIntegrationError,
     request_json,
     reset_circuits_for_tests,
@@ -290,6 +291,20 @@ async def test_client_rejects_unknown_service_even_with_valid_https_origin():
             method="GET", path="/health",
         )
     assert error.value.code == "bridge_service_invalid"
+
+
+@pytest.mark.asyncio
+async def test_client_rejects_oversized_success_body(identity_context):
+    async def handler(request):
+        return httpx.Response(200, content=b"x" * (MAX_RESPONSE_BYTES + 1))
+
+    with pytest.raises(EcosystemIntegrationError) as error:
+        await request_json(
+            service="threatfade", base_url="https://integration.example",
+            method="GET", path="/health", identity_context=identity_context,
+            transport=httpx.MockTransport(handler),
+        )
+    assert error.value.code == "bridge_response_too_large"
 
 
 @pytest.mark.asyncio
