@@ -6,9 +6,9 @@ execution state as proof that the business postcondition was achieved.
 """
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
+import re
 from dataclasses import dataclass
 from typing import Any, Callable
 from uuid import UUID, uuid4
@@ -284,7 +284,8 @@ class PlatformGovernedActionExecutor:
         except GovernedActionError:
             raise
         except SdkError as exc:
-            code = getattr(exc, "error_code", None) or type(exc).__name__.lower()
+            raw_code = getattr(exc, "error_code", None) or type(exc).__name__.lower()
+            code = re.sub(r"[^A-Za-z0-9_.-]", "_", str(raw_code))[:80] or "platform_error"
             retryable = bool(getattr(exc, "retryable", False))
             logger.warning(
                 "Governed Platform request failed operation=%s code=%s retryable=%s",
