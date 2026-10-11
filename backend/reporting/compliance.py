@@ -33,17 +33,17 @@ def _nis2_controls(params: dict) -> list[dict]:
         },
         {
             "control": "Art.21(2)(b) — Incident handling",
-            "status": "pass" if tickets_resolved > 0 else "fail",
-            "evidence": f"{tickets_resolved} incidents handled via AI agent. Full audit trail maintained.",
+            "status": "partial" if tickets_resolved > 0 else "fail",
+            "evidence": f"{tickets_resolved} resolved/closed tickets observed in the reporting window; this metric alone does not prove incident-handling process conformance.",
             "weight": 20,
-            "score": 20 if tickets_resolved > 0 else 0,
+            "score": 10 if tickets_resolved > 0 else 0,
         },
         {
             "control": "Art.21(2)(c) — Business continuity",
-            "status": "pass" if avg_score >= 60 else "partial",
-            "evidence": f"Predictive resilience scoring with 72-hour failure forecasting active. Self-healing playbooks deployed.",
+            "status": "partial",
+            "evidence": f"Observed resilience score {avg_score}/100; continuity exercises and recovery evidence were not independently supplied.",
             "weight": 15,
-            "score": 15 if avg_score >= 60 else 7,
+            "score": 8 if avg_score >= 60 else 5,
         },
         {
             "control": "Art.21(2)(d) — Supply chain security",
@@ -61,10 +61,10 @@ def _nis2_controls(params: dict) -> list[dict]:
         },
         {
             "control": "Art.21(2)(g) — Cryptography policies",
-            "status": "pass",
-            "evidence": "Hash-chained audit log with SHA-256 integrity verification. TLS enforced on all endpoints.",
+            "status": "partial",
+            "evidence": "Application audit records use hash linkage; deployment-wide cryptography policies and TLS configuration were not independently verified by this report.",
             "weight": 5,
-            "score": 5,
+            "score": 2,
         },
         {
             "control": "Art.21(2)(i) — Multi-factor authentication",
@@ -86,10 +86,10 @@ def _dora_controls(params: dict) -> list[dict]:
     return [
         {
             "control": "Art.9(2) — ICT risk management framework",
-            "status": "pass" if avg_score >= 70 else "partial",
-            "evidence": f"Continuous device resilience monitoring. Score: {avg_score}/100.",
+            "status": "partial",
+            "evidence": f"Observed device resilience score: {avg_score}/100. A score is not evidence of a complete ICT risk-management framework.",
             "weight": 25,
-            "score": 25 if avg_score >= 70 else 12,
+            "score": 15 if avg_score >= 70 else 8,
         },
         {
             "control": "Art.10 — ICT-related incident detection",
@@ -100,10 +100,10 @@ def _dora_controls(params: dict) -> list[dict]:
         },
         {
             "control": "Art.11 — ICT Business continuity policy",
-            "status": "pass",
-            "evidence": "Self-healing playbooks (disk_full, service_restart, cert_expiry, high_cpu) active. 72h forecasting deployed.",
+            "status": "partial",
+            "evidence": "Business continuity policy, exercises, and recovery-test evidence were not independently supplied to this report.",
             "weight": 25,
-            "score": 25,
+            "score": 10,
         },
         {
             "control": "Art.9(4)(e) — Strong authentication",
@@ -197,9 +197,11 @@ def generate_compliance_report(
         },
         "failed_controls": failed_controls,
         "recommendations": recommendations,
+        "assessment_type": "observed_control_evidence_summary",
+        "certification_claim": False,
         "report_narrative": (
-            f"Organisation {org_id} achieved a {compliance_score}% {framework} compliance score "
-            f"based on ResilientAI telemetry. {pass_count}/{len(controls)} controls fully satisfied. "
+            f"Organisation {org_id} has an observed {framework} control-evidence score of {compliance_score}%. This is not a legal compliance score or certification. "
+            f"{pass_count}/{len(controls)} controls are marked pass under configured evidence rules. "
             f"{'No critical gaps detected.' if fail_count == 0 else f'{fail_count} control(s) require immediate remediation.'}"
         ),
     }
