@@ -10,6 +10,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 import bridges.threatfade as threatfade_bridge
+from core.tsic_contracts import TSICIdentityContext
 
 # ── MITRE ATT&CK TTP mapping table ────────────────────────────────────
 _PROTOCOL_TTP_MAP = {
@@ -191,6 +192,7 @@ async def block_threat(
     src_ip: str,
     scenario: str,
     org_id: str,
+    identity_context: TSICIdentityContext,
     additional_context: dict | None = None,
 ) -> dict:
     """Create a threat assessment; never claim enforcement without an adapter.
@@ -216,8 +218,21 @@ async def block_threat(
         "mitre_ttp": "T1071",
     }
 
+    if (
+        not isinstance(identity_context, TSICIdentityContext)
+        or identity_context.organization_id != org_id
+    ):
+        base.update({
+            "status": "analysis_unavailable",
+            "action_taken": "monitor",
+            "error": "identity_context_invalid",
+        })
+        return base
+
     try:
-        tf_result = await threatfade_bridge.detect_scenario(scenario)
+        tf_result = await threatfade_bridge.detect_scenario(
+            scenario, identity_context=identity_context,
+        )
     except Exception:
         # Do not return internal bridge errors or misrepresent a failed
         # dependency call as a successful detection/containment.
