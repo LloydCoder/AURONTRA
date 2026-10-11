@@ -156,9 +156,11 @@ async def request_json(
         not isinstance(correlation_id, str) or not _CORRELATION_ID_RE.fullmatch(correlation_id)
     ):
         raise EcosystemIntegrationError("bridge_correlation_id_invalid", 400)
+    if verified_context is not None and correlation_id is not None and correlation_id != verified_context.correlation_id:
+        raise EcosystemIntegrationError("bridge_identity_context_mismatch", 403)
 
     if traceparent is None:
-        trace_id = __import__("uuid").uuid4().hex
+        trace_id = verified_context.trace_id if verified_context is not None else __import__("uuid").uuid4().hex
         span_id = __import__("uuid").uuid4().hex[:16]
         traceparent = f"00-{trace_id}-{span_id}-01"
     else:
@@ -166,13 +168,15 @@ async def request_json(
         if match is None or match.group(1) == "0" * 32 or match.group(2) == "0" * 16:
             raise EcosystemIntegrationError("bridge_trace_context_invalid", 400)
         trace_id, span_id = match.group(1), match.group(2)
+        if verified_context is not None and trace_id != verified_context.trace_id:
+            raise EcosystemIntegrationError("bridge_identity_context_mismatch", 403)
 
     headers = {
         "Authorization": f"Bearer {token}",
         "Accept": "application/json",
         "X-Tinlance-Contract-Version": CONTRACT_VERSION,
         "X-Request-ID": request_id,
-        "X-Correlation-ID": correlation_id or request_id,
+        "X-Correlation-ID": verified_context.correlation_id if verified_context is not None else (correlation_id or request_id),
         "traceparent": traceparent,
         "X-Trace-ID": trace_id,
         "X-Span-ID": span_id,
