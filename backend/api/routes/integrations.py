@@ -149,6 +149,11 @@ async def ingest_containment_verification(
     except ThreatContainmentError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.code) from None
 
+    # SQLAlchemy may expire server-generated updated_at values after the
+    # service commits. Refresh while the tenant-scoped session is active so
+    # response serialization never triggers implicit async I/O.
+    await db.refresh(updated_attempt)
+
     refreshed_finding = await db.scalar(select(ThreatFinding).where(
         ThreatFinding.org_id == request.state.tenant_id,
         ThreatFinding.id == finding.id,
