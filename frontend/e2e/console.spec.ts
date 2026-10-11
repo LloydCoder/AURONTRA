@@ -43,7 +43,7 @@ async function jsonResponse(route: Route, body: unknown, status = 200): Promise<
   });
 }
 
-async function installOidcRoutes(page: Page): Promise<void> {
+async function installOidcRoutes(page: Page, invalidSignature = false): Promise<void> {
   let nonce = "";
   await page.route(`${ISSUER}/.well-known/openid-configuration`, route =>
     jsonResponse(route, {
@@ -81,7 +81,7 @@ async function installOidcRoutes(page: Page): Promise<void> {
       access_token: "e2e-only-access-token",
       token_type: "Bearer",
       expires_in: 900,
-      id_token: idToken(nonce),
+      id_token: invalidSignature ? idToken(nonce).replace(/[^.]+$/, "invalid-signature") : idToken(nonce),
     });
   });
 }
@@ -195,6 +195,7 @@ test("PKCE authentication calls tenant APIs and only labels verifier-backed cont
   await expect(page.getByText("Threats blocked", { exact: true })).toHaveCount(0);
   expect(headers.length).toBeGreaterThanOrEqual(4);
   expect(headers.every(value => value === "Bearer e2e-only-access-token")).toBe(true);
+  expect(await page.evaluate(() => localStorage.length + sessionStorage.length)).toBe(0);
 
   await page.getByRole("tab", { name: "Threat evidence" }).click();
   await expect(page.getByText("Containment is counted only when the server provides explicit verifier evidence.")).toBeVisible();
@@ -211,6 +212,19 @@ test("disabled tenant data plane fails closed without fabricated records", async
   await expect(page.getByText("Business data plane unavailable")).toBeVisible();
   await expect(page.getByText("No data is simulated or substituted.")).toBeVisible();
   await expect(page.getByText("prod-server-01")).toHaveCount(0);
+});
+
+test("invalid ID-token signature is rejected before any API request", async ({ page }) => {
+  let apiCalls = 0;
+  await installOidcRoutes(page, true);
+  await page.route(API_ORIGIN + "/**", async route => {
+    apiCalls += 1;
+    await jsonResponse(route, { code: "SHOULD_NOT_BE_CALLED" }, 500);
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Sign in securely" }).click();
+  await expect(page.getByText("Sign-in could not be completed. Verify your identity-provider configuration and try again.")).toBeVisible();
+  expect(apiCalls).toBe(0);
 });
 
 test("OIDC callback with missing or mismatched state is rejected before API access", async ({ page }) => {
