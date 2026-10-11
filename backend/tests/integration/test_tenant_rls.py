@@ -44,7 +44,7 @@ async def test_rls_scopes_organization_and_device_rows_and_rejects_cross_tenant_
             "INSERT INTO report_artifacts (id, org_id, report_type, period_start, period_end, created_by, input_provenance, report_payload, payload_sha256) "
             "VALUES ($1, $2, 'roi', now() - interval '1 day', now(), 'actor-a', '{}'::jsonb, '{}'::jsonb, repeat('a', 64)), "
             "($3, $4, 'roi', now() - interval '1 day', now(), 'actor-b', '{}'::jsonb, '{}'::jsonb, repeat('b', 64))",
-            f"report-a-${suffix}", org_a, f"report-b-${suffix}", org_b,
+            f"report-a-{suffix}", org_a, f"report-b-{suffix}", org_b,
         )
         await admin.execute(
             "INSERT INTO knowledge_articles (id, org_id, article_key, slug, title, category, content, content_sha256, status, version, approved_by, approved_at) "
@@ -155,7 +155,7 @@ async def test_rls_scopes_organization_and_device_rows_and_rejects_cross_tenant_
         visible_knowledge = await app.fetch("SELECT id FROM knowledge_articles ORDER BY id")
         assert [row["id"] for row in visible_knowledge] == [kb_a, kb_draft_a, kb_global]
         visible_reports = await app.fetch("SELECT id FROM report_artifacts")
-        assert [row["id"] for row in visible_reports] == [f"report-a-${suffix}"]
+        assert [row["id"] for row in visible_reports] == [f"report-a-{suffix}"]
 
         await app.execute("SELECT set_config('app.current_org_id', '', false)")
         assert await app.fetch("SELECT id FROM devices") == []
@@ -176,7 +176,7 @@ async def test_rls_scopes_organization_and_device_rows_and_rejects_cross_tenant_
             await app.execute(
                 "INSERT INTO report_artifacts (id, org_id, report_type, period_start, period_end, created_by, input_provenance, report_payload, payload_sha256) "
                 "VALUES ($1, $2, 'roi', now() - interval '1 day', now(), 'actor', '{}'::jsonb, '{}'::jsonb, repeat('c', 64))",
-                f"forbidden-report-${suffix}", org_b,
+                f"forbidden-report-{suffix}", org_b,
             )
         with pytest.raises(asyncpg.InsufficientPrivilegeError):
             await app.execute(
