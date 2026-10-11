@@ -28,7 +28,7 @@ Until secure endpoint execution and authorization are implemented and tested:
 
 ## Latest repository validation baseline
 
-At audit baseline commit `9685e413ac1be3529d118eec65d290637d24cb3a`, [CI run 38120377781](https://github.com/LloydCoder/AURONTRA/actions/runs/38120377781) passed **488 tests, 1 skipped, 84.85% coverage**. Clean SQLite migration, backend compilation, PostgreSQL migrations, non-owner tenant RLS, backup/restore, and the secret/archive scan ([run 38120377788](https://github.com/LloydCoder/AURONTRA/actions/runs/38120377788)) passed. Deployment was skipped by the explicit release gate; this is not a production deployment or certification claim.
+At implementation audit commit `8fe28b3ba661f1287699e76984546b7b31884019`, [PR CI run 38120645677](https://github.com/LloydCoder/AURONTRA/actions/runs/38120645677) passed **488 tests, 1 skipped, 84.85% coverage**. Clean SQLite migration, backend compilation, PostgreSQL migrations, non-owner tenant RLS, backup/restore, and the secret/archive scan ([run 38120645640](https://github.com/LloydCoder/AURONTRA/actions/runs/38120645640)) passed. Deployment was skipped by the explicit release gate; this is not a production deployment or certification claim.
 
 ## Threat containment orchestration (Phase 16)
 
