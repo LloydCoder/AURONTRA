@@ -41,3 +41,4 @@ condition = "AND"
 regexTarget = "line"
 regexes = ['''The current repository is materially beyond a scaffold''']
 paths = ['''docs/audits/PROJECT_FORENSIC_AUDIT_2026-10-11\.md''']
+commits = ["a61b07ca9a6a4ee68ec649b0e332f79a1a5ac28c"]
