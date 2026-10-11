@@ -3,7 +3,6 @@ Sprint 3 — Threat API integration tests.
 RED phase.
 """
 import pytest
-from unittest.mock import AsyncMock, patch
 from httpx import AsyncClient, ASGITransport
 
 
@@ -65,19 +64,20 @@ class TestThreatsAPI:
         assert "containment is disabled" in r.json()["detail"]
 
     @pytest.mark.asyncio
-    async def test_threats_events_endpoint_returns_list(self, client):
-        with patch("api.routes.threats.get_events", new_callable=AsyncMock) as mock_events:
-            mock_events.return_value = [
-                {"event": "c2_detected", "ip": "192.0.2.10", "blocked": True, "action_taken": "blocked"},
-                {"event": "ticket_resolved", "id": "tkt-001"},
-            ]
-            r = await client.get("/threats/events")
+    async def test_threats_events_endpoint_returns_tenant_scoped_durable_findings(self, client):
+        created = await client.post("/threats/analyse", json={
+            "event_id": "events-list-test",
+            "src_ip": "192.0.2.10",
+            "protocol": "QUIC",
+            "entropy": 7.0,
+        })
+        assert created.status_code == 200
+        r = await client.get("/threats/events")
         assert r.status_code == 200
         data = r.json()
-        assert "events" in data
-        assert data["events"][0]["upstream_reported_blocked"] is True
-        assert data["events"][0]["blocked"] is False
-        assert data["events"][0]["containment_verified"] is False
+        assert data["source"] == "aurontra_durable_evidence"
+        assert any(item["event_id"] == "events-list-test" for item in data["events"])
+        assert all(item["containment_verified"] is False for item in data["events"])
 
     @pytest.mark.asyncio
     async def test_threats_siem_export_endpoint(self, client):
