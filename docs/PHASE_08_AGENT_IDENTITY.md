@@ -24,7 +24,7 @@ Agent requests use `Authorization: DPoP <access-token>` plus a `DPoP` JWT header
 - `htm`, canonical `htu`, fresh `iat`, unique `jti`, and `ath` (access-token hash)
 - `bht`, an explicit Aurontra extension binding the proof to the exact request-body bytes
 
-The server persists proof identifiers under a tenant RLS policy with a unique key. Reuse is rejected; expired entries are pruned within the tenant transaction. Body hashing supplements DPoP's standard method/URI/token binding. HTTPS remains mandatory in production.
+The server persists proof identifiers under a tenant RLS policy with a unique key. Reuse is rejected; expired entries are pruned within the tenant transaction. Enrollment and rotation write non-secret lifecycle evidence to the existing transactional outbox in the same transaction as device state. Body hashing supplements DPoP's standard method/URI/token binding. HTTPS remains mandatory in production.
 
 ## Lifecycle endpoints
 
