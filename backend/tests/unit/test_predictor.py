@@ -4,6 +4,11 @@ RED phase: all tests written before implementation.
 """
 import pytest
 import numpy as np
+from datetime import datetime, timedelta, timezone
+
+
+def _timestamp_for_hour(hour: int) -> str:
+    return (datetime(2026, 6, 20, tzinfo=timezone.utc) + timedelta(hours=hour)).isoformat().replace('+00:00', 'Z')
 
 
 class TestIsolationForestPredictor:
@@ -84,8 +89,8 @@ class TestIsolationForestPredictor:
         with tempfile.NamedTemporaryFile(suffix=".pkl", delete=False) as f:
             path = f.name
         try:
-            predictor.save(path)
-            loaded = ResiliencePredictor.load(path)
+            expected_sha256 = predictor.save(path)
+            loaded = ResiliencePredictor.load(path, expected_sha256=expected_sha256)
             assert loaded.is_trained is True
             result = loaded.predict({"cpu_percent": 22, "memory_percent": 30, "disk_percent": 40})
             assert "is_anomaly" in result
@@ -100,7 +105,7 @@ class TestTemporalCorrelator:
         from resilience.temporal import TemporalCorrelator
         tc = TemporalCorrelator()
         series = [
-            {"timestamp": f"2026-06-20T{10+i:02d}:00:00Z",
+            {"timestamp": _timestamp_for_hour(10 + i),
              "cpu_percent": 20 + i * 3,
              "memory_percent": 30,
              "disk_percent": 40}
@@ -116,7 +121,7 @@ class TestTemporalCorrelator:
         tc = TemporalCorrelator()
         # CPU rising fast — 20% → 80% over 10 readings
         series = [
-            {"timestamp": f"2026-06-20T{i:02d}:00:00Z",
+            {"timestamp": _timestamp_for_hour(i),
              "cpu_percent": 20 + i * 6,
              "memory_percent": 30,
              "disk_percent": 40}
