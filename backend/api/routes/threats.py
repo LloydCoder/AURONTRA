@@ -70,7 +70,7 @@ def _serialize(finding: ThreatFinding) -> dict:
 
 
 @router.get("/")
-async def threats_overview(db: AsyncSession = Depends(get_tenant_db), request: Request = None):
+async def threats_overview(request: Request, db: AsyncSession = Depends(get_tenant_db)):
     tenant_id = request.state.tenant_id
     rows = (await db.scalars(select(ThreatFinding).where(
         ThreatFinding.org_id == tenant_id
@@ -161,8 +161,8 @@ async def block_threat_endpoint(payload: BlockRequest):
 
 @router.get("/events")
 async def threat_events_endpoint(
+    request: Request,
     limit: int = Query(default=50, ge=1, le=200),
-    request: Request = None,
     db: AsyncSession = Depends(get_tenant_db),
 ):
     """Return durable tenant-scoped assessments; upstream claims are not treated as evidence."""
