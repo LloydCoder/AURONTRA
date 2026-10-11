@@ -69,3 +69,14 @@ Aurontra now has tenant-scoped `durable_jobs` and `outbox_events` tables, introd
 - Outbox publication is at-least-once. A publisher may deliver an event and crash before recording its acknowledgement, so downstream consumers must deduplicate by event/idempotency identifier.
 - The code provides reusable worker loops, but no production scheduler, broker, publisher destination, or service deployment is configured. This phase is implementation and CI evidence, not proof of live production processing.
 - These workers do not replace the Tinlance Agent Platform. Any consequential remediation must still go through the official Platform SDK and its policy, approval, sandbox, budget, secret, execution and evidence controls.
+
+
+## Organization and device lifecycle (Phase 07)
+
+Alembic revision `0004_device_lifecycle` adds `enrolled_at`, `revoked_at`, and `agent_version` metadata to devices and an organization/activity index. Legacy devices are not silently declared enrolled: their enrollment timestamp remains NULL pending an explicit authenticated agent handshake.
+
+- `POST /devices/provision` is an organization-admin operation that creates a tenant-owned, inactive device record. Provisioning is not enrollment and cannot authorize telemetry or execution.
+- `POST /devices/{device_id}/revoke` is organization-admin-only, tenant-scoped, and idempotent. A cross-tenant identifier is indistinguishable from a missing device.
+- `POST /organizations/offboard` is organization-admin-only. It transitions the organization to `offboarded`, deactivates its devices, stamps revocation time, and retains records for audit/retention policy rather than cascading deletion.
+- `GET /organizations/me` exposes only the authenticated tenant's own lifecycle state. A narrowly scoped lifecycle database dependency permits status inspection and repeated offboarding for an existing inactive organization; normal tenant data dependencies continue to reject non-active organizations.
+- The endpoint-agent cryptographic handshake, enrollment proof, key rotation, heartbeat authentication, and telemetry replay defense are Phase 08 requirements. No device is activated merely by provisioning, and these routes do not claim those Phase 08 controls are complete.
