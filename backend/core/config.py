@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     # Secure-by-default: the business data plane stays closed until auth and tenant-scoped persistence are ready.
     AUTH_MODE: str = "required"
     DATA_PLANE_ENABLED: bool = False
-    DB_SCHEMA_REVISION: str = "0002_tenant_foreign_keys_and_rls"
+    DB_SCHEMA_REVISION: str = "0003_durable_jobs_and_outbox"
     TEST_MODE: bool = False
     JWT_JWKS_URL: str = ""
     JWT_ISSUER: str = ""
