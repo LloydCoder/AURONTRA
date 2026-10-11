@@ -98,7 +98,7 @@ async def enforce_auth_and_data_plane(request: Request, call_next):
         request.state.role = principal["role"]
         request.state.claims = claims
     # Deterministic identity is permitted only in explicit test mode.
-    if settings.TEST_MODE and not getattr(request.state, "tenant_id", None):
+    if settings.TEST_MODE and not agent_endpoint and not getattr(request.state, "tenant_id", None):
         request.state.tenant_id = "test-tenant"
         request.state.subject = "test-runner"
         request.state.role = "org:owner"
