@@ -38,6 +38,7 @@ def _serialize(device: Device) -> dict:
         "enrolled_at": device.enrolled_at.isoformat() if device.enrolled_at else None,
         "revoked_at": device.revoked_at.isoformat() if device.revoked_at else None,
         "agent_version": device.agent_version,
+        "agent_key_rotated_at": device.agent_key_rotated_at.isoformat() if device.agent_key_rotated_at else None,
     }
 
 
