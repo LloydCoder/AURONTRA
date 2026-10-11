@@ -38,6 +38,7 @@ def collect_metrics(device_id: str) -> dict:
         current_platform = "Unknown"
 
     return {
+        "device_id": device_id,
         "event_id": str(uuid4()),
         "schema_version": "1",
         "timestamp": timestamp,
