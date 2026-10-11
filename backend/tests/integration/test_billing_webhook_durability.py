@@ -18,7 +18,7 @@ def _signed(body: bytes, secret: str) -> str:
 
 @pytest.mark.asyncio
 async def test_signed_billing_webhook_is_durable_and_exact_replay_is_idempotent(monkeypatch):
-    secret = "test_secret_1234567890"
+    secret = "abc"
     monkeypatch.setattr(settings, "LEMONSQUEEZY_WEBHOOK_SECRET", secret)
     body = json.dumps({
         "meta": {"event_name": "subscription_created"},
@@ -49,7 +49,7 @@ async def test_signed_billing_webhook_is_durable_and_exact_replay_is_idempotent(
 
 @pytest.mark.asyncio
 async def test_invalid_billing_signature_does_not_write_webhook_event(monkeypatch):
-    monkeypatch.setattr(settings, "LEMONSQUEEZY_WEBHOOK_SECRET", "test_secret_1234567890")
+    monkeypatch.setattr(settings, "LEMONSQUEEZY_WEBHOOK_SECRET", "abc")
     body = b'{"meta":{"event_name":"subscription_created"},"data":{"id":"123"}}'
     from main import app
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
@@ -64,7 +64,7 @@ async def test_invalid_billing_signature_does_not_write_webhook_event(monkeypatc
 
 @pytest.mark.asyncio
 async def test_unknown_signed_billing_event_is_recorded_but_never_executed(monkeypatch):
-    secret = "test_secret_1234567890"
+    secret = "abc"
     monkeypatch.setattr(settings, "LEMONSQUEEZY_WEBHOOK_SECRET", secret)
     body = b'{"meta":{"event_name":"arbitrary_command"},"data":{"id":"123"}}'
     from main import app
