@@ -6,6 +6,7 @@ Usage:
     names  = list_playbooks()
 """
 from datetime import datetime, timezone
+from resilience.playbooks.base import normalize_device_id
 from resilience.playbooks.disk_full import DiskFullPlaybook
 from resilience.playbooks.service_restart import ServiceRestartPlaybook
 from resilience.playbooks.cert_expiry import CertExpiryPlaybook
@@ -52,8 +53,10 @@ async def execute_playbook(playbook_name: str, context: dict) -> dict:
     # Compatibility API: enforce the non-execution contract even if a future
     # playbook implementation returns contradictory legacy fields.
     created_at = result.get("created_at") or datetime.now(timezone.utc).isoformat()
+    device_id, device_id_source = normalize_device_id(context)
     result["playbook"] = playbook_name
-    result.setdefault("device_id", "unknown")
+    result["device_id"] = device_id
+    result["device_id_source"] = device_id_source
     result.setdefault("created_at", created_at)
     result["executed_at"] = created_at
     result["timestamp_semantics"] = "recommendation_created"
