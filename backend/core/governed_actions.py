@@ -269,7 +269,7 @@ class PlatformGovernedActionExecutor:
         client_factory: ClientFactory | None = None,
     ) -> None:
         self._registry = registry
-        self._client_factory = client_factory or _new_platform_client
+        self._client_factory = client_factory if client_factory is not None else _new_platform_client
 
     async def submit(
         self,
@@ -280,6 +280,9 @@ class PlatformGovernedActionExecutor:
         intent: str,
         arguments: dict[str, Any],
     ) -> GovernedActionResult:
+        # The feature flag is authoritative even when a test/custom client factory is injected.
+        if not settings.AGENT_PLATFORM_ENABLED:
+            raise GovernedActionError("platform_integration_disabled")
         if not isinstance(action_id, UUID):
             raise GovernedActionError("action_id_must_be_uuid")
         if action_id.int == 0:
