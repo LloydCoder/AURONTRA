@@ -36,7 +36,7 @@ async def test_ticket_draft_persists_provenance_without_closing_ticket():
         await db.commit()
 
     from main import app
-    async with patch("agents.ticket_resolver.llm") as mock_llm:
+    with patch("agents.ticket_resolver.llm") as mock_llm:
         mock_llm.complete = AsyncMock(return_value={
             "text": "Please check the VPN client status and reconnect using your approved company settings.",
             "model": "test-model",
@@ -87,7 +87,7 @@ async def test_tampered_knowledge_fails_closed_before_external_model_call():
         await db.commit()
 
     from main import app
-    async with patch("agents.ticket_resolver.llm") as mock_llm:
+    with patch("agents.ticket_resolver.llm") as mock_llm:
         mock_llm.complete = AsyncMock()
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             created = await client.post("/tickets/ingest", json={
