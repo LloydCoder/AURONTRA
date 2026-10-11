@@ -1,6 +1,6 @@
 # Phase 17 — Tinlance Ecosystem Integration
 
-**Status:** In progress; reference registration candidate submitted, phase not accepted.  
+**Status:** In progress; TSIC reference registration merged, runtime integration and phase acceptance remain open.  
 **Aurontra baseline:** `c804dc7d72da163c0fe3db928b753d5cc826544c`  
 **TSIC registration PR:** [LloydCoder/tinlance-system-integration#53](https://github.com/LloydCoder/tinlance-system-integration/pull/53)  
 **TSIC candidate commit:** `ae961f1cf6ea26ac0d468283b03159f016613caf`  
