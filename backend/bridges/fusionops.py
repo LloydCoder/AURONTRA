@@ -9,7 +9,8 @@ async def get_events(limit: int = 100, *, identity_context: TSICIdentityContext)
         raise ValueError("limit must be between 1 and 500")
     result = await request_json(
         service="fusionops", base_url=settings.FUSIONOPS_URL,
-        method="GET", path="/events", params={"limit": limit},\n        identity_context=identity_context,
+        method="GET", path="/events", params={"limit": limit},
+        identity_context=identity_context,
     )
     if not isinstance(result, list):
         raise EcosystemIntegrationError("bridge_response_contract_invalid", 502)
