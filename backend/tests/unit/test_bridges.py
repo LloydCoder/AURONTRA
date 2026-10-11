@@ -45,9 +45,9 @@ class TestThreatFadeBridge:
     async def test_get_events_enforces_bounded_limit(self):
         from bridges.threatfade import get_events
         with pytest.raises(ValueError):
-            await get_events(10000)
+            await get_events(10000, identity_context=_identity_context())
         with patch("bridges.threatfade.request_json", new=AsyncMock(return_value=[])) as call:
-            assert await get_events(10) == []
+            assert await get_events(10, identity_context=_identity_context()) == []
             assert call.await_args.kwargs["params"] == {"limit": 10}
 
 
