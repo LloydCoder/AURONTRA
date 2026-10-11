@@ -16,6 +16,7 @@ from typing import Any
 from urllib.parse import urlsplit
 
 import httpx
+from pydantic import ValidationError
 
 from core.config import settings
 from core.tsic_contracts import TSICIdentityContext, validate_event_envelope
