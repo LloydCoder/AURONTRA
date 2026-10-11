@@ -28,7 +28,13 @@ async def test_roi_report_uses_verified_tenant_and_persists_digest():
     assert artifact.org_id == "test-tenant"
     assert artifact.report_type == "roi"
     assert artifact.payload_sha256 == payload["evidence_sha256"]
-    canonical = json.dumps(artifact.report_payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True, default=str)
+    digest_material = {
+        "org_id": artifact.org_id, "report_type": artifact.report_type,
+        "period_start": artifact.period_start.isoformat(), "period_end": artifact.period_end.isoformat(),
+        "created_by": artifact.created_by, "input_provenance": artifact.input_provenance,
+        "report_payload": artifact.report_payload,
+    }
+    canonical = json.dumps(digest_material, sort_keys=True, separators=(",", ":"), ensure_ascii=True, default=str)
     assert hashlib.sha256(canonical.encode("utf-8")).hexdigest() == artifact.payload_sha256
     assert artifact.input_provenance["query_scope"] == "verified_tenant_id"
 
