@@ -28,7 +28,7 @@ _GENESIS_HASH = "0" * 64
 
 class APIKeyCreateRequest(BaseModel):
     scopes: list[str] = Field(min_length=1, max_length=8)
-    expires_in_days: int | None = Field(default=90, ge=1, le=365)
+    expires_in_days: int = Field(default=90, ge=1, le=365)
 
 
 def _is_active_key(row: APIKey) -> bool:
