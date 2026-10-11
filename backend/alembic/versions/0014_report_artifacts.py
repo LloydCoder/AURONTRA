@@ -22,6 +22,7 @@ def upgrade():
         sa.Column("payload_sha256", sa.String(64), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
         sa.CheckConstraint("report_type IN ('roi','compliance','executive_summary')", name="ck_report_artifacts_type"),
+        sa.CheckConstraint("period_start <= period_end", name="ck_report_artifacts_period_order"),
         sa.UniqueConstraint("org_id", "id", name="uq_report_artifacts_org_id"),
     )
     op.create_index("ix_report_artifacts_org_created", "report_artifacts", ["org_id", "created_at"])
