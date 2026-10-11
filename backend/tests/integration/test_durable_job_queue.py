@@ -216,7 +216,7 @@ async def test_domain_write_and_outbox_event_share_transaction():
 
 @pytest.mark.asyncio
 async def test_worker_processes_only_explicitly_registered_handlers():
-    from core.workers.job_worker import process_job_batch
+    from workers.job_worker import process_job_batch
 
     async def echo(payload, idempotency_key):
         assert idempotency_key == "worker:echo:1"
@@ -251,7 +251,7 @@ async def test_worker_processes_only_explicitly_registered_handlers():
 
 @pytest.mark.asyncio
 async def test_outbox_worker_publishes_and_records_durable_ack():
-    from core.workers.job_worker import publish_outbox_batch
+    from workers.job_worker import publish_outbox_batch
 
     delivered = []
 
