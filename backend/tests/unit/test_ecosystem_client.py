@@ -12,6 +12,38 @@ from core.ecosystem_client import (
 )
 
 
+@pytest.fixture
+def identity_context():
+    return {
+        "tenant_id": "tenant-1",
+        "organization_id": "org-1",
+        "workspace_id": "workspace-1",
+        "actor_id": "service:aurontra",
+        "execution_id": "execution-1",
+        "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+        "correlation_id": "correlation-1",
+    }
+
+
+def event_payload(context, **overrides):
+    event = {
+        "id": "event-1",
+        "source": "aurontra",
+        "specversion": "1.0",
+        "type": "aurontra.telemetry.accepted",
+        "time": "2026-10-11T08:00:00Z",
+        "subject": "device:device-1",
+        "data": {"status": "accepted"},
+        "data_content_type": "application/json",
+        "tenant_id": context["tenant_id"],
+        "execution_id": context["execution_id"],
+        "trace_id": context["trace_id"],
+        "correlation_id": context["correlation_id"],
+    }
+    event.update(overrides)
+    return event
+
+
 @pytest.fixture(autouse=True)
 def reset_circuit_state(monkeypatch):
     reset_circuits_for_tests()
@@ -50,7 +82,7 @@ async def test_client_sends_bearer_and_versioned_contract_headers():
 
 
 @pytest.mark.asyncio
-async def test_client_preserves_valid_trace_context_and_correlation_id():
+async def test_client_preserves_valid_trace_context_and_correlation_id(identity_context):
     seen = {}
     traceparent = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
 
@@ -64,13 +96,14 @@ async def test_client_preserves_valid_trace_context_and_correlation_id():
         method="GET",
         path="/health",
         traceparent=traceparent,
-        correlation_id="ticket-123",
+        correlation_id="correlation-1",
+        identity_context=identity_context,
         transport=httpx.MockTransport(handler),
     )
     assert seen["traceparent"] == traceparent
     assert seen["x-trace-id"] == "4bf92f3577b34da6a3ce929d0e0e4736"
     assert seen["x-span-id"] == "00f067aa0ba902b7"
-    assert seen["x-correlation-id"] == "ticket-123"
+    assert seen["x-correlation-id"] == "correlation-1"
 
 
 @pytest.mark.asyncio
@@ -133,7 +166,7 @@ async def test_origin_and_path_validation_prevent_url_injection():
 
 
 @pytest.mark.asyncio
-async def test_retryable_get_retries_transient_upstream_failures():
+async def test_retryable_get_retries_transient_upstream_failures(identity_context):
     calls = 0
 
     async def handler(request):
@@ -145,14 +178,15 @@ async def test_retryable_get_retries_transient_upstream_failures():
 
     result = await request_json(
         service="test-service", base_url="https://integration.example",
-        method="GET", path="/events", transport=httpx.MockTransport(handler),
+        method="GET", path="/events", identity_context=identity_context,
+        transport=httpx.MockTransport(handler),
     )
     assert result == {"events": []}
     assert calls == 2
 
 
 @pytest.mark.asyncio
-async def test_non_idempotent_post_is_not_retried():
+async def test_non_idempotent_post_is_not_retried(identity_context):
     calls = 0
 
     async def handler(request):
@@ -164,14 +198,14 @@ async def test_non_idempotent_post_is_not_retried():
         await request_json(
             service="test-service", base_url="https://integration.example",
             method="POST", path="/actions", payload={"action": "submit"},
-            transport=httpx.MockTransport(handler),
+            identity_context=identity_context, transport=httpx.MockTransport(handler),
         )
     assert error.value.code == "bridge_upstream_retryable"
     assert calls == 1
 
 
 @pytest.mark.asyncio
-async def test_post_retries_only_with_explicit_idempotency_key():
+async def test_post_retries_only_with_explicit_idempotency_key(identity_context):
     calls = 0
     keys = []
 
@@ -185,12 +219,39 @@ async def test_post_retries_only_with_explicit_idempotency_key():
 
     result = await request_json(
         service="test-service", base_url="https://integration.example",
-        method="POST", path="/events", payload={"event": "x"},
-        idempotency_key="event-123", transport=httpx.MockTransport(handler),
+        method="POST", path="/events", payload=event_payload(identity_context),
+        identity_context=identity_context, idempotency_key="event-123",
+        transport=httpx.MockTransport(handler),
     )
     assert result == {"accepted": True}
     assert calls == 2
     assert keys == ["event-123", "event-123"]
+
+
+@pytest.mark.asyncio
+async def test_tenant_scoped_call_requires_identity_context():
+    with pytest.raises(EcosystemIntegrationError) as error:
+        await request_json(
+            service="test-service", base_url="https://integration.example",
+            method="GET", path="/events",
+        )
+    assert error.value.code == "bridge_identity_context_missing"
+
+
+@pytest.mark.asyncio
+async def test_event_envelope_must_match_verified_tenant_context(identity_context):
+    async def handler(request):
+        return httpx.Response(202, json={"accepted": True})
+
+    with pytest.raises(EcosystemIntegrationError) as error:
+        await request_json(
+            service="test-service", base_url="https://integration.example",
+            method="POST", path="/events",
+            payload=event_payload(identity_context, tenant_id="other-tenant"),
+            identity_context=identity_context, idempotency_key="event-1",
+            transport=httpx.MockTransport(handler),
+        )
+    assert error.value.code == "bridge_event_context_mismatch"
 
 
 @pytest.mark.asyncio
