@@ -88,12 +88,18 @@ class TrustedPlatformContext:
 
     tenant_id: str
     subject_id: str
+    agent_id: UUID
+    task_id: UUID
 
     def __post_init__(self) -> None:
         if not _bounded_text(self.tenant_id, maximum=128):
             raise ValueError("trusted tenant identifier is invalid")
         if not _bounded_text(self.subject_id, maximum=256):
             raise ValueError("trusted subject identifier is invalid")
+        if not isinstance(self.agent_id, UUID) or self.agent_id.int == 0:
+            raise ValueError("trusted Platform agent UUID is invalid")
+        if not isinstance(self.task_id, UUID) or self.task_id.int == 0:
+            raise ValueError("trusted Platform task UUID is invalid")
 
 
 @dataclass(frozen=True, slots=True)
@@ -198,15 +204,6 @@ def _traceparent(action_id: UUID) -> str:
     return f"00-{action_id.hex}-{uuid4().hex[:16]}-01"
 
 
-def _configured_ids() -> tuple[UUID, UUID]:
-    try:
-        agent_id = UUID(settings.AGENT_PLATFORM_AGENT_ID)
-        task_id = UUID(settings.AGENT_PLATFORM_TASK_ID)
-    except (ValueError, TypeError, AttributeError) as exc:
-        raise GovernedActionError("platform_agent_or_task_id_invalid") from exc
-    return agent_id, task_id
-
-
 def _new_platform_client(
     action_id: UUID,
     operation: str,
@@ -232,9 +229,16 @@ def _new_platform_client(
             _bounded_text(settings.AGENT_PLATFORM_SUBJECT_ID, maximum=256),
         )):
             raise GovernedActionError("platform_integration_not_configured")
+        try:
+            configured_agent_id = UUID(settings.AGENT_PLATFORM_AGENT_ID)
+            configured_task_id = UUID(settings.AGENT_PLATFORM_TASK_ID)
+        except (ValueError, TypeError, AttributeError) as exc:
+            raise GovernedActionError("platform_agent_or_task_id_invalid") from exc
         if (
             context.tenant_id != settings.AGENT_PLATFORM_TENANT_ID
             or context.subject_id != settings.AGENT_PLATFORM_SUBJECT_ID
+            or context.agent_id != configured_agent_id
+            or context.task_id != configured_task_id
         ):
             raise GovernedActionError("platform_identity_context_mismatch")
         bearer_token = settings.AGENT_PLATFORM_BEARER_TOKEN
@@ -374,7 +378,7 @@ class PlatformGovernedActionExecutor:
         # mutation from changing the intent between validation and dispatch.
         normalized_arguments = json.loads(encoded_arguments.decode("utf-8"))
 
-        agent_id, task_id = _configured_ids()
+        agent_id, task_id = context.agent_id, context.task_id
         run_id: UUID | None = None
         try:
             run_client = self._make_client(action_id, "run", context)
