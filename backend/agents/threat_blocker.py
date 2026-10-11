@@ -312,6 +312,16 @@ async def block_threat(
         })
         return base
 
+    if not isinstance(tf_result, dict):
+        base.update({
+            "status": "analysis_unavailable",
+            "action_taken": "monitor",
+            "blocked": False,
+            "enforcement_verified": False,
+            "error": "invalid_bridge_response",
+        })
+        return base
+
     signal = {
         "src_ip": src_ip,
         "protocol": tf_result.get("protocol", "HTTPS"),
@@ -331,6 +341,10 @@ async def block_threat(
         })
         return base
     tf_level = tf_result.get("threat_level", "info")
+    if not isinstance(tf_level, str) or tf_level.lower() not in {"info", "low", "medium", "high", "critical"}:
+        tf_level = "info"
+    else:
+        tf_level = tf_level.lower()
     level_rank = {"info": 0, "low": 1, "medium": 2, "high": 3, "critical": 4}
     final_level = (
         tf_level
