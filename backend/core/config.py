@@ -59,7 +59,7 @@ class Settings(BaseSettings):
     # Threat containment remains disabled until a registered Platform tool and independent verifier exist.
     THREAT_CONTAINMENT_ENABLED: bool = False
     # Per-source HMAC keys are injected by the deployment secret manager as a JSON map.
-    THREAT_VERIFIER_HMAC_KEYS_JSON: str = ""
+    THREAT_VERIFIER_INTEGRATION_CONFIG_JSON: str = ""
     THREAT_VERIFIER_MAX_SKEW_SECONDS: int = 60
 
     # Local development default; production must explicitly configure PostgreSQL.
