@@ -181,6 +181,21 @@ async def request_json(
         "X-Trace-ID": trace_id,
         "X-Span-ID": span_id,
     }
+    if verified_context is not None:
+        headers.update({
+            "X-Tinlance-Tenant-ID": verified_context.tenant_id,
+            "X-Tinlance-Organization-ID": verified_context.organization_id,
+            "X-Tinlance-Workspace-ID": verified_context.workspace_id,
+            "X-Tinlance-Actor-ID": verified_context.actor_id,
+            "X-Tinlance-Execution-ID": verified_context.execution_id,
+        })
+        if verified_context.agent_id:
+            headers["X-Tinlance-Agent-ID"] = verified_context.agent_id
+        if verified_context.service_id:
+            headers["X-Tinlance-Service-ID"] = verified_context.service_id
+        if verified_context.causation_id:
+            headers["X-Tinlance-Causation-ID"] = verified_context.causation_id
+
     if idempotency_key and retry_safe:
         headers["Idempotency-Key"] = idempotency_key
 
