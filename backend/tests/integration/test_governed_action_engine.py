@@ -359,3 +359,70 @@ def test_client_factory_rejects_noncanonical_base_url(monkeypatch):
     monkeypatch.setattr(settings, "ENVIRONMENT", "test")
     with pytest.raises(GovernedActionError, match="platform_base_url_invalid"):
         _new_platform_client(uuid4(), "run")
+
+
+def test_action_definition_rejects_mutable_allowlist():
+    with pytest.raises(ValueError, match="immutable frozensets"):
+        _definition(allowed_arguments={"metric", "window"})
+
+
+@pytest.mark.asyncio
+async def test_action_intent_is_snapshotted_before_first_await(monkeypatch):
+    monkeypatch.setattr(settings, "AGENT_PLATFORM_AGENT_ID", str(AGENT_ID))
+    monkeypatch.setattr(settings, "AGENT_PLATFORM_TASK_ID", str(TASK_ID))
+    calls = []
+    caller_arguments = {"metric": "cpu"}
+
+    class MutatingRunClient(FakePlatform):
+        async def create_run(self, **kwargs):
+            caller_arguments["metric"] = "disk"
+            return await super().create_run(**kwargs)
+
+    def factory(action_id, operation):
+        if operation == "run":
+            return MutatingRunClient(calls)
+        return FakePlatform(calls)
+
+    executor = PlatformGovernedActionExecutor(
+        GovernedActionRegistry((_definition(),)),
+        client_factory=factory,
+    )
+    await executor.submit(
+        action_id=uuid4(),
+        action_key="diagnostic.read",
+        resource="device:device-123",
+        intent="Read diagnostic metrics",
+        arguments=caller_arguments,
+    )
+    assert caller_arguments["metric"] == "disk"
+    assert calls[-1][1]["invocation"].arguments == {"metric": "cpu"}
+
+
+@pytest.mark.asyncio
+async def test_nil_uuid_action_id_is_rejected_before_network(monkeypatch):
+    executor, calls, _ = _executor(monkeypatch)
+    with pytest.raises(GovernedActionError, match="action_id_invalid"):
+        await executor.submit(
+            action_id=UUID(int=0),
+            action_key="diagnostic.read",
+            resource="device:device-123",
+            intent="Read diagnostic metrics",
+            arguments={"metric": "cpu"},
+        )
+    assert calls == []
+
+
+def test_platform_client_rejects_nonfinite_timeout(monkeypatch):
+    from core.governed_actions import _new_platform_client
+
+    monkeypatch.setattr(settings, "AGENT_PLATFORM_ENABLED", True)
+    monkeypatch.setattr(settings, "AGENT_PLATFORM_BASE_URL", "https://platform.example.invalid")
+    monkeypatch.setattr(settings, "AGENT_PLATFORM_BEARER_TOKEN", "test-injected-credential")
+    monkeypatch.setattr(settings, "AGENT_PLATFORM_TENANT_ID", "trusted-tenant")
+    monkeypatch.setattr(settings, "AGENT_PLATFORM_SUBJECT_ID", "aurontra-service")
+    monkeypatch.setattr(settings, "AGENT_PLATFORM_API_VERSION", "1.1")
+    monkeypatch.setattr(settings, "AGENT_PLATFORM_TIMEOUT_SECONDS", float("nan"))
+    monkeypatch.setattr(settings, "AGENT_PLATFORM_ALLOW_INSECURE_HTTP", False)
+    monkeypatch.setattr(settings, "ENVIRONMENT", "test")
+    with pytest.raises(GovernedActionError, match="platform_timeout_invalid"):
+        _new_platform_client(uuid4(), "run")
