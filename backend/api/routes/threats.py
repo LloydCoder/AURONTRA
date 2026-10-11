@@ -115,7 +115,7 @@ async def analyse_threat(
     if existing is not None:
         if existing.signal_sha256 != signal_hash:
             raise HTTPException(status_code=409, detail="event_id was already used with a different signal.")
-        return {"finding": _serialize(existing), "idempotent_replay": True}
+        return {**existing.assessment, "finding": _serialize(existing), "idempotent_replay": True}
 
     assessment = analyse_signal(dict(signal))
     assessment.update({
@@ -147,7 +147,7 @@ async def analyse_threat(
     except IntegrityError as exc:
         await db.rollback()
         raise HTTPException(status_code=409, detail="event_id was concurrently recorded; retry with the same event_id.") from exc
-    return {"finding": _serialize(finding), "idempotent_replay": False}
+    return {**assessment, "finding": _serialize(finding), "idempotent_replay": False}
 
 
 @router.post("/block", status_code=503)
