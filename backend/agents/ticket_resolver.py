@@ -83,15 +83,14 @@ def _redact_sensitive_text(value: str, max_chars: int) -> str:
 
 
 def _sanitize_response(value: Any) -> str:
-    """Convert provider output to bounded plain text; never treat it as executable markup."""
+    """Convert provider output to bounded plain text and redact common sensitive data."""
     if not isinstance(value, str):
         return ""
     text = re.sub(r"<[^>]{0,200}>", "", value)
     text = "".join(ch for ch in text if ch in "\n\r\t" or ord(ch) >= 32)
-    text = text.strip()
     max_chars = max(100, min(int(settings.LLM_MAX_OUTPUT_CHARS), 10000))
+    text = _redact_sensitive_text(text.strip(), max_chars)
     return text[:max_chars]
-
 
 def _sha256(value: str | None) -> str | None:
     if value is None:
