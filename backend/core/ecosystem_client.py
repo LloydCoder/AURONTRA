@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 CONTRACT_VERSION = "1.0.0"
 _TRACEPARENT_RE = re.compile(r"^00-([0-9a-f]{32})-([0-9a-f]{16})-([0-9a-f]{2})$")
 _CORRELATION_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
+_IDEMPOTENCY_KEY_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
 MAX_RESPONSE_BYTES = 1_048_576
 RETRYABLE_STATUS = frozenset({408, 425, 429, 500, 502, 503, 504})
 
@@ -151,6 +152,10 @@ async def request_json(
             raise EcosystemIntegrationError("bridge_event_envelope_invalid", 400) from None
         except ValueError:
             raise EcosystemIntegrationError("bridge_event_context_mismatch", 403) from None
+    if idempotency_key is not None and (
+        not isinstance(idempotency_key, str) or not _IDEMPOTENCY_KEY_RE.fullmatch(idempotency_key)
+    ):
+        raise EcosystemIntegrationError("bridge_idempotency_key_invalid", 400)
     retry_safe = method in {"GET", "PUT", "DELETE"} or (
         method in {"POST", "PATCH"} and isinstance(idempotency_key, str)
         and 1 <= len(idempotency_key) <= 128
