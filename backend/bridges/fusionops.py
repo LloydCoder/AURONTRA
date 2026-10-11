@@ -1,19 +1,26 @@
-"""FusionOps bridge — orchestration layer on AWS EC2 Stockholm."""
-import httpx
+"""FusionOps bridge through the shared authenticated ecosystem client."""
 from core.config import settings
+from core.ecosystem_client import EcosystemIntegrationError, request_json
 
 
 async def get_events(limit: int = 100) -> list:
-    async with httpx.AsyncClient(timeout=settings.BRIDGE_TIMEOUT) as client:
-        r = await client.get(f"{settings.FUSIONOPS_URL}/events?limit={limit}")
-        r.raise_for_status()
-        return r.json()
+    if not 1 <= limit <= 500:
+        raise ValueError("limit must be between 1 and 500")
+    result = await request_json(
+        service="fusionops", base_url=settings.FUSIONOPS_URL,
+        method="GET", path="/events", params={"limit": limit},
+    )
+    if not isinstance(result, list):
+        raise EcosystemIntegrationError("bridge_response_contract_invalid", 502)
+    return result
 
 
 async def health_check() -> bool:
     try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            r = await client.get(f"{settings.FUSIONOPS_URL}/health")
-            return r.status_code == 200
+        result = await request_json(
+            service="fusionops", base_url=settings.FUSIONOPS_URL,
+            method="GET", path="/health", timeout_seconds=5,
+        )
+        return isinstance(result, dict) and result.get("status") in {"ok", "healthy"}
     except Exception:
         return False
