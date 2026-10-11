@@ -1,6 +1,6 @@
 # Phase 09 — Governed Action Engine
 
-**Status:** Complete at implementation/CI level; PR #4 awaits merge.  
+**Status:** Merged in PR #4 at `90b8760560b7efb773861e0297c86235638a014a`; implementation/CI gates passed.  
 **Authority:** Tinlance Agent Platform.  
 **Integration contract:** Tinlance Agent Platform SDK 1.0.0 / Platform API 1.1 / `governed-execution.v1`.  
 **Reviewed SDK source:** `LloydCoder/tinlance-agent-platform-sdk@615eef529831fdfbe37e050e45d9a1a8c4472291`.  
@@ -56,13 +56,13 @@ Production must not enable insecure HTTP. These settings do not open Aurontra's 
 6. Tests prove a static tenant credential cannot be used for a different tenant and an injected credential provider receives the trusted context.
 7. A forensic audit confirms there is no local `subprocess`, `systemctl`, Certbot, shell, or filesystem side-effect fallback.
 8. Documentation clearly separates repository CI evidence from live Platform connectivity and production deployment.
-9. PR CI, PostgreSQL RLS/restore checks, and secret/history/archive scan are green before merge.
+9. PR CI, PostgreSQL RLS/restore checks, and secret/history/archive scan were green before merge; post-merge main CI and scan are also green.
 
 ## Verified CI evidence
 
-- PR head audited: `8dc412742f6c2c946e1c358d63d359855017a329`.
+- PR head audited: `8dc412742f6c2c946e1c358d63d359855017a329`; merge commit: `90b8760560b7efb773861e0297c86235638a014a`.
 - Backend CI: 325 passed, 1 skipped, 84.08% coverage; `pip check`, migration validation and compilation passed.
-- PostgreSQL RLS/backup-restore job passed; secret/history/archive scan passed.
+- PostgreSQL RLS/backup-restore job passed; PR secret/history/archive scan passed. Post-merge main CI [38101019351](https://github.com/LloydCoder/AURONTRA/actions/runs/38101019351) and secret/history/archive scan [38101019352](https://github.com/LloydCoder/AURONTRA/actions/runs/38101019352) also passed.
 - Deployment was skipped by configuration. No live Platform or production runtime was verified.
 - Full forensic review: [docs/audits/PHASE_09_FORENSIC_AUDIT.md](audits/PHASE_09_FORENSIC_AUDIT.md).
 
