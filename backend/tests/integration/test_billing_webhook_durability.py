@@ -18,7 +18,7 @@ def _signed(body: bytes, secret: str) -> str:
 
 @pytest.mark.asyncio
 async def test_signed_billing_webhook_is_durable_and_exact_replay_is_idempotent(monkeypatch):
-    secret = "test-webhook-secret-that-is-not-a-real-provider-secret"
+    secret = "test_secret_1234567890"
     monkeypatch.setattr(settings, "LEMONSQUEEZY_WEBHOOK_SECRET", secret)
     body = json.dumps({
         "meta": {"event_name": "subscription_created"},
@@ -29,11 +29,11 @@ async def test_signed_billing_webhook_is_durable_and_exact_replay_is_idempotent(
         first = await client.post("/billing/webhook", content=body, headers={"X-Signature": _signed(body, secret)})
         replay = await client.post("/billing/webhook", content=body, headers={"X-Signature": _signed(body, secret)})
 
-    assert first.status_code == 202
+    assert first.status_code == 200
     assert first.json()["duplicate"] is False
     assert first.json()["entitlements_changed"] is False
     assert first.json()["reconciliation_required"] is True
-    assert replay.status_code == 202
+    assert replay.status_code == 200
     assert replay.json()["duplicate"] is True
     assert replay.headers["Idempotent-Replay"] == "true"
 
@@ -49,7 +49,7 @@ async def test_signed_billing_webhook_is_durable_and_exact_replay_is_idempotent(
 
 @pytest.mark.asyncio
 async def test_invalid_billing_signature_does_not_write_webhook_event(monkeypatch):
-    monkeypatch.setattr(settings, "LEMONSQUEEZY_WEBHOOK_SECRET", "test-webhook-secret-that-is-not-a-real-provider-secret")
+    monkeypatch.setattr(settings, "LEMONSQUEEZY_WEBHOOK_SECRET", "test_secret_1234567890")
     body = b'{"meta":{"event_name":"subscription_created"},"data":{"id":"123"}}'
     from main import app
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
@@ -64,13 +64,13 @@ async def test_invalid_billing_signature_does_not_write_webhook_event(monkeypatc
 
 @pytest.mark.asyncio
 async def test_unknown_signed_billing_event_is_recorded_but_never_executed(monkeypatch):
-    secret = "test-webhook-secret-that-is-not-a-real-provider-secret"
+    secret = "test_secret_1234567890"
     monkeypatch.setattr(settings, "LEMONSQUEEZY_WEBHOOK_SECRET", secret)
     body = b'{"meta":{"event_name":"arbitrary_command"},"data":{"id":"123"}}'
     from main import app
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.post("/billing/webhook", content=body, headers={"X-Signature": _signed(body, secret)})
-    assert response.status_code == 202
+    assert response.status_code == 200
     assert response.json()["entitlements_changed"] is False
     assert response.json()["reconciliation_required"] is False
     async with AsyncSessionLocal() as db:
