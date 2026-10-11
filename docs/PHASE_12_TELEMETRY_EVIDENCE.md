@@ -11,7 +11,7 @@ This phase turns authenticated endpoint telemetry into durable, tenant-scoped ev
 - Endpoint identity and tenant identity come from the validated Platform-issued DPoP-bound access token, never from the JSON body. The collector may send `device_id` as a routing hint, but the API rejects it if it does not match the authenticated subject.
 - Each request is bound to a signed HTTP method, canonical path, body hash, DPoP proof JTI, device key thumbprint, tenant and device.
 - Enrollment, key rotation and telemetry require distinct scopes and active, non-revoked device enrollment.
-- Telemetry uses strict schema version `1`; unknown fields, invalid ranges, NaN/Infinity and timezone-naive timestamps are rejected.
+- The endpoint ingestion contract accepts only explicitly supported wire-schema versions and rejects unknown fields, invalid ranges, NaN/Infinity and timezone-naive timestamps. Persistence now allows normalized evidence schema versions `1` and `2`; the additive Alembic revision `0012_telemetry_schema_v2` updates the database constraint without rewriting prior migration history.
 - At least one of CPU, memory or disk must be present. Missing values are represented explicitly, never replaced with zero.
 - Observation timestamps are bounded by `TELEMETRY_MAX_AGE_SECONDS` and `TELEMETRY_FUTURE_SKEW_SECONDS`; stale and excessive-future samples are rejected.
 - A configurable per-device ingestion limit defaults to 120 events/minute; excess new events return HTTP 429 with `Retry-After: 60`. Duplicate-event checks happen before the limit so retries remain idempotent. This is a per-device guard, not a global tenant quota.
@@ -21,7 +21,7 @@ This phase turns authenticated endpoint telemetry into durable, tenant-scoped ev
 
 ## Provenance and persistence
 
-Migration `0007_telemetry_evidence` adds `telemetry_records` with tenant/device foreign keys, tenant-scoped event uniqueness, DPoP JTI uniqueness, schema and score bounds, source, agent version, device-key thumbprint, request and payload hashes, observation/receipt timestamps, metric completeness, quality flags, score components/status, and expiry timestamp.
+Migration `0007_telemetry_evidence` adds `telemetry_records` with tenant/device foreign keys, tenant-scoped event uniqueness, DPoP JTI uniqueness, schema and score bounds, source, agent version, device-key thumbprint, request and payload hashes, observation/receipt timestamps, metric completeness, quality flags, score components/status, and expiry timestamp. Migration `0012_telemetry_schema_v2` expands the persisted schema-version check to accept versions `1` and `2`, while refusing unsafe downgrade when v2 records exist. Alembic's version table is widened to 64 characters because the existing descriptive migration IDs exceed Alembic's default 32-character limit.
 
 The database transaction persists the telemetry record and its `telemetry.accepted` outbox event atomically. Outbox payloads contain bounded identifiers, hashes, quality metadata and score status; they do not include raw endpoint secrets. PostgreSQL enables and forces RLS, with a policy bound to `app.current_org_id`. The CI non-owner role test covers cross-tenant reads and writes, and backup/restore verifies the telemetry RLS policy survives restoration.
 
