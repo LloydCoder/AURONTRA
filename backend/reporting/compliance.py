@@ -176,11 +176,11 @@ def generate_compliance_report(
     failed_controls = [c["control"] for c in controls if c["status"] == "fail"]
     recommendations = []
     if not mfa_enabled:
-        recommendations.append("Enable MFA via Clerk auth settings — required for all frameworks")
+        recommendations.append("Review tenant MFA enrollment and identity-provider policy evidence; this report could not verify MFA.")
     if not siem_active:
-        recommendations.append("Activate SIEM export (Splunk HEC or CEF) to satisfy detection requirements")
+        recommendations.append("Configure and verify tenant-scoped SIEM export if required by the applicable control framework.")
     if avg_resilience_score < 70:
-        recommendations.append("Deploy additional self-healing playbooks to raise fleet resilience above 70")
+        recommendations.append("Review resilience observations alongside documented recovery exercises and business-continuity evidence.")
 
     return {
         "org_id": org_id,
@@ -202,6 +202,6 @@ def generate_compliance_report(
         "report_narrative": (
             f"Organisation {org_id} has an observed {framework} control-evidence score of {compliance_score}%. This is not a legal compliance score or certification. "
             f"{pass_count}/{len(controls)} controls are marked pass under configured evidence rules. "
-            f"{'No critical gaps detected.' if fail_count == 0 else f'{fail_count} control(s) require immediate remediation.'}"
+            f"{partial_count} control(s) have partial evidence and {fail_count} control(s) are marked fail; this summary is not a certification."
         ),
     }
