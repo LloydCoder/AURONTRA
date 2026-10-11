@@ -167,7 +167,7 @@ def build_resolution_prompt(
         "general": "Ask clarifying questions and avoid assumptions.",
     }.get(category, "Use conservative, reversible troubleshooting guidance and escalate uncertainty.")
 
-    max_input = max(2000, min(int(settings.LLM_MAX_INPUT_CHARS), 20000))
+    max_input = max(1000, min(int(settings.LLM_MAX_INPUT_CHARS), 20000))
     safe_title = _redact_sensitive_text(title, min(300, max_input // 20))
     safe_description = _redact_sensitive_text(description, max_input // 3)
     article_payload = []
