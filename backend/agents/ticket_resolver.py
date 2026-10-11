@@ -251,7 +251,14 @@ def _base_result(ticket_id: str, classification: dict) -> dict:
     }
 
 
-def _escalation_result(base: dict, reason: str, response: str) -> dict:
+def _escalation_result(
+    base: dict,
+    reason: str,
+    response: str,
+    *,
+    model_used: str | None = None,
+    llm_layer: int | None = None,
+) -> dict:
     safe_response = _sanitize_response(response)
     return {
         **base,
@@ -261,7 +268,8 @@ def _escalation_result(base: dict, reason: str, response: str) -> dict:
         "outcome_verified": False,
         "response_generated": bool(safe_response),
         "response": safe_response,
-        "model_used": reason,
+        "model_used": model_used,
+        "llm_layer": llm_layer,
         "response_sha256": _sha256(safe_response),
         "escalation_reason": reason,
     }
@@ -342,9 +350,21 @@ async def resolve_ticket(
     model = result.get("model", "unknown")
     response_text = _sanitize_response(result.get("text", ""))
     if layer == 3 or model == "offline-template":
-        return _escalation_result(base, "offline_fallback", response_text or "Automated drafting is unavailable. A human support agent must review this ticket.")
+        return _escalation_result(
+            base,
+            "offline_fallback",
+            response_text or "Automated drafting is unavailable. A human support agent must review this ticket.",
+            model_used="offline_fallback",
+            llm_layer=3,
+        )
     if len(response_text) < 10:
-        return _escalation_result(base, "invalid_or_empty_response", "Automated drafting did not return a usable suggestion. A human support agent must review this ticket.")
+        return _escalation_result(
+            base,
+            "invalid_or_empty_response",
+            "Automated drafting did not return a usable suggestion. A human support agent must review this ticket.",
+            model_used=str(model)[:128],
+            llm_layer=layer if isinstance(layer, int) else None,
+        )
 
     return {
         **base,
