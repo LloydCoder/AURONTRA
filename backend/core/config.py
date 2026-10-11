@@ -38,6 +38,7 @@ class Settings(BaseSettings):
     TELEMETRY_MAX_AGE_SECONDS: int = 300
     TELEMETRY_FUTURE_SKEW_SECONDS: int = 30
     TELEMETRY_RETENTION_DAYS: int = 90
+    TELEMETRY_MAX_EVENTS_PER_MINUTE: int = 120
 
     # Governed execution consumes the official Platform SDK; disabled by default.
     # The credential is injected by the deployment secret manager/environment.
