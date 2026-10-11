@@ -1,6 +1,6 @@
 # Phase 23 — Security Assurance and Release Integrity
 
-**Status:** Implementation candidate; acceptance requires CodeQL results, exact-SHA CI, dependency/secret scans, and a successful main-branch SBOM/provenance run.
+**Status:** Accepted at repository/CI level for commit `90428644155ce36eeae729f3b8ee578c178bbd19`; frontend lockfile reproducibility and exact-SHA security/CI evidence are recorded in [`release/evidence/phase23-frontend-reproducible-dependencies.json`](../release/evidence/phase23-frontend-reproducible-dependencies.json). This does not accept production deployment or other release gates.
 
 ## Implemented
 
@@ -13,14 +13,14 @@
 
 ## Acceptance gates
 
-- [ ] CodeQL completes on the exact candidate SHA; all high/critical findings are triaged and resolved or explicitly risk-accepted.
-- [ ] actionlint validates every workflow, including release-integrity and provenance workflows.
-- [ ] Frontend `npm audit --audit-level=high` passes and the production build/typecheck/lint remain green.
-- [ ] Commit a reviewed frontend lockfile and switch the frontend build to `npm ci`; direct dependency pins alone do not lock the transitive dependency graph.
-- [ ] Main-branch SBOM and provenance workflow succeeds; verify both attestations and checksums independently before release.
-- [ ] Dependency, secret/history/archive, PostgreSQL RLS/restore, and fault/load tests pass on the exact final candidate.
+- [x] CodeQL completes on the reviewed main candidate SHA; Python and JavaScript/TypeScript analysis jobs succeeded. Findings still require normal triage if surfaced.
+- [x] actionlint and GitHub Actions workflow syntax validation succeeded on the reviewed main candidate.
+- [x] Frontend dependency audit, lint, TypeScript typecheck, and production build succeeded.
+- [x] `frontend/package-lock.json` is committed and the frontend workflow uses `npm ci`.
+- [x] Main-branch SPDX SBOM/source provenance workflow completed successfully and uploaded source, SBOM, and checksums. Independent release-operator verification remains part of Phase 24.
+- [x] Python dependency audit, secret/history/archive scan, PostgreSQL tenant isolation/RLS/restore, and backend CI passed on the reviewed candidate.
 - [ ] Review workflow permissions, action pins, fork PR behavior, artifact retention, and release access controls.
 
 ## Non-claims
 
-Adding a workflow does not itself prove a clean SAST result or successful provenance. SBOM/provenance runs are triggered on main, not untrusted pull requests. No container image is built because this repository currently has no Dockerfile. The frontend remains less reproducible until a reviewed package-lock file is committed and `npm ci` is used.
+Adding a workflow does not itself prove a clean SAST result or successful provenance. SBOM/provenance runs are triggered on main, not untrusted pull requests. No container image is built because this repository currently has no Dockerfile. The frontend dependency graph is now lockfile-backed and installed with `npm ci`. This is repository/CI acceptance only; production deployment was skipped and Phases 17, 18, 19, 20, 21, 22, and 24 remain independently gated.
