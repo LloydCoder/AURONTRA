@@ -61,7 +61,7 @@ The repository has Alembic migrations for the base schema and tenant foreign key
 
 ## Durable jobs and event delivery (Phase 06)
 
-Aurontra now has tenant-scoped `durable_jobs` and `outbox_events` tables, introduced by Alembic revision `0003_durable_jobs_and_outbox`. Both tables have tenant foreign keys, idempotency uniqueness, queue-oriented indexes, and PostgreSQL forced row-level security. Revision `0004_device_lifecycle` extends the expected production migration head.
+Aurontra now has tenant-scoped `durable_jobs` and `outbox_events` tables, introduced by Alembic revision `0003_durable_jobs_and_outbox`. Both tables have tenant foreign keys, idempotency uniqueness, queue-oriented indexes, and PostgreSQL forced row-level security. Revision `0005_agent_dpop_identity` extends the expected production migration head.
 
 - Jobs are claimed in bounded batches with row locks and PostgreSQL `SKIP LOCKED`; leases expire and can be recovered. Attempt counts, bounded exponential backoff, cooperative cancellation, lease-owner checks and terminal dead-letter states are persisted.
 - A transactional outbox avoids a dual-write gap: ticket creation writes the ticket and a `ticket.created` event in the same database transaction. Event payloads contain the ticket identifier and source only; consumers must refetch data through tenant-scoped access.
@@ -80,3 +80,16 @@ Alembic revision `0004_device_lifecycle` adds `enrolled_at`, `revoked_at`, and `
 - `POST /organizations/offboard` is organization-admin-only. It transitions the organization to `offboarded`, deactivates its devices, stamps revocation time, and retains records for audit/retention policy rather than cascading deletion.
 - `GET /organizations/me` exposes only the authenticated tenant's own lifecycle state. A narrowly scoped lifecycle database dependency permits status inspection and repeated offboarding for an existing inactive organization; normal tenant data dependencies continue to reject non-active organizations.
 - The endpoint-agent cryptographic handshake, enrollment proof, key rotation, heartbeat authentication, and telemetry replay defense are Phase 08 requirements. No device is activated merely by provisioning, and these routes do not claim those Phase 08 controls are complete.
+
+
+## Authenticated endpoint-agent boundary (Phase 08)
+
+Alembic revision `0005_agent_dpop_identity` adds an enrolled public-key thumbprint, key-rotation timestamp, and the `agent_request_replays` table. The replay table has a unique proof identifier, tenant/device foreign-key ownership, expiry index, and forced PostgreSQL RLS.
+
+Aurontra is a resource server, not an identity provider. Endpoint agents must present a short-lived DPoP-bound access token issued by the Platform-approved identity provider. The token binds device subject and tenant to `cnf.jkt`; Aurontra verifies issuer, audience, JWKS signature, scopes, expiry, key thumbprint, per-request DPoP proof, request method/URI, access-token hash, and the Aurontra `bht` body-hash extension. The one-use proof identifier is stored in the tenant transaction and replay is rejected.
+
+- `POST /agent/v1/enroll` activates only a provisioned, unrevoked device after proof verification.
+- `POST /agent/v1/telemetry` requires the enrolled key thumbprint and the telemetry-write scope.
+- `POST /agent/v1/rotate-key` requires a Platform-issued rotation scope bound to the new key; it updates the thumbprint and rotation timestamp. The prior key then fails the enrolled-key comparison.
+- Private keys and credential issuance remain outside Aurontra. The Platform-approved issuer is responsible for workload principal provisioning and sender-constrained token issuance.
+- `AGENT_AUTH_ENABLED` defaults to false. Production requires HTTPS issuer/JWKS and a canonical HTTPS public origin. The product-wide data-plane gate remains closed until all subsystems pass release criteria.
