@@ -46,7 +46,26 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          "$RUNNER_TEMP/gitleaks/gitleaks" dir --redact --max-archive-depth=3 --timeout=300 .
+          report="$RUNNER_TEMP/gitleaks-dir-report.json"
+          set +e
+          "$RUNNER_TEMP/gitleaks/gitleaks" dir --redact --report-format json --report-path "$report" --max-archive-depth=3 --timeout=300 .
+          scan_status=$?
+          set -e
+          if [[ -s "$report" ]]; then
+            python - "$report" <<'PY'
+          import json, sys
+          with open(sys.argv[1], encoding="utf-8") as stream:
+              findings = json.load(stream)
+          for finding in findings:
+              print("Gitleaks finding: rule={rule} file={file} line={line} description={description}".format(
+                  rule=finding.get("RuleID", "unknown"),
+                  file=finding.get("File", "unknown"),
+                  line=finding.get("StartLine", "unknown"),
+                  description=finding.get("Description", "redacted"),
+              ))
+          PY
+          fi
+          exit "$scan_status"
 
       - name: Scan all reachable Git history and nested archives
         shell: bash
