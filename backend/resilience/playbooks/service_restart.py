@@ -10,13 +10,16 @@ class ServiceRestartPlaybook(BasePlaybook):
 
     async def execute(self, context: dict) -> dict:
         """Never call systemctl/sc from the API process."""
-        service_name = context.get("service_name", _DEFAULT_SERVICE)
-        approved_name = service_name in _SAFE_RESTARTABLE
+        service_name = context.get("service_name")
+        approved_name = isinstance(service_name, str) and service_name in _SAFE_RESTARTABLE
         result = self._base_result(
             context,
-            status="simulated" if approved_name else "approval_required",
+            status="simulated",
+            recommendation_state="candidate" if approved_name else "blocked",
             service_name=service_name,
-            actions_taken=[
+            service_name_source="caller_supplied_unverified" if service_name is not None else "not_provided",
+            actions_taken=[],
+            recommendations=[
                 "No service command was executed on the API host.",
                 "Service restart requires an authenticated endpoint agent and an explicit target policy.",
             ],
