@@ -178,3 +178,36 @@ async def test_outbox_retries_then_dead_letters_without_leaking_error_text():
         )
         assert dead.status == "dead_letter"
         assert dead.last_error_code == "connection_timeout"
+
+
+
+@pytest.mark.asyncio
+async def test_domain_write_and_outbox_event_share_transaction():
+    from models.ticket import Ticket, TicketPriority, TicketSource, TicketStatus
+
+    async with AsyncSessionLocal() as session:
+        ticket = Ticket(
+            id="outbox-atomic-ticket",
+            org_id="test-tenant",
+            title="Atomic event",
+            description="The outbox event must roll back with the domain write",
+            reporter_email="test@example.invalid",
+            source=TicketSource.MANUAL,
+            priority=TicketPriority.MEDIUM,
+            status=TicketStatus.OPEN,
+        )
+        session.add(ticket)
+        await session.flush()
+        await enqueue_outbox_event(
+            session, org_id="test-tenant", aggregate_type="ticket",
+            aggregate_id=ticket.id, event_type="ticket.created",
+            idempotency_key=f"ticket:{ticket.id}:created",
+            payload={"ticket_id": ticket.id},
+        )
+        await session.rollback()
+
+    async with AsyncSessionLocal() as session:
+        assert await session.get(Ticket, "outbox-atomic-ticket") is None
+        assert await session.scalar(
+            select(OutboxEvent).where(OutboxEvent.idempotency_key == "ticket:outbox-atomic-ticket:created")
+        ) is None
