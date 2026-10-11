@@ -150,7 +150,10 @@ def _normalize_signal(signal: dict) -> dict:
         "jitter": (0.0, 1.0),
     }
     for key, (minimum, maximum) in bounds.items():
-        if key not in normalized or normalized[key] is None:
+        if key not in normalized:
+            continue
+        if normalized[key] is None:
+            normalized.pop(key)
             continue
         value = normalized[key]
         if isinstance(value, bool) or not isinstance(value, Real) or not math.isfinite(float(value)):
@@ -165,7 +168,10 @@ def _normalize_signal(signal: dict) -> dict:
         "beacon_interval": (1, 86400),
     }
     for key, (minimum, maximum) in integer_bounds.items():
-        if key not in normalized or normalized[key] is None:
+        if key not in normalized:
+            continue
+        if normalized[key] is None:
+            normalized.pop(key)
             continue
         value = normalized[key]
         if isinstance(value, bool) or not isinstance(value, int):
