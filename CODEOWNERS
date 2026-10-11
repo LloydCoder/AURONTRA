@@ -1,0 +1,11 @@
+# Default review owner; keep aligned with the active maintainer roster.
+/* @LloydCoder
+
+# Security-sensitive code and workflows require owner review.
+/.github/ @LloydCoder
+/backend/core/auth.py @LloydCoder
+/backend/core/config.py @LloydCoder
+/backend/main.py @LloydCoder
+/backend/api/routes/agent.py @LloydCoder
+/backend/api/routes/automation.py @LloydCoder
+/backend/api/routes/threats.py @LloydCoder
