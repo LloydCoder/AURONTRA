@@ -1,0 +1,48 @@
+# Aurontra
+
+> Aurontra is a Tinlance ecosystem product for IT service operations, infrastructure resilience, risk assessment, and governed remediation workflows with auditable operational evidence.
+
+Aurontra consumes the Tinlance Agent System. It must not duplicate the Agent Platform's authority over identity, authorization, policy, approvals, secrets, sandboxing, execution, or authoritative evidence.
+
+## Important status and safety notes
+
+- Aurontra is not certified production-ready.
+- The production business data plane is gated.
+- Endpoint-agent authentication, governed remediation submission, and threat containment remain disabled by default or blocked on documented external release prerequisites.
+- CI success is not evidence of production deployment.
+- Threat scores are heuristics unless calibrated; predictive outputs have not been established as production-grade.
+- A planned or accepted action is not a verified business outcome.
+
+## Start here
+
+- [README](README.md): product scope, setup, tests, configuration, limitations.
+- [Documentation index](docs/README.md): documentation grouped by purpose.
+- [Architecture](docs/ARCHITECTURE.md): system boundaries, integration contract, persistence and security constraints.
+- [Roadmap](docs/ROADMAP.md): sequential phase plan and recorded acceptance status.
+- [Security baseline](docs/SECURITY_BASELINE.md): known risks, controls, and release gates.
+- [Contributing](CONTRIBUTING.md): development workflow and review expectations.
+- [Security policy](SECURITY.md): private vulnerability reporting.
+- [Support](SUPPORT.md): help channels and safe diagnostic information.
+
+## Architecture and implementation references
+
+- [Endpoint-agent identity — Phase 08](docs/PHASE_08_AGENT_IDENTITY.md)
+- [Governed action engine — Phase 09](docs/PHASE_09_GOVERNED_ACTION_ENGINE.md)
+- [Safe remediation playbooks — Phase 10](docs/PHASE_10_SAFE_REMEDIATION.md)
+- [Durable orchestration and recovery — Phase 11](docs/PHASE_11_ORCHESTRATION_RECOVERY.md)
+- [Telemetry evidence — Phase 12](docs/PHASE_12_TELEMETRY_EVIDENCE.md)
+- [Predictive evaluation — Phase 13](docs/PHASE_13_PREDICTIVE_EVALUATION.md)
+- [AI service desk — Phase 14](docs/PHASE_14_AI_SERVICE_DESK.md)
+- [Threat evidence — Phase 15](docs/PHASE_15_THREAT_EVIDENCE.md)
+- [Verified containment — Phase 16](docs/PHASE_16_VERIFIED_CONTAINMENT.md)
+- [Forensic audit records](docs/audits/)
+
+## Development
+
+Backend CI uses Python 3.12. The dependency manifest is backend/requirements.txt. CI is defined in .github/workflows/ci.yml; the current-tree and Git-history secret/archive scan is defined in .github/workflows/security.yml.
+
+Test-only commands may set AUTH_MODE=disabled, DATA_PLANE_ENABLED=true, and TEST_MODE=true for the test process. Never use those overrides to expose a deployed business API.
+
+## Licensing
+
+No root license file was found at the time this index was authored. Do not infer a license grant from public repository visibility. See [the licensing decision note](docs/LICENSING.md).
