@@ -82,6 +82,7 @@ class ResiliencePredictor:
         is_anomaly = prediction == -1 or hard_anomaly
         return {
             "is_anomaly": bool(is_anomaly),
+            "model_is_anomaly": bool(prediction == -1),
             "anomaly_score": round(anomaly_score, 4),
             # Retained for API compatibility; explicitly not a calibrated probability.
             "confidence": round(min(1.0, anomaly_score * 2.0), 3),
