@@ -8,7 +8,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -72,12 +72,12 @@ def _serialize(finding: ThreatFinding) -> dict:
 @router.get("/")
 async def threats_overview(request: Request, db: AsyncSession = Depends(get_tenant_db)):
     tenant_id = request.state.tenant_id
-    rows = (await db.scalars(select(ThreatFinding).where(
+    total_events = await db.scalar(select(func.count()).select_from(ThreatFinding).where(
         ThreatFinding.org_id == tenant_id
-    ))).all()
+    ))
     return {
         "status": "ok",
-        "total_events": len(rows),
+        "total_events": int(total_events or 0),
         "contained": 0,
         "containment_enabled": False,
         "note": "Detection and analysis do not establish successful containment.",
