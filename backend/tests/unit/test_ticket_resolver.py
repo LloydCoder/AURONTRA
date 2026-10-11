@@ -369,6 +369,26 @@ class TestTicketResolverSecurityControls:
         assert isinstance(json.loads(prompt), dict)
 
     @pytest.mark.asyncio
+    async def test_generated_response_redacts_emails_and_credentials(self):
+        from agents.ticket_resolver import resolve_ticket
+        with patch("agents.ticket_resolver.llm") as mock_llm:
+            mock_llm.complete = AsyncMock(return_value={
+                "text": "Contact alice@example.com and use api_key=super-secret-token to continue troubleshooting.",
+                "model": "test-model",
+                "layer": 1,
+            })
+            result = await resolve_ticket(
+                ticket_id="tkt-output-redaction",
+                title="VPN issue",
+                description="Cannot connect to VPN",
+                reporter_email="user@example.invalid",
+            )
+        assert "alice@example.com" not in result["response"]
+        assert "super-secret-token" not in result["response"]
+        assert "[REDACTED_EMAIL]" in result["response"]
+        assert "[REDACTED_CREDENTIAL]" in result["response"]
+
+    @pytest.mark.asyncio
     async def test_forged_knowledge_digest_never_reaches_llm(self):
         from agents.ticket_resolver import resolve_ticket
         with patch("agents.ticket_resolver.llm") as mock_llm:
