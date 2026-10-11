@@ -53,6 +53,8 @@ def evaluate_anomaly_detector(
     n_estimators: int = 100,
 ) -> dict:
     """Train on a baseline set and evaluate on separate, labeled holdout samples."""
+    if not isinstance(training_baseline, list) or len(training_baseline) < 5:
+        raise ValueError("training_baseline must contain at least five valid baseline samples.")
     if not isinstance(label_source, str) or not label_source.strip():
         raise ValueError("label_source is required for evaluation provenance.")
     if not isinstance(split_strategy, str) or not split_strategy.strip():
