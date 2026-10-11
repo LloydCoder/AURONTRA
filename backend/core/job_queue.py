@@ -30,6 +30,12 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _utc(value: datetime) -> datetime:
+    # SQLite does not preserve timezone metadata for DateTime(timezone=True).
+    # Normalize values read from any supported backend before Python comparison.
+    return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
+
+
 def _canonical_hash(value: Any) -> str:
     encoded = json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
@@ -169,7 +175,7 @@ async def claim_jobs(
 def _assert_lease(job: DurableJob, worker_id: str, now: datetime) -> None:
     if job.status != "running" or job.lease_owner != worker_id:
         raise JobLeaseLost("Worker does not own the active job lease.")
-    if job.lease_expires_at is None or job.lease_expires_at <= now:
+    if job.lease_expires_at is None or _utc(job.lease_expires_at) <= now:
         raise JobLeaseLost("Job lease expired; worker must not commit a result.")
 
 
@@ -373,7 +379,7 @@ async def mark_outbox_published(
     )
     if event is None:
         raise LookupError("Outbox event not found.")
-    if event.status != "publishing" or event.lease_owner != worker_id or not event.lease_expires_at or event.lease_expires_at <= now:
+    if event.status != "publishing" or event.lease_owner != worker_id or not event.lease_expires_at or _utc(event.lease_expires_at) <= now:
         raise JobLeaseLost("Worker does not own the active outbox lease.")
     event.status = "published"
     event.published_at = now
