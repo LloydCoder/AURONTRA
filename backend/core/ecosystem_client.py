@@ -127,7 +127,7 @@ async def request_json(
     idempotency_key: str | None = None,
     traceparent: str | None = None,
     correlation_id: str | None = None,
-    identity_context: TSICIdentityContext | dict[str, Any] | None = None,
+    identity_context: TSICIdentityContext | None = None,
     timeout_seconds: float | None = None,
     transport: httpx.AsyncBaseTransport | None = None,
 ) -> Any:
@@ -150,13 +150,9 @@ async def request_json(
 
     verified_context: TSICIdentityContext | None = None
     if identity_context is not None:
-        try:
-            verified_context = (
-                identity_context if isinstance(identity_context, TSICIdentityContext)
-                else TSICIdentityContext.model_validate(identity_context)
-            )
-        except (ValidationError, TypeError, ValueError):
-            raise EcosystemIntegrationError("bridge_identity_context_invalid", 400) from None
+        if not isinstance(identity_context, TSICIdentityContext):
+            raise EcosystemIntegrationError("bridge_identity_context_invalid", 400)
+        verified_context = identity_context
     elif path not in {"/health", "/health/live"}:
         raise EcosystemIntegrationError("bridge_identity_context_missing", 503)
 
