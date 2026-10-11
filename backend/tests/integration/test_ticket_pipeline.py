@@ -125,3 +125,33 @@ class TestTicketIngestionAPI:
         data = r.json()
         assert "resilience" in data
         assert data["resilience"]["score"] >= 80
+
+
+
+@pytest.mark.asyncio
+async def test_ticket_ingestion_commits_a_tenant_scoped_outbox_event():
+    from sqlalchemy import select
+    from core.database import AsyncSessionLocal
+    from models.durable_job import OutboxEvent
+
+    from main import app
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post("/tickets/ingest", json={
+            "title": "Outbox integration regression",
+            "description": "Ticket and event must be committed together",
+            "reporter_email": "outbox@example.invalid",
+        })
+    assert response.status_code == 201
+    ticket_id = response.json()["ticket"]["id"]
+
+    async with AsyncSessionLocal() as db:
+        event = await db.scalar(
+            select(OutboxEvent).where(
+                OutboxEvent.org_id == "test-tenant",
+                OutboxEvent.aggregate_id == ticket_id,
+                OutboxEvent.event_type == "ticket.created",
+            )
+        )
+        assert event is not None
+        assert event.status == "pending"
+        assert event.payload == {"ticket_id": ticket_id, "source": "MANUAL"}
