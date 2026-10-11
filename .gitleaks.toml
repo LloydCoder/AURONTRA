@@ -18,3 +18,15 @@ paths = [
   '''backend/models/threat_finding\.py''',
   '''backend/api/routes/threats\.py''',
 ]
+
+
+# Historical false positive from the empty example variable before it was renamed.
+# The exception applies only to that exact empty assignment in .env.example and
+# only to Gitleaks' generic-api-key rule; active configuration uses a new name.
+[[allowlists]]
+description = "Historical empty verifier config variable false positive"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+regexes = ['''THREAT_VERIFIER_HMAC_KEYS_JSON=''']
+paths = ['''\.env\.example''']
