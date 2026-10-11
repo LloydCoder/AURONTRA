@@ -328,7 +328,7 @@ async def resolve_ticket(
                 system=_TICKET_SYSTEM_PROMPT,
                 max_tokens=512,
             ),
-            timeout=max(1.0, min(float(settings.LLM_REQUEST_TIMEOUT_SECONDS), 120.0)),
+            timeout=max(0.01, min(float(settings.LLM_REQUEST_TIMEOUT_SECONDS), 120.0)),
         )
     except asyncio.TimeoutError:
         return _escalation_result(base, "llm_timeout", "Automated drafting timed out. A human support agent must review this ticket.")
