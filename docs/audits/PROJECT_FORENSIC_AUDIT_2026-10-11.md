@@ -66,7 +66,7 @@ The original CI had dependency consistency checks but no resolved-package vulner
 
 ### F-10 — TSIC trace-context contract version drift
 
-The TSIC contract registry listed `trace-context` as `1.0.0`, while `contracts/telemetry/trace-context.json` declares `schema_version: 1.1.0`. This is a cross-system compatibility defect. TSIC PR #54 updates the registry to `1.1.0` and pins the Aurontra adapter's per-contract versions. The change remains pending final workflow completion and review. Aurontra's shared client now emits a semver contract header and propagates validated W3C trace context, with regression tests.
+The TSIC contract registry listed `trace-context` as `1.0.0`, while `contracts/telemetry/trace-context.json` declares `schema_version: 1.1.0`. This is a cross-system compatibility defect. TSIC PR #54 updates the registry to `1.1.0` and pins the Aurontra adapter's per-contract versions. TSIC PR #54 merged as `619db9e264cdc71369de621c981bfc2ba1615a1d` after all 32 associated workflows passed on the reviewed candidate. The registry and Aurontra adapter now agree on trace-context `1.1.0`. Aurontra's shared client emits a semver contract header and propagates validated W3C trace context, with regression tests; live end-to-end propagation remains unverified.
 
 ## Security and architecture invariants
 
