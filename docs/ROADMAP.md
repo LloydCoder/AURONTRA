@@ -17,7 +17,7 @@ Phases are sequential release gates. A phase is complete only after implementati
 | 09 | Governed action engine | Official Platform SDK/TSIC contracts, pinned reviewed dependency, policy/approval/evidence contract tests, no local execution authority | **Complete — PR #4 merged at `90b8760560b7efb773861e0297c86235638a014a`; 325 passed, 1 skipped; 84.08% coverage; PostgreSQL RLS/restore and secret/history/archive scan green; post-merge main CI green; deployment skipped** |
 | 10 | Safe remediation playbooks | Allowlist, least privilege, bounded Platform submission, postcondition verification contract and adversarial tests | **Complete at code/CI level — PR #6; 371 passed, 1 skipped, 84.79% coverage; PostgreSQL RLS/restore and secret/history/archive scans green. Public execution remains disabled pending exact Platform tool registration and a concrete tenant-scoped verifier.** |
 | 11 | Orchestration recovery | Durable action intents, crash/retry/duplicate/partial-failure recovery, leases, reconciliation and outbox integration | **Complete at code/CI level — PR #7; 382 passed, 1 skipped, 84.93% coverage; PostgreSQL RLS/backup-restore and secret/history/archive scans green. No production worker or live action is claimed.** |
-| 12 | Telemetry pipeline | Provenance, freshness, schema, missing-data and retention tests | **Next — Phase 11 code and forensic audit complete; evidence-source integration remains a release prerequisite** |
+| 12 | Telemetry pipeline | Provenance, freshness, schema, missing-data and retention tests | **Implementation in CI validation — durable telemetry evidence, DPoP replay/idempotency, freshness, ordering, partial-data safeguards, tenant RLS and bounded retention primitive; production collector and scheduler remain disabled/release-gated** |
 | 13 | Predictive resilience evaluation | Reproducible labeled benchmark and model-quality report | Not started |
 | 14 | AI service desk and retrieval | Prompt-injection, privacy, escalation, timeout and output validation tests | Not started |
 | 15 | Threat detection evidence pipeline | Reproducible dataset, calibrated metrics and finding provenance | Not started |
@@ -37,6 +37,15 @@ Phases are sequential release gates. A phase is complete only after implementati
 - Internal submission service maps only four code-owned action contracts to the official Platform SDK adapter. Submission is disabled by default, requires verified target/context agreement, a valid unmodified plan, and an independent postcondition verifier. Platform approval-pending and incomplete states are never promoted to success.
 - No public automation route is connected to the service. Exact Platform tool registrations are not confirmed, and no concrete tenant-scoped postcondition verifier is configured. The production data plane remains closed.
 - Phase 10 CI: [run 38101939727](https://github.com/LloydCoder/AURONTRA/actions/runs/38101939727) — 371 passed, 1 skipped, 84.79% coverage; PostgreSQL RLS/backup-restore passed. [Secret/history/archive scan](https://github.com/LloydCoder/AURONTRA/actions/runs/38101939719) passed. Deployment was skipped; no production runtime was exercised.
+
+## Phase 12 implementation evidence
+
+- Revision `0007_telemetry_evidence` adds durable telemetry evidence with tenant/device foreign keys, per-tenant event idempotency, DPoP proof uniqueness, request/payload hashes, metric completeness, quality flags, scoring status and retention expiry.
+- Ingestion validates the strict schema, timestamp bounds, enrolled device/key, scoped DPoP identity and event idempotency; the telemetry row and `telemetry.accepted` outbox event share the request transaction.
+- Out-of-order samples are retained as evidence but cannot overwrite current state. Partial CPU/memory/disk samples have no composite score and cannot overwrite the trusted device score.
+- The retention primitive is tenant-bound and batch-limited. No production retention scheduler or event consumer is configured.
+- The [Phase 12 design](PHASE_12_TELEMETRY_EVIDENCE.md) documents semantics and residual release gates. The phase-specific forensic audit will record the exact tested commit and CI results after all checks pass.
+- Production remains closed pending real identity-provider configuration, agent release/signing, scheduled retention, evidence consumers, observability and customer-environment validation.
 
 ## Phase 11 implementation evidence
 
