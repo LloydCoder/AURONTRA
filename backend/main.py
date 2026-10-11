@@ -17,7 +17,7 @@ import models  # noqa: F401 — register SQLAlchemy models before metadata creat
 from api.routes import (
     health, tickets, devices, resilience,
     automation, threats, billing, reports,
-    onboarding, kb, sla, organizations,
+    onboarding, kb, sla, organizations, agent,
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -61,8 +61,18 @@ async def enforce_auth_and_data_plane(request: Request, call_next):
         return JSONResponse(status_code=503, content={"detail": "Test mode is forbidden in production.", "code": "PRODUCTION_TEST_MODE_FORBIDDEN"})
     if settings.ENVIRONMENT.lower() == "production" and settings.AUTH_MODE == "disabled":
         return JSONResponse(status_code=503, content={"detail": "Authentication cannot be disabled in production.", "code": "PRODUCTION_AUTH_REQUIRED"})
+    agent_endpoint = path.startswith("/agent/v1/")
+    if agent_endpoint:
+        if not settings.AGENT_AUTH_ENABLED:
+            return JSONResponse(status_code=503, content={"detail": "Endpoint-agent authentication is disabled.", "code": "AGENT_AUTH_DISABLED"})
+        if not (settings.AGENT_JWKS_URL and settings.AGENT_JWT_ISSUER and settings.AGENT_JWT_AUDIENCE):
+            return JSONResponse(status_code=503, content={"detail": "Agent identity provider is not configured.", "code": "AGENT_IDENTITY_NOT_CONFIGURED"})
+        if settings.ENVIRONMENT.lower() == "production":
+            agent_origin = urlparse(settings.AGENT_PUBLIC_ORIGIN)
+            if agent_origin.scheme != "https" or not agent_origin.hostname or agent_origin.username or agent_origin.password or agent_origin.path not in {"", "/"} or agent_origin.query or agent_origin.fragment:
+                return JSONResponse(status_code=503, content={"detail": "Production agent public origin must be a canonical HTTPS origin.", "code": "AGENT_ORIGIN_INVALID"})
     signature_only = path == "/billing/webhook"
-    if settings.AUTH_MODE != "disabled" and not signature_only:
+    if settings.AUTH_MODE != "disabled" and not signature_only and not agent_endpoint:
         if not (settings.JWT_JWKS_URL and settings.JWT_ISSUER and settings.JWT_AUDIENCE):
             return JSONResponse(status_code=503, content={"detail": "Business API unavailable: authentication provider is not configured.", "code": "AUTH_PROVIDER_NOT_CONFIGURED"})
         if settings.ENVIRONMENT.lower() == "production":
@@ -104,7 +114,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=[
-        "Authorization", "Content-Type", "X-Request-ID",
+        "Authorization", "Content-Type", "X-Request-ID", "DPoP", "X-Aurontra-Agent-Version",
         "X-Tinlance-API-Version", "Idempotency-Key", "traceparent",
     ],
 )
@@ -122,6 +132,7 @@ app.include_router(billing.router,     prefix="/billing",     tags=["billing"])
 app.include_router(reports.router,     prefix="/reports",     tags=["reports"])
 app.include_router(onboarding.router,  prefix="/onboarding",  tags=["onboarding"])
 app.include_router(organizations.router, prefix="/organizations", tags=["organizations"])
+app.include_router(agent.router, prefix="/agent/v1", tags=["endpoint-agent"])
 
 # Gap fills
 app.include_router(kb.router,          prefix="/kb",          tags=["knowledge-base"])
