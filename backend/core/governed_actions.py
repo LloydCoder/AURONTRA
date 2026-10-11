@@ -374,7 +374,7 @@ class PlatformGovernedActionExecutor:
             )
             raise GovernedActionError(
                 "platform_transport_error",
-                retryable=False,
+                retryable=True,
                 run_id=run_id,
             ) from None
         except SdkError as exc:
@@ -407,6 +407,6 @@ class PlatformGovernedActionExecutor:
             )
             raise GovernedActionError(
                 "platform_unavailable",
-                retryable=True,
+                retryable=False,
                 run_id=run_id,
             ) from None
