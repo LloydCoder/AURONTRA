@@ -44,6 +44,13 @@ class TSICIdentityContext(BaseModel):
             raise ValueError("identity context identifier is invalid")
         return value
 
+    @field_validator("agent_id", "service_id", "causation_id")
+    @classmethod
+    def optional_identifiers_must_be_safe(cls, value: str | None) -> str | None:
+        if value is not None and not _SAFE_ID_RE.fullmatch(value):
+            raise ValueError("optional identity context identifier is invalid")
+        return value
+
     @field_validator("trace_id")
     @classmethod
     def trace_id_must_be_valid(cls, value: str) -> str:
