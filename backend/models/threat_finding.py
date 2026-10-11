@@ -12,6 +12,7 @@ class ThreatFinding(Base):
         UniqueConstraint("org_id", "event_id", name="uq_threat_findings_org_event"),
         UniqueConstraint("org_id", "id", name="uq_threat_findings_org_id_id"),
         ForeignKeyConstraint(["org_id", "device_id"], ["devices.org_id", "devices.id"], name="fk_threat_findings_org_device", ondelete="RESTRICT"),
+        ForeignKeyConstraint(["org_id", "telemetry_record_id"], ["telemetry_records.org_id", "telemetry_records.id"], name="fk_threat_findings_org_telemetry", ondelete="RESTRICT"),
         CheckConstraint("score >= 0 AND score <= 100", name="ck_threat_findings_score_range"),
         CheckConstraint(
             "threat_level IN ('info', 'low', 'medium', 'high', 'critical')",
@@ -30,6 +31,7 @@ class ThreatFinding(Base):
     org_id = Column(String(64), ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False)
     event_id = Column(String(128), nullable=False)
     device_id = Column(String(128), nullable=True)
+    telemetry_record_id = Column(String(36), nullable=True)
     source = Column(String(32), nullable=False, default="network_signal", server_default="network_signal")
     detector_version = Column(String(64), nullable=False)
     observed_at = Column(DateTime(timezone=True), nullable=False)
