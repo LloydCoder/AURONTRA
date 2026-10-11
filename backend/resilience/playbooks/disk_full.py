@@ -12,7 +12,9 @@ class DiskFullPlaybook(BasePlaybook):
             context,
             status="simulated",
             disk_percent_before=disk_pct,
-            actions_taken=[
+            disk_percent_source="caller_supplied_unverified" if disk_pct is not None else "not_provided",
+            actions_taken=[],
+            recommendations=[
                 "No filesystem changes were made.",
                 "Cleanup requires an authenticated endpoint agent and an explicit app-owned path allowlist.",
                 "Recommendation: inspect filesystem usage and propose cleanup candidates for approval.",
