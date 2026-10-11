@@ -90,8 +90,8 @@ async def test_rls_scopes_organization_and_device_rows_and_rejects_cross_tenant_
         )
         await admin.execute(
             "INSERT INTO threat_findings (id, org_id, event_id, source, detector_version, observed_at, signal_sha256, signal, assessment, score, threat_level, mitre_ttp, decision_status, containment_verified) "
-            "VALUES ($1, $2, $1, 'api_signal', 'threat-heuristic.v2', now(), repeat('a', 64), '{}'::jsonb, '{}'::jsonb, 70, 'high', 'T1071', 'assessed', false), "
-            "($3, $4, $3, 'api_signal', 'threat-heuristic.v2', now(), repeat('b', 64), '{}'::jsonb, '{}'::jsonb, 20, 'low', 'T1071', 'assessed', false)",
+            "VALUES ($1, $2, $1, 'network_signal', 'threat-heuristic.v2', now(), repeat('a', 64), '{}'::jsonb, '{}'::jsonb, 70, 'high', 'T1071', 'assessed', false), "
+            "($3, $4, $3, 'network_signal', 'threat-heuristic.v2', now(), repeat('b', 64), '{}'::jsonb, '{}'::jsonb, 20, 'low', 'T1071', 'assessed', false)",
             threat_a, org_a, threat_b, org_b,
         )
         await admin.execute(
@@ -188,7 +188,7 @@ async def test_rls_scopes_organization_and_device_rows_and_rejects_cross_tenant_
         with pytest.raises(asyncpg.InsufficientPrivilegeError):
             await app.execute(
                 "INSERT INTO threat_findings (id, org_id, event_id, source, detector_version, observed_at, signal_sha256, signal, assessment, score, threat_level, mitre_ttp, decision_status, containment_verified) "
-                "VALUES ($1, $2, $1, 'api_signal', 'threat-heuristic.v2', now(), repeat('c', 64), '{}'::jsonb, '{}'::jsonb, 70, 'high', 'T1071', 'assessed', false)",
+                "VALUES ($1, $2, $1, 'network_signal', 'threat-heuristic.v2', now(), repeat('c', 64), '{}'::jsonb, '{}'::jsonb, 70, 'high', 'T1071', 'assessed', false)",
                 f"forbidden-threat-{suffix}", org_b,
             )
         with pytest.raises(asyncpg.InsufficientPrivilegeError):
