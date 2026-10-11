@@ -3,9 +3,10 @@
 **Result:** Phase 10 accepted at repository/CI level after the 2026-10-11 follow-up audit. Production remediation remains disabled.  
 **PR:** [#6 — Phase 10: add safe deterministic remediation planner](https://github.com/LloydCoder/AURONTRA/pull/6)  
 **Original audited head:** `aa40ac0cc7779fe4522ace7a9bc2979c7aa7ef49`  
-**Follow-up audit baseline:** `9685e413ac1be3529d118eec65d290637d24cb3a`  
-**CI:** [Run 38101939727](https://github.com/LloydCoder/AURONTRA/actions/runs/38101939727)  
-**Secret/history/archive scan:** [Run 38101939719](https://github.com/LloydCoder/AURONTRA/actions/runs/38101939719)
+**Follow-up implementation audit SHA:** `8fe28b3ba661f1287699e76984546b7b31884019`  
+**Original Phase 10 CI:** [Run 38101939727](https://github.com/LloydCoder/AURONTRA/actions/runs/38101939727)  
+**Follow-up PR CI:** [Run 38120645677](https://github.com/LloydCoder/AURONTRA/actions/runs/38120645677)  
+**Follow-up secret/archive scan:** [Run 38120645640](https://github.com/LloydCoder/AURONTRA/actions/runs/38120645640)
 
 ## Follow-up forensic finding (2026-10-11)
 
@@ -13,10 +14,10 @@ PR [#8](https://github.com/LloydCoder/AURONTRA/pull/8) was closed as superseded.
 
 ## CI evidence
 
-- Follow-up backend suite: **488 passed, 1 skipped**, **84.85% total coverage**; configured 60% minimum passed. [CI run 38120377781](https://github.com/LloydCoder/AURONTRA/actions/runs/38120377781).
+- Follow-up backend suite: **488 passed, 1 skipped**, **84.85% total coverage**; configured 60% minimum passed. [PR CI run 38120645677](https://github.com/LloydCoder/AURONTRA/actions/runs/38120645677).
 - Dependency validation, clean SQLite Alembic migration, backend compilation and full tests passed.
 - PostgreSQL migrations, non-owner tenant RLS tests and backup/restore smoke test passed.
-- Secret/archive scan passed: [run 38120377788](https://github.com/LloydCoder/AURONTRA/actions/runs/38120377788).
+- Secret/archive scan passed: [PR run 38120645640](https://github.com/LloydCoder/AURONTRA/actions/runs/38120645640).
 - Production deployment was **skipped by configuration**. No live Platform tool, endpoint, production database, or customer action was exercised.
 
 ## Code and security review
@@ -26,7 +27,7 @@ PR [#8](https://github.com/LloydCoder/AURONTRA/pull/8) was closed as superseded.
 3. **Freshness and numeric checks:** evidence older than five minutes or more than one minute in the future is blocked. Metrics reject booleans, strings, NaN, infinity and out-of-range values.
 4. **Allowlisting:** unknown playbooks fail closed. Service restarts are limited to the code-owned service set. Certificate renewal rejects URLs, localhost and malformed domains, requires a domain-ownership evidence reference, and performs no DNS/TLS probing.
 5. **Bounded parameters:** only known parameters are copied into a plan. Unknown fields, shell commands, secrets and arbitrary request content do not flow to the Platform action request.
-6. **Risk and approval metadata:** disk cleanup candidate review and certificate renewal are marked high risk/non-reversible as appropriate; service restart is high risk and approval-required; high-CPU remediation is read-only diagnostics. These local labels are descriptive only; the Platform remains authoritative for policy and approvals.
+6. **Risk and approval metadata:** disk cleanup candidate review and certificate renewal are marked high risk/non-reversible as appropriate; service restart is high risk and approval-required; high-CPU remediation is recommendation-only; no diagnostics collection occurs. These local labels are descriptive only; the Platform remains authoritative for policy and approvals.
 7. **Gated submission:** `RemediationService` is disabled by `REMEDIATION_SUBMISSION_ENABLED=false` by default and also requires Platform integration to be enabled. It checks tenant/device/actor/evidence agreement, reconstructs the plan to detect mutation and stale evidence, uses stable plan UUIDs for idempotency, and submits only allowlisted action keys through the official SDK adapter.
 8. **No local fallback:** failures do not fall back to local `subprocess`, `systemctl`, Certbot, filesystem cleanup or process reprioritization.
 9. **Approval and state semantics:** waiting-approval or non-completed Platform states do not call the postcondition verifier and are not promoted to success.
