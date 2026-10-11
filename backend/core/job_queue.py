@@ -42,10 +42,12 @@ def _canonical_hash(value: Any) -> str:
 
 
 def _safe_error_code(value: str) -> str:
-    # Persist stable machine-readable codes, never exception messages, prompts,
-    # tokens, ticket text, URLs or other potentially sensitive provider output.
-    normalized = re.sub(r"[^a-zA-Z0-9_.-]", "_", value)[:100]
-    return normalized or "worker_error"
+    # Accept only a short, pre-normalized machine code. Never transform an
+    # arbitrary exception string into a "safe" value because it may contain
+    # credentials, PII, prompts, URLs or provider response fragments.
+    if isinstance(value, str) and re.fullmatch(r"[a-z][a-z0-9_.-]{0,99}", value):
+        return value
+    return "worker_error"
 
 
 async def enqueue_job(
@@ -425,7 +427,7 @@ async def fail_outbox_event(
     )
     if event is None:
         raise LookupError("Outbox event not found.")
-    if event.status != "publishing" or event.lease_owner != worker_id or not event.lease_expires_at or event.lease_expires_at <= now:
+    if event.status != "publishing" or event.lease_owner != worker_id or not event.lease_expires_at or _utc(event.lease_expires_at) <= now:
         raise JobLeaseLost("Worker does not own the active outbox lease.")
     event.last_error_code = _safe_error_code(error_code)
     event.lease_owner = None
