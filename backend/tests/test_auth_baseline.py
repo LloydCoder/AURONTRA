@@ -242,3 +242,21 @@ async def test_tenant_db_dependency_requires_verified_tenant_outside_test_mode(m
     with pytest.raises(HTTPException) as exc:
         await anext(dependency)
     assert exc.value.status_code == 401
+
+
+def test_device_and_organization_lifecycle_operations_require_admin():
+    from core.auth import AuthorizationDenied, authorize_claims
+
+    member = {"sub": "user_member", "org_id": "org_1", "org_role": "org:member"}
+    for method, path in (
+        ("POST", "/devices/provision"),
+        ("POST", "/devices/device-1/revoke"),
+        ("POST", "/organizations/offboard"),
+    ):
+        with pytest.raises(AuthorizationDenied):
+            authorize_claims(member, method, path)
+
+    admin = {"sub": "user_admin", "org_id": "org_1", "org_role": "org:admin"}
+    assert authorize_claims(admin, "POST", "/devices/provision")["tenant_id"] == "org_1"
+    assert authorize_claims(admin, "POST", "/devices/device-1/revoke")["tenant_id"] == "org_1"
+    assert authorize_claims(admin, "POST", "/organizations/offboard")["tenant_id"] == "org_1"
