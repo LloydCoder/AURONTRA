@@ -10,6 +10,7 @@ import jwt
 import pytest
 from cryptography.hazmat.primitives.asymmetric import ec
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import select
 
 from core import agent_auth
 from core.config import settings
@@ -43,8 +44,8 @@ def _telemetry_payload(*, event_id=None, observed_at=None, **metrics):
     }
 
 
-def _headers(monkeypatch, *, device_id, tenant_id, scope, path, body, device_key=None):
-    issuer_key = ec.generate_private_key(ec.SECP256R1())
+def _headers(monkeypatch, *, device_id, tenant_id, scope, path, body, device_key=None, issuer_key=None):
+    issuer_key = issuer_key or ec.generate_private_key(ec.SECP256R1())
     client_key = device_key or ec.generate_private_key(ec.SECP256R1())
     jwk = _jwk(client_key)
     thumbprint = agent_auth.jwk_thumbprint(jwk)
@@ -315,6 +316,7 @@ async def test_platform_scoped_key_rotation_rebinds_device_and_rejects_old_key(m
 async def test_telemetry_persists_provenance_and_duplicate_event_is_idempotent(monkeypatch):
     device_id = "telemetry-durable-01"
     key = ec.generate_private_key(ec.SECP256R1())
+    issuer_key = ec.generate_private_key(ec.SECP256R1())
     thumbprint = agent_auth.jwk_thumbprint(_jwk(key))
     async with AsyncSessionLocal() as db:
         db.add(Device(
@@ -327,9 +329,9 @@ async def test_telemetry_persists_provenance_and_duplicate_event_is_idempotent(m
     payload = _telemetry_payload(cpu_percent=22.0, memory_percent=41.0, disk_percent=58.0, process_count=12, platform="Linux")
     body = _body(payload)
     headers1, _ = _headers(monkeypatch, device_id=device_id, tenant_id="test-tenant",
-        scope="aurontra:telemetry:write", path="/agent/v1/telemetry", body=body, device_key=key)
+        scope="aurontra:telemetry:write", path="/agent/v1/telemetry", body=body, device_key=key, issuer_key=issuer_key)
     headers2, _ = _headers(monkeypatch, device_id=device_id, tenant_id="test-tenant",
-        scope="aurontra:telemetry:write", path="/agent/v1/telemetry", body=body, device_key=key)
+        scope="aurontra:telemetry:write", path="/agent/v1/telemetry", body=body, device_key=key, issuer_key=issuer_key)
     async with await _client() as client:
         first = await client.post("/agent/v1/telemetry", content=body, headers=headers1)
         duplicate = await client.post("/agent/v1/telemetry", content=body, headers=headers2)
@@ -361,6 +363,7 @@ async def test_telemetry_persists_provenance_and_duplicate_event_is_idempotent(m
 async def test_same_telemetry_event_id_with_changed_content_returns_409_and_consumes_proof(monkeypatch):
     device_id = "telemetry-conflict-01"
     key = ec.generate_private_key(ec.SECP256R1())
+    issuer_key = ec.generate_private_key(ec.SECP256R1())
     thumbprint = agent_auth.jwk_thumbprint(_jwk(key))
     async with AsyncSessionLocal() as db:
         db.add(Device(
@@ -374,9 +377,9 @@ async def test_same_telemetry_event_id_with_changed_content_returns_409_and_cons
     body1 = _body(_telemetry_payload(event_id=event_id, observed_at=timestamp, cpu_percent=10.0))
     body2 = _body(_telemetry_payload(event_id=event_id, observed_at=timestamp, cpu_percent=99.0))
     headers1, _ = _headers(monkeypatch, device_id=device_id, tenant_id="test-tenant",
-        scope="aurontra:telemetry:write", path="/agent/v1/telemetry", body=body1, device_key=key)
+        scope="aurontra:telemetry:write", path="/agent/v1/telemetry", body=body1, device_key=key, issuer_key=issuer_key)
     headers2, _ = _headers(monkeypatch, device_id=device_id, tenant_id="test-tenant",
-        scope="aurontra:telemetry:write", path="/agent/v1/telemetry", body=body2, device_key=key)
+        scope="aurontra:telemetry:write", path="/agent/v1/telemetry", body=body2, device_key=key, issuer_key=issuer_key)
     async with await _client() as client:
         first = await client.post("/agent/v1/telemetry", content=body1, headers=headers1)
         conflict = await client.post("/agent/v1/telemetry", content=body2, headers=headers2)
@@ -397,6 +400,7 @@ async def test_same_telemetry_event_id_with_changed_content_returns_409_and_cons
 async def test_stale_and_future_telemetry_timestamps_are_rejected(monkeypatch):
     device_id = "telemetry-time-boundary"
     key = ec.generate_private_key(ec.SECP256R1())
+    issuer_key = ec.generate_private_key(ec.SECP256R1())
     thumbprint = agent_auth.jwk_thumbprint(_jwk(key))
     async with AsyncSessionLocal() as db:
         db.add(Device(
@@ -414,7 +418,7 @@ async def test_stale_and_future_telemetry_timestamps_are_rejected(monkeypatch):
     async with await _client() as client:
         for body in bodies:
             headers, _ = _headers(monkeypatch, device_id=device_id, tenant_id="test-tenant",
-                scope="aurontra:telemetry:write", path="/agent/v1/telemetry", body=body, device_key=key)
+                scope="aurontra:telemetry:write", path="/agent/v1/telemetry", body=body, device_key=key, issuer_key=issuer_key)
             responses.append(await client.post("/agent/v1/telemetry", content=body, headers=headers))
     assert [response.status_code for response in responses] == [422, 422]
     async with AsyncSessionLocal() as db:
@@ -425,6 +429,7 @@ async def test_stale_and_future_telemetry_timestamps_are_rejected(monkeypatch):
 async def test_out_of_order_telemetry_is_stored_but_does_not_overwrite_current_score(monkeypatch):
     device_id = "telemetry-out-of-order"
     key = ec.generate_private_key(ec.SECP256R1())
+    issuer_key = ec.generate_private_key(ec.SECP256R1())
     thumbprint = agent_auth.jwk_thumbprint(_jwk(key))
     async with AsyncSessionLocal() as db:
         db.add(Device(
@@ -437,9 +442,9 @@ async def test_out_of_order_telemetry_is_stored_but_does_not_overwrite_current_s
     first_body = _body(_telemetry_payload(observed_at=now - timedelta(seconds=10), cpu_percent=10.0, memory_percent=20.0, disk_percent=30.0))
     older_body = _body(_telemetry_payload(observed_at=now - timedelta(seconds=20), cpu_percent=98.0, memory_percent=99.0, disk_percent=99.0))
     headers1, _ = _headers(monkeypatch, device_id=device_id, tenant_id="test-tenant",
-        scope="aurontra:telemetry:write", path="/agent/v1/telemetry", body=first_body, device_key=key)
+        scope="aurontra:telemetry:write", path="/agent/v1/telemetry", body=first_body, device_key=key, issuer_key=issuer_key)
     headers2, _ = _headers(monkeypatch, device_id=device_id, tenant_id="test-tenant",
-        scope="aurontra:telemetry:write", path="/agent/v1/telemetry", body=older_body, device_key=key)
+        scope="aurontra:telemetry:write", path="/agent/v1/telemetry", body=older_body, device_key=key, issuer_key=issuer_key)
     async with await _client() as client:
         first = await client.post("/agent/v1/telemetry", content=first_body, headers=headers1)
         older = await client.post("/agent/v1/telemetry", content=older_body, headers=headers2)
@@ -533,6 +538,7 @@ async def test_partial_telemetry_is_evidence_only_and_cannot_overwrite_resilienc
 async def test_telemetry_rate_limit_bounds_device_ingestion_and_consumes_rejected_proof(monkeypatch):
     device_id = "telemetry-rate-limited"
     key = ec.generate_private_key(ec.SECP256R1())
+    issuer_key = ec.generate_private_key(ec.SECP256R1())
     thumbprint = agent_auth.jwk_thumbprint(_jwk(key))
     monkeypatch.setattr(settings, "TELEMETRY_MAX_EVENTS_PER_MINUTE", 1)
     async with AsyncSessionLocal() as db:
@@ -546,9 +552,9 @@ async def test_telemetry_rate_limit_bounds_device_ingestion_and_consumes_rejecte
     body1 = _body(_telemetry_payload(cpu_percent=20.0, memory_percent=30.0, disk_percent=40.0))
     body2 = _body(_telemetry_payload(cpu_percent=21.0, memory_percent=31.0, disk_percent=41.0))
     headers1, _ = _headers(monkeypatch, device_id=device_id, tenant_id="test-tenant",
-        scope="aurontra:telemetry:write", path="/agent/v1/telemetry", body=body1, device_key=key)
+        scope="aurontra:telemetry:write", path="/agent/v1/telemetry", body=body1, device_key=key, issuer_key=issuer_key)
     headers2, _ = _headers(monkeypatch, device_id=device_id, tenant_id="test-tenant",
-        scope="aurontra:telemetry:write", path="/agent/v1/telemetry", body=body2, device_key=key)
+        scope="aurontra:telemetry:write", path="/agent/v1/telemetry", body=body2, device_key=key, issuer_key=issuer_key)
     async with await _client() as client:
         first = await client.post("/agent/v1/telemetry", content=body1, headers=headers1)
         limited = await client.post("/agent/v1/telemetry", content=body2, headers=headers2)
