@@ -319,7 +319,17 @@ async def block_threat(
         "entropy": tf_result.get("entropy", 0),
         **(additional_context or {}),
     }
-    assessment = analyse_signal(signal)
+    try:
+        assessment = analyse_signal(signal)
+    except (TypeError, ValueError, OverflowError):
+        base.update({
+            "status": "analysis_unavailable",
+            "action_taken": "monitor",
+            "blocked": False,
+            "enforcement_verified": False,
+            "error": "invalid_signal",
+        })
+        return base
     tf_level = tf_result.get("threat_level", "info")
     level_rank = {"info": 0, "low": 1, "medium": 2, "high": 3, "critical": 4}
     final_level = (
