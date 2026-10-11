@@ -2,7 +2,7 @@
 
 **Aurontra — Autonomous IT Resilience Platform.** Detect operational risk, assist IT service workflows, coordinate governed remediation, and produce auditable operational evidence.
 
-Aurontra is a Tinlance ecosystem product and consumer of the four-repository Tinlance Agent System. Its governed-action adapter uses the reviewed Platform SDK. TSIC manifest and reference-adapter registration merged as `f12105f5a64fc365eae1bd151d01eed509f3108d`. Phase 17 code-level contract hardening passed candidate CI at `a125f77fd12d623207698faac427d2fdce554ca7` (515 tests passed, 1 skipped, 85.28% coverage; PostgreSQL RLS/restore, dependency audit, and secret/archive scan green). Live cross-system contracts, trusted telemetry-to-finding, independent containment verification, and operational worker/scheduler acceptance remain open. Aurontra must not duplicate the Agent Platform's identity, authorization, policy, approval, sandbox, secrets, execution, or audit authority.
+Aurontra is a Tinlance ecosystem product and consumer of the four-repository Tinlance Agent System. Its governed-action adapter uses the reviewed Platform SDK. TSIC manifest and reference-adapter registration merged as `f12105f5a64fc365eae1bd151d01eed509f3108d`. Phase 17 code-level contract hardening passed candidate CI at `b813d4bc45fc9a641c44b1ef4a83ca52fab1127f` (515 tests passed, 1 skipped, 85.28% coverage; PostgreSQL RLS/restore, dependency audit, and secret/archive scan green). Live cross-system contracts, trusted telemetry-to-finding, independent containment verification, and operational worker/scheduler acceptance remain open. Aurontra must not duplicate the Agent Platform's identity, authorization, policy, approval, sandbox, secrets, execution, or audit authority.
 
 ## Product scope
 
