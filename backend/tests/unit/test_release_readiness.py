@@ -13,6 +13,22 @@ assert SPEC and SPEC.loader
 SPEC.loader.exec_module(release_readiness)
 
 
+
+def test_release_gate_rejects_non_object_manifest(monkeypatch, tmp_path):
+    manifest_path = tmp_path / "acceptance-manifest.json"
+    manifest_path.write_text("[]", encoding="utf-8")
+    monkeypatch.setattr(release_readiness, "MANIFEST_PATH", manifest_path)
+
+    result = release_readiness.evaluate()
+
+    assert result["production_release_ready"] is False
+    assert any(
+        item["id"] == "manifest_schema"
+        and "root must be a JSON object" in item["reason"]
+        for item in result["blockers"]
+    )
+
+
 def test_current_manifest_fails_closed_and_lists_external_blockers():
     result = release_readiness.evaluate()
     assert result["production_release_ready"] is False
