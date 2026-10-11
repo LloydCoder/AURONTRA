@@ -1,5 +1,6 @@
 """Platform-bound endpoint-agent enrollment and telemetry."""
 from datetime import datetime, timedelta, timezone
+from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
@@ -11,6 +12,7 @@ from core.agent_auth import AgentIdentity, get_agent_identity, get_agent_tenant_
 from core.config import settings
 from models.agent_request_replay import AgentRequestReplay
 from models.device import Device
+from models.durable_job import OutboxEvent
 from resilience.scorer import score_device
 
 router = APIRouter()
@@ -25,6 +27,25 @@ class AgentTelemetryPayload(BaseModel):
     memory_percent: float | None = Field(default=None, ge=0, le=100)
     disk_percent: float | None = Field(default=None, ge=0, le=100)
     boot_time: float | None = Field(default=None, ge=0)
+
+
+def _record_lifecycle_event(db: AsyncSession, identity: AgentIdentity, event_type: str, agent_version: str) -> None:
+    """Write non-secret lifecycle evidence to the transactional outbox."""
+    db.add(OutboxEvent(
+        id=uuid4().hex,
+        org_id=identity.tenant_id,
+        aggregate_type="device",
+        aggregate_id=identity.device_id,
+        event_type=event_type,
+        schema_version="1",
+        idempotency_key=f"{event_type}:{identity.device_id}:{identity.proof_jti}",
+        payload={
+            "device_id": identity.device_id,
+            "agent_version": agent_version,
+            "key_thumbprint": identity.key_thumbprint,
+            "request_hash": identity.request_hash,
+        },
+    ))
 
 
 async def _consume_proof(db: AsyncSession, identity: AgentIdentity) -> None:
@@ -73,6 +94,7 @@ async def enroll_agent(
     device.agent_version = payload.agent_version
     device.enrolled_at = now
     device.is_active = True
+    _record_lifecycle_event(db, identity, "agent.enrolled", device.agent_version)
     await db.flush()
     return {"device_id": device.id, "lifecycle_state": "enrolled", "is_active": True,
             "enrolled_at": now.isoformat(), "agent_version": device.agent_version}
@@ -102,6 +124,7 @@ async def rotate_agent_key(
     device.agent_key_thumbprint = identity.key_thumbprint
     device.agent_key_rotated_at = now
     device.agent_version = payload.agent_version
+    _record_lifecycle_event(db, identity, "agent.key_rotated", device.agent_version)
     await db.flush()
     return {"device_id": device.id, "lifecycle_state": "key_rotated",
             "key_thumbprint": identity.key_thumbprint, "key_rotated_at": now.isoformat(),
