@@ -1,19 +1,32 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
+import { generateKeyPairSync, sign } from "node:crypto";
 
 const APP_ORIGIN = "http://127.0.0.1:4173";
 const API_ORIGIN = "http://api.test";
 const ISSUER = "https://identity.test";
 const CLIENT_ID = "aurontra-e2e-client";
 
+const { publicKey, privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+const publicJwk = {
+  ...publicKey.export({ format: "jwk" }),
+  kid: "aurontra-e2e-rsa-key",
+  alg: "RS256",
+  use: "sig",
+};
+
 function idToken(nonce: string): string {
-  const payload = {
+  const header = Buffer.from(JSON.stringify({ alg: "RS256", typ: "JWT", kid: "aurontra-e2e-rsa-key" })).toString("base64url");
+  const payload = Buffer.from(JSON.stringify({
     iss: ISSUER,
     aud: CLIENT_ID,
+    sub: "e2e-subject",
     exp: Math.floor(Date.now() / 1000) + 3600,
     iat: Math.floor(Date.now() / 1000),
     nonce,
-  };
-  return `e30.${Buffer.from(JSON.stringify(payload)).toString("base64url")}.test-signature`;
+  })).toString("base64url");
+  const signingInput = `${header}.${payload}`;
+  const signature = sign("RSA-SHA256", Buffer.from(signingInput), privateKey).toString("base64url");
+  return `${signingInput}.${signature}`;
 }
 
 async function jsonResponse(route: Route, body: unknown, status = 200): Promise<void> {
@@ -43,6 +56,9 @@ async function installOidcRoutes(page: Page): Promise<void> {
       id_token_signing_alg_values_supported: ["RS256"],
       code_challenge_methods_supported: ["S256"],
     })
+  );
+  await page.route(`${ISSUER}/.well-known/jwks.json`, route =>
+    jsonResponse(route, { keys: [publicJwk] })
   );
   await page.route(`${ISSUER}/authorize**`, async route => {
     const authorization = new URL(route.request().url());
@@ -84,7 +100,6 @@ async function installApiRoutes(page: Page, mode: "success" | "disabled" = "succ
       });
       return;
     }
-    authorizationHeaders.push(route.request().headers().authorization || "");
     if (mode === "disabled") {
       await jsonResponse(route, {
         code: "TENANT_DATA_PLANE_NOT_READY",
@@ -92,6 +107,7 @@ async function installApiRoutes(page: Page, mode: "success" | "disabled" = "succ
       }, 503);
       return;
     }
+    authorizationHeaders.push(route.request().headers().authorization || "");
     const path = new URL(route.request().url()).pathname;
     if (path === "/organizations/me") {
       await jsonResponse(route, { id: "org-e2e", name: "Test Organization", status: "active" });
@@ -156,7 +172,7 @@ async function authenticate(page: Page, mode: "success" | "disabled" = "success"
   const authorizationHeaders = await installApiRoutes(page, mode);
   await page.goto("/");
   await page.getByRole("button", { name: "Sign in securely" }).click();
-  await expect(page.getByRole("heading", { name: "Operational workspace" })).toBeVisible();
+  await expect(page.getByRole("tablist", { name: "Console sections" })).toBeVisible();
   return authorizationHeaders;
 }
 
