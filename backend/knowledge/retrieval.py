@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
 import re
 from urllib.parse import urlparse
 
@@ -77,7 +78,7 @@ async def retrieve_knowledge_articles(
     ranked: list[tuple[float, KnowledgeArticle]] = []
     for article in rows:
         actual_digest = hashlib.sha256(article.content.encode("utf-8")).hexdigest()
-        if not hashlib.compare_digest(actual_digest, article.content_sha256.lower()):
+        if not hmac.compare_digest(actual_digest, article.content_sha256.lower()):
             raise KnowledgeIntegrityError(
                 f"Published knowledge article integrity check failed for id={article.id}."
             )
