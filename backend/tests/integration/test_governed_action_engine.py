@@ -319,9 +319,10 @@ async def test_platform_run_identity_mismatch_never_executes_tool(monkeypatch):
 
 def test_client_factory_binds_trusted_context_and_w3c_trace(monkeypatch):
     import re
-    import core.governed_actions as governed
 
-    captured = {}
+    from tinlance_agent_platform_sdk.async_client import AsyncAgentPlatform
+    from core.governed_actions import _new_platform_client
+
     monkeypatch.setattr(settings, "AGENT_PLATFORM_ENABLED", True)
     monkeypatch.setattr(settings, "AGENT_PLATFORM_BASE_URL", "https://platform.example.invalid")
     monkeypatch.setattr(settings, "AGENT_PLATFORM_BEARER_TOKEN", "test-injected-credential")
@@ -332,21 +333,16 @@ def test_client_factory_binds_trusted_context_and_w3c_trace(monkeypatch):
     monkeypatch.setattr(settings, "AGENT_PLATFORM_ALLOW_INSECURE_HTTP", False)
     monkeypatch.setattr(settings, "ENVIRONMENT", "test")
 
-    class FakeAsyncPlatform:
-        def __init__(self, **kwargs):
-            captured.update(kwargs)
-
-    monkeypatch.setattr(governed, "AsyncAgentPlatform", FakeAsyncPlatform)
     action_id = uuid4()
-    client = governed._new_platform_client(action_id, "execute")
-    assert isinstance(client, FakeAsyncPlatform)
-    assert captured["base_url"] == "https://platform.example.invalid"
-    assert captured["tenant_id"] == "trusted-tenant"
-    assert captured["subject_id"] == "aurontra-service"
-    assert captured["api_version"] == "1.1"
-    assert captured["timeout"] == 7.0
-    assert re.fullmatch(r"00-[0-9a-f]{32}-[0-9a-f]{16}-01", captured["traceparent"])
-    assert captured["traceparent"].split("-")[1] == action_id.hex
+    client = _new_platform_client(action_id, "execute")
+    assert isinstance(client, AsyncAgentPlatform)
+    assert client._sync._base_url == "https://platform.example.invalid"
+    assert client._sync._tenant_id == "trusted-tenant"
+    assert client._sync._subject_id == "aurontra-service"
+    assert client._sync._api_version == "1.1"
+    assert client._sync._timeout == 7.0
+    assert re.fullmatch(r"00-[0-9a-f]{32}-[0-9a-f]{16}-01", client._sync._traceparent)
+    assert client._sync._traceparent.split("-")[1] == action_id.hex
 
 
 def test_client_factory_rejects_noncanonical_base_url(monkeypatch):
