@@ -83,10 +83,12 @@ async def test_signal_validation_rejects_invalid_ip_ranges_and_tenant_override()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         bad_ip = await client.post("/threats/analyse", json={"src_ip": "attacker.example"})
         bad_entropy = await client.post("/threats/analyse", json={"entropy": 9.0})
+        empty_signal = await client.post("/threats/analyse", json={})
         tenant_override = await client.post("/threats/analyse", json={"org_id": "other-tenant", "entropy": 1.0})
 
     assert bad_ip.status_code == 422
     assert bad_entropy.status_code == 422
+    assert empty_signal.status_code == 422
     assert tenant_override.status_code == 422
 
 
