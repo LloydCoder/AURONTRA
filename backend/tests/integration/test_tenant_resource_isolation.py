@@ -136,3 +136,52 @@ async def test_explicit_transaction_rollback_leaves_no_ticket():
 
     async with AsyncSessionLocal() as session:
         assert await session.get(Ticket, "rolled-back-ticket") is None
+
+
+@pytest.mark.asyncio
+async def test_threat_assessment_persists_idempotently_and_never_claims_containment():
+    from main import app
+    payload = {
+        "event_id": "threat-evidence-001",
+        "src_ip": "192.0.2.50",
+        "protocol": "QUIC",
+        "entropy": 7.0,
+        "z_score": 6.0,
+        "beacon_interval": 30,
+        "jitter": 0.1,
+    }
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        first = await client.post("/threats/analyse", json=payload)
+        replay = await client.post("/threats/analyse", json=payload)
+        events = await client.get("/threats/events")
+
+    assert first.status_code == 200, first.text
+    assert replay.status_code == 200, replay.text
+    finding = first.json()["finding"]
+    assert finding["containment_verified"] is False
+    assert finding["assessment"]["blocked"] is False
+    assert len(finding["signal_sha256"]) == 64
+    assert replay.json()["idempotent_replay"] is True
+    assert len([event for event in events.json()["events"] if event["event_id"] == "threat-evidence-001"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_threat_event_id_cannot_be_reused_for_a_different_signal():
+    from main import app
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        first = await client.post("/threats/analyse", json={
+            "event_id": "threat-evidence-conflict", "protocol": "DNS", "entropy": 2.0,
+        })
+        conflict = await client.post("/threats/analyse", json={
+            "event_id": "threat-evidence-conflict", "protocol": "QUIC", "entropy": 7.0,
+        })
+    assert first.status_code == 200, first.text
+    assert conflict.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_threat_analysis_rejects_out_of_range_signal():
+    from main import app
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post("/threats/analyse", json={"entropy": 99})
+    assert response.status_code == 422
