@@ -7,8 +7,8 @@ execution state as proof that the business postcondition was achieved.
 from __future__ import annotations
 
 import json
-import math
 import logging
+import math
 import re
 from dataclasses import dataclass
 from typing import Any, Callable
