@@ -8,6 +8,7 @@ from __future__ import annotations
 import hashlib
 import ipaddress
 import json
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import func, select, text
@@ -100,6 +101,19 @@ class SIEMExportRequest(BaseModel):
     mitre_ttp: str = Field(max_length=32, pattern=r"^T[0-9]{4}(?:\.[0-9]{3})?$")
     blocked: bool
     timestamp: str = Field(min_length=1, max_length=64)
+
+    @field_validator("timestamp")
+    @classmethod
+    def validate_timestamp(cls, value: str) -> str:
+        if any(ord(ch) < 32 for ch in value):
+            raise ValueError("timestamp must not contain control characters")
+        try:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError as exc:
+            raise ValueError("timestamp must be ISO 8601") from exc
+        if parsed.tzinfo is None:
+            raise ValueError("timestamp must include a timezone")
+        return parsed.isoformat()
     format: Literal["json", "splunk_hec", "cef"] = "json"
     reason: str | None = Field(default=None, max_length=512)
     action_taken: Literal["monitor", "assessed", "review_required", "containment_pending"] = "monitor"
