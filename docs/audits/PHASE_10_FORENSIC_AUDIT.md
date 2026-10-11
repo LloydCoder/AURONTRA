@@ -1,21 +1,22 @@
 # Phase 10 — Forensic Audit
 
-**Result:** Original Phase 10 implementation passed its historical repository/CI gate; current safety-envelope follow-up requires fresh CI. Production remediation remains disabled.  
+**Result:** Phase 10 accepted at repository/CI level after the 2026-10-11 follow-up audit. Production remediation remains disabled.  
 **PR:** [#6 — Phase 10: add safe deterministic remediation planner](https://github.com/LloydCoder/AURONTRA/pull/6)  
-**Audited head:** `aa40ac0cc7779fe4522ace7a9bc2979c7aa7ef49`  
+**Original audited head:** `aa40ac0cc7779fe4522ace7a9bc2979c7aa7ef49`  
+**Follow-up audit baseline:** `9685e413ac1be3529d118eec65d290637d24cb3a`  
 **CI:** [Run 38101939727](https://github.com/LloydCoder/AURONTRA/actions/runs/38101939727)  
 **Secret/history/archive scan:** [Run 38101939719](https://github.com/LloydCoder/AURONTRA/actions/runs/38101939719)
 
 ## Follow-up forensic finding (2026-10-11)
 
-The open PR #8 was compared against current main. Its branch predates Phases 11–16, proposes an alternate incompatible planner API, adds no tests for that 688-line planner/dispatcher, and contains an undefined `service_is_allowlisted` reference in `service_restart.py`. The alternate planner is not safe to merge as-is. The useful response-envelope hardening was ported to main: actions are empty, recommendations are separate, caller-supplied signals are marked unverified, missing service targets fail closed, and timestamps explicitly mean recommendation creation. Regression tests cover these invariants. PR #8 is to be closed as superseded after the current CI and security workflows pass; no production execution is enabled.
+PR [#8](https://github.com/LloydCoder/AURONTRA/pull/8) was closed as superseded. Its branch predates Phases 11–16, proposes an alternate incompatible planner API, adds no tests for its 688-line planner/dispatcher, and contains an undefined `service_is_allowlisted` reference. The alternate planner was not merged. Useful safety-envelope changes were ported into the current architecture: `actions_taken` is always empty, recommendations are separate, caller-supplied metrics/domains/services/device IDs are marked unverified, missing service targets fail closed, and the dispatcher enforces non-execution status, outcome and timestamp semantics even for contradictory legacy playbook results. Regression tests cover these invariants.
 
 ## CI evidence
 
-- Backend suite: **371 passed, 1 skipped**, **84.79% total coverage**; configured 60% minimum passed.
+- Follow-up backend suite: **488 passed, 1 skipped**, **84.85% total coverage**; configured 60% minimum passed. [CI run 38120377781](https://github.com/LloydCoder/AURONTRA/actions/runs/38120377781).
 - Dependency validation, clean SQLite Alembic migration, backend compilation and full tests passed.
 - PostgreSQL migrations, non-owner tenant RLS tests and backup/restore smoke test passed.
-- Working tree, reachable Git history and nested-archive secret scan passed.
+- Secret/archive scan passed: [run 38120377788](https://github.com/LloydCoder/AURONTRA/actions/runs/38120377788).
 - Production deployment was **skipped by configuration**. No live Platform tool, endpoint, production database, or customer action was exercised.
 
 ## Code and security review
@@ -43,4 +44,4 @@ The open PR #8 was compared against current main. Its branch predates Phases 11�
 
 ## Decision
 
-Phase 10 is accepted at repository/CI level because safe planning, gated SDK submission, independent-verification contracts, negative tests and forensic documentation are implemented and CI is green. Production execution remains explicitly blocked by missing exact Platform registrations, a concrete tenant-scoped verifier, durable orchestration, deployment configuration and full data-plane release gates. Phase 11's repository/CI implementation is present; proceed to the next roadmap release gate only after current CI and security workflows pass, without enabling public execution.
+Phase 10 is accepted at repository/CI level because safe planning, gated SDK submission, independent-verification contracts, negative tests, fail-closed response envelopes and forensic documentation are implemented and CI/security scanning are green. Production execution remains explicitly blocked by missing exact Platform registrations, a concrete tenant-scoped verifier, production worker/scheduler configuration, and full data-plane release gates. Phase 17 may proceed at repository/CI level; no public execution is enabled.
