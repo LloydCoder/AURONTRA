@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.database import get_tenant_db
+from core.database import get_tenant_db_lifecycle
 from models.device import Device
 from models.organization import Organization
 
@@ -27,7 +27,7 @@ class OrganizationView(BaseModel):
 @router.get("/me")
 async def get_current_organization(
     request: Request,
-    db: AsyncSession = Depends(get_tenant_db),
+    db: AsyncSession = Depends(get_tenant_db_lifecycle),
 ):
     org = await db.get(Organization, request.state.tenant_id)
     if org is None:
