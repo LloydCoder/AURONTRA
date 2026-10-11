@@ -52,7 +52,7 @@ These checks validate code paths and synthetic fixtures, not real-world predicti
 
 ## AI service desk and knowledge retrieval (Phase 14)
 
-The Phase 14 implementation changes the resolver to risk-based draft generation only: unknown, security and high-impact tickets require human review; reporter email and common secrets are redacted before inference and from generated drafts; provider calls are bounded; output is validated; and no generated answer can close a ticket. Retrieval is limited to approved, published global or same-tenant knowledge articles with SHA-256 integrity checks. Prompt/response digests, prompt version, generation time and article references are persisted. The implementation and evidence gates are documented in [Phase 14 design](docs/PHASE_14_AI_SERVICE_DESK.md). This phase is not production certification; CI must pass before it is marked complete.
+Phase 14 is **complete at code/CI level**. The resolver is draft-only; unknown, security and high-impact tickets require human review; reporter email is excluded from prompts; common PII/credentials are redacted; provider calls and serialized prompts are bounded; and prompt, response, triage, escalation and knowledge-reference provenance are persisted. Retrieval is deterministic lexical ranking over approved, published global or same-tenant knowledge articles, with content-digest verification and PostgreSQL RLS. CI passed **433 tests, 1 skipped, 85.56% coverage**, plus PostgreSQL tenant RLS/backup-restore and secret/history/archive scans. Deployment was skipped and the production data plane remains closed. See [Phase 14 design](docs/PHASE_14_AI_SERVICE_DESK.md) and [Phase 14 forensic audit](docs/audits/PHASE_14_FORENSIC_AUDIT.md).
 
 ## Governed action engine (Phase 09)
 
