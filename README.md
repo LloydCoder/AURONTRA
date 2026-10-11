@@ -2,7 +2,7 @@
 
 **Aurontra — Autonomous IT Resilience Platform.** Detect operational risk, assist IT service workflows, coordinate governed remediation, and produce auditable operational evidence.
 
-Aurontra is a Tinlance ecosystem product. It integrates with the authoritative Tinlance Agent System through documented, versioned interfaces; it must not duplicate the Agent Platform's identity, authorization, policy, approval, sandbox, secrets, execution, or audit authority.
+Aurontra is a Tinlance ecosystem product being integrated as a consumer of the four-repository Tinlance Agent System. Its governed-action adapter uses the reviewed Platform SDK, but TSIC registry registration and end-to-end cross-system contracts remain Phase 17 gates. Aurontra must not duplicate the Agent Platform's identity, authorization, policy, approval, sandbox, secrets, execution, or audit authority.
 
 ## Product scope
 
@@ -25,6 +25,10 @@ Until secure endpoint execution and authorization are implemented and tested:
 - Phase 10 provides a pure remediation planner and feature-gated Platform submission service with independent postcondition-verification contracts. Phase 11 adds durable tenant-scoped remediation intents, atomic job/outbox creation, crash-safe unknown-outcome state, and idempotent reconciliation scheduling. Neither phase is wired to a production worker or public route; submission remains disabled until exact Platform tools, a real tenant-scoped verifier, and a scheduler are configured.
 - ROI outputs are illustrative models, not measured savings; control mappings are not compliance certification.
 - Deployment status is reported separately from test status.
+
+## Latest repository validation baseline
+
+At audit baseline commit `9685e413ac1be3529d118eec65d290637d24cb3a`, [CI run 38120377781](https://github.com/LloydCoder/AURONTRA/actions/runs/38120377781) passed **488 tests, 1 skipped, 84.85% coverage**. Clean SQLite migration, backend compilation, PostgreSQL migrations, non-owner tenant RLS, backup/restore, and the secret/archive scan ([run 38120377788](https://github.com/LloydCoder/AURONTRA/actions/runs/38120377788)) passed. Deployment was skipped by the explicit release gate; this is not a production deployment or certification claim.
 
 ## Threat containment orchestration (Phase 16)
 
