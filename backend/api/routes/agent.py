@@ -140,6 +140,8 @@ async def ingest_agent_telemetry(
 ):
     if "aurontra:telemetry:write" not in identity.scopes:
         raise HTTPException(status_code=403, detail="Telemetry write scope is required.")
+    if not payload.model_dump(exclude_none=True):
+        raise HTTPException(status_code=422, detail="At least one telemetry metric is required.")
     device = await db.scalar(select(Device).where(
         Device.id == identity.device_id,
         Device.org_id == identity.tenant_id,
