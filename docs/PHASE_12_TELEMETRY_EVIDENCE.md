@@ -8,15 +8,16 @@ This phase turns authenticated endpoint telemetry into durable, tenant-scoped ev
 
 ## Ingestion contract
 
-- Endpoint identity and tenant identity come from the validated Platform-issued DPoP-bound access token, never from the JSON body.
+- Endpoint identity and tenant identity come from the validated Platform-issued DPoP-bound access token, never from the JSON body. The collector may send `device_id` as a routing hint, but the API rejects it if it does not match the authenticated subject.
 - Each request is bound to a signed HTTP method, canonical path, body hash, DPoP proof JTI, device key thumbprint, tenant and device.
 - Enrollment, key rotation and telemetry require distinct scopes and active, non-revoked device enrollment.
 - Telemetry uses strict schema version `1`; unknown fields, invalid ranges, NaN/Infinity and timezone-naive timestamps are rejected.
 - At least one of CPU, memory or disk must be present. Missing values are represented explicitly, never replaced with zero.
 - Observation timestamps are bounded by `TELEMETRY_MAX_AGE_SECONDS` and `TELEMETRY_FUTURE_SKEW_SECONDS`; stale and excessive-future samples are rejected.
+- A configurable per-device ingestion limit defaults to 120 events/minute; excess new events return HTTP 429 with `Retry-After: 60`. Duplicate-event checks happen before the limit so retries remain idempotent. This is a per-device guard, not a global tenant quota.
 - Same tenant/device/event ID plus the same canonical payload hash is idempotent. Reusing an event ID with changed content returns HTTP 409. Each DPoP proof is consumed once, including rejected conflicting event attempts.
 - Older-but-still-fresh observations may be stored with an `out_of_order` quality flag but may not overwrite current device state.
-- Partial metric samples are stored as evidence with `insufficient_data` score status and no composite score. They never overwrite the current resilience score.
+- Partial metric samples are stored as evidence with `insufficient_data` score status and no composite score. They never overwrite the current resilience score. Persisted timestamps returned by SQLite are normalized before ordering comparisons because SQLite drops timezone metadata.
 
 ## Provenance and persistence
 
@@ -35,5 +36,13 @@ The current score is a deterministic health heuristic over CPU, memory and disk 
 ## Operational and security gates
 
 - `AGENT_AUTH_ENABLED=false` and `DATA_PLANE_ENABLED=false` remain secure defaults.
-- CI covers schema/migration checks, DPoP replay, enrollment/revocation, provenance, idempotency/conflicting event IDs, freshness bounds, out-of-order ordering, partial-metric behavior, retention bounds, PostgreSQL RLS, backup/restore, and repository/history/archive secret scans.
+- CI covers schema/migration checks, DPoP replay, enrollment/revocation, provenance, idempotency/conflicting event IDs, freshness bounds, out-of-order ordering, partial-metric behavior, per-device rate limiting, caller-supplied device-ID mismatch, retention bounds, PostgreSQL RLS, backup/restore, and repository/history/archive secret scans.
 - Production remains blocked on real issuer/JWKS configuration, TLS, tenant credentials, agent release/signing, telemetry consumer contracts, retention scheduler, observability/alerting, and a customer-environment verification run.
+
+
+## Research references
+
+- OWASP API Security Top 10 (2023): object-level authorization, authentication, unrestricted resource consumption, security misconfiguration and API inventory are relevant controls for authenticated telemetry ingestion: https://api-security.owasp.org/editions/2023/en/0x11-t10/
+- NIST SP 800-92, *Guide to Computer Security Log Management*: useful operational guidance for log/evidence lifecycle, collection, retention and management: https://csrc.nist.gov/pubs/sp/800/92/final
+- NIST AI RMF 1.0, MEASURE function: predictive claims require documented test sets, metrics, uncertainty, ongoing evaluation and limitations; this telemetry phase does not certify prediction performance: https://nvlpubs.nist.gov/nistpubs/ai/nist.ai.100-1.pdf
+- scikit-learn model selection and evaluation guidance: do not evaluate a predictor on the same data used to fit it; Phase 13 must use separated evaluation data and report task-appropriate metrics: https://scikit-learn.org/stable/model_selection.html
