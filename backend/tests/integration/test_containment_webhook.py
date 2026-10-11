@@ -8,6 +8,7 @@ from uuid import uuid4
 
 import pytest
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import select
 
 from core.config import settings
 from core.database import AsyncSessionLocal
