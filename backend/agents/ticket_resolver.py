@@ -316,7 +316,12 @@ async def resolve_ticket(
         category=classification["category"],
         knowledge_articles=knowledge_articles,
     )
-    prompt_digest = _sha256(prompt)
+    prompt_digest = _sha256(json.dumps(
+        {"system_prompt": _TICKET_SYSTEM_PROMPT, "user_prompt": prompt},
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ))
     article_refs = [
         {
             "article_id": str(article.get("article_id", "")),
