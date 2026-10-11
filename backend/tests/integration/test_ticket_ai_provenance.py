@@ -59,6 +59,10 @@ async def test_ticket_draft_persists_provenance_without_closing_ticket():
     assert payload["outcome_verified"] is False
     assert payload["ticket"]["status"] == "open"
     assert payload["ticket"]["ai_resolved"] is False
+    assert payload["ticket"]["ai_triage_category"] == "connectivity"
+    assert payload["ticket"]["ai_triage_tier"] == 1
+    assert payload["ticket"]["ai_confidence_semantics"] == "heuristic_not_probability"
+    assert payload["ticket"]["ai_escalation_reason"] is None
     assert payload["ticket"]["ai_prompt_version"] == "ticket-resolution.v2"
     assert len(payload["ticket"]["ai_prompt_sha256"]) == 64
     assert len(payload["ticket"]["ai_response_sha256"]) == 64
@@ -100,4 +104,29 @@ async def test_tampered_knowledge_fails_closed_before_external_model_call():
 
     assert response.status_code == 503
     assert "integrity verification failed" in response.json()["detail"]
+    mock_llm.complete.assert_not_awaited()
+
+
+
+@pytest.mark.asyncio
+async def test_high_impact_ticket_persists_escalation_reason_without_model_call():
+    from main import app
+    with patch("agents.ticket_resolver.llm") as mock_llm:
+        mock_llm.complete = AsyncMock()
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            created = await client.post("/tickets/ingest", json={
+                "title": "Account hacked",
+                "description": "Suspicious login from an unknown country.",
+                "reporter_email": "person@example.invalid",
+            })
+            assert created.status_code == 201
+            ticket_id = created.json()["ticket"]["id"]
+            response = await client.post(f"/tickets/{ticket_id}/resolve")
+
+    assert response.status_code == 200
+    ticket = response.json()["ticket"]
+    assert ticket["status"] == "escalated"
+    assert ticket["ai_escalation_reason"] == "security_signal"
+    assert ticket["ai_model_used"] is None
+    assert response.json()["resolved"] is False
     mock_llm.complete.assert_not_awaited()
