@@ -204,6 +204,7 @@ async def test_platform_transport_failure_is_sanitized_and_retains_run_correlati
             arguments={"metric": "cpu"},
         )
     assert caught.value.run_id == RUN_ID
+    assert caught.value.retryable is True
     assert "secret-token-must-not-escape" not in str(caught.value)
     assert "secret-token-must-not-escape" not in repr(caught.value)
     assert len(calls) == 2
@@ -426,3 +427,19 @@ def test_platform_client_rejects_nonfinite_timeout(monkeypatch):
     monkeypatch.setattr(settings, "ENVIRONMENT", "test")
     with pytest.raises(GovernedActionError, match="platform_timeout_invalid"):
         _new_platform_client(uuid4(), "run")
+
+
+@pytest.mark.asyncio
+async def test_unexpected_programming_error_is_not_advertised_as_retryable(monkeypatch):
+    executor, _, _ = _executor(monkeypatch, execute_error=RuntimeError("secret internal detail"))
+    with pytest.raises(GovernedActionError) as caught:
+        await executor.submit(
+            action_id=uuid4(),
+            action_key="diagnostic.read",
+            resource="device:device-123",
+            intent="Read diagnostic metrics",
+            arguments={"metric": "cpu"},
+        )
+    assert caught.value.code == "platform_unavailable"
+    assert caught.value.retryable is False
+    assert "secret internal detail" not in str(caught.value)
