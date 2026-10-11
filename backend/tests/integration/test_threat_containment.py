@@ -283,3 +283,34 @@ async def test_contained_finding_replay_does_not_submit_second_action(enable_con
     assert second_replay is True
     assert len(executor.calls) == 1
     assert UUID(executor.calls[0]["action_id"].hex) == UUID(first.platform_action_id)
+
+
+@pytest.mark.asyncio
+async def test_caller_submitted_signal_is_not_sufficient_evidence_for_containment(enable_containment):
+    now = datetime.now(timezone.utc)
+    async with AsyncSessionLocal() as session:
+        session.info["tenant_id"] = "test-tenant"
+        session.add(Device(
+            id="untrusted-signal-device", org_id="test-tenant", name="Endpoint",
+            is_active=True, enrolled_at=now, last_seen_at=now,
+        ))
+        finding = ThreatFinding(
+            id=str(uuid4()), org_id="test-tenant", event_id=f"untrusted-{uuid4().hex}",
+            device_id="untrusted-signal-device", telemetry_record_id=None,
+            source="network_signal", detector_version="threat-heuristic.v2",
+            observed_at=now, signal_sha256="c" * 64, signal={"protocol": "QUIC"},
+            assessment={"containment_recommended": True}, score=95, threat_level="critical",
+            mitre_ttp="T1071", decision_status="assessed", containment_verified=False,
+        )
+        session.add(finding)
+        await session.commit()
+        finding_id = finding.id
+
+    executor = FakeExecutor()
+    async with AsyncSessionLocal() as session:
+        session.info["tenant_id"] = "test-tenant"
+        with pytest.raises(ThreatContainmentError, match="finding_not_backed_by_trusted_telemetry"):
+            await ThreatContainmentService(executor=executor, verifier=FakeVerifier()).contain(
+                db=session, tenant_id="test-tenant", finding_id=finding_id, platform_context=_context()
+            )
+    assert executor.calls == []
