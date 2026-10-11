@@ -19,9 +19,15 @@ Register Aurontra in the canonical TSIC ecosystem and prove versioned, tenant-sa
 - [x] Kept Aurontra's authority narrowly scoped to `it_resilience_product`; no execution authority was added.
 - [x] Preserved the rule that reference registration does not enable production flags or certify runtime integration.
 - [x] Added a pinned TSIC contract snapshot (`identity-context` 1.0.0, `event-envelope` 1.0.0, `trace-context` 1.1.0) tied to TSIC registry revision `619db9e264cdc71369de621c981bfc2ba1615a1d`.
-- [x] The shared ecosystem client validates tenant identity context and CloudEvents envelopes, binds tenant/execution/trace/correlation fields, requires context for non-health calls, propagates W3C `traceparent` and explicit trace/span IDs, and rejects unsafe correlation/idempotency values.
-- [x] Candidate `161a0fa988a02ddd7ffe134bddcacff8d8d2f540` passed CI: 503 tests passed, 1 skipped, 85.08% coverage; PostgreSQL RLS/restore checks, dependency audit, and secret/archive scan passed.
-- [ ] Complete identity/event-envelope contract tests, live end-to-end contracts, independent verification, and operational release gates.
+- [x] The shared client now accepts only typed `TSICIdentityContext` objects for tenant-scoped operations and binds tenant, organization, workspace, actor, execution, trace, and correlation headers.
+- [x] Integration destinations are bound to explicit service-to-configuration allowlists; arbitrary service names and spoofed origins fail closed (OWASP SSRF guidance).
+- [x] Successful response bodies are streamed with a strict 1 MiB cap before JSON parsing; redirects remain disabled.
+- [x] W3C `traceparent` is validated and propagated; event envelopes are validated against the pinned TSIC contract snapshot; unsafe correlation/idempotency values are rejected.
+- [x] ThreatFade and FusionOps data operations now require typed tenant context; health probes remain non-tenant-scoped.
+- [x] Regression tests cover unknown services, spoofed origins, untyped identity context, oversized responses, cross-tenant envelope mismatches, and header injection.
+- [x] Earlier candidate `161a0fa988a02ddd7ffe134bddcacff8d8d2f540` passed CI with 503 tests passed, 1 skipped, and 85.08% coverage; PostgreSQL RLS/restore checks, dependency audit, and secret/archive scan passed.
+- [ ] Validate the subsequent SSRF, bounded-response, typed-context, and bridge-propagation changes on one exact SHA; record the resulting test count and coverage below.
+- [ ] Complete controlled sandbox contracts, independent-verifier integration, and operational release gates.
 
 ## Required implementation gates
 
@@ -71,7 +77,8 @@ Phase 17 is complete only when:
 
 ## Current non-claims
 
-- TSIC PR #53 is a registration candidate, not proof that it is merged.
+- TSIC PR #53 is merged; registry inclusion is not proof of runtime integration.
 - Structural TSIC CI is not proof of Aurontra runtime integration.
 - No live production Platform, verifier, identity provider, customer database, worker/scheduler, or containment action has been exercised by this phase's current evidence.
+- Domain allowlisting reduces SSRF exposure but does not alone prevent DNS rebinding; deployment networking must enforce approved egress and prevent private/link-local metadata destinations as defense in depth.
 - Production readiness, predictive accuracy, threat-detection efficacy, and compliance certification are not claimed.
