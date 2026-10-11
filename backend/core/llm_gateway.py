@@ -32,7 +32,7 @@ class LLMGateway:
                 result = await self._claude(prompt, system, max_tokens)
                 return {**result, "layer": 1}
             except Exception as e:
-                logger.warning(f"[LLM] Layer 1 (Claude) failed: {e}")
+                logger.warning("[LLM] Layer 1 (Claude) failed: %s", type(e).__name__)
 
         # ── Layer 2: Grok via Groq ─────────────────────────
         if settings.GROQ_API_KEY:
@@ -40,7 +40,7 @@ class LLMGateway:
                 result = await self._grok(prompt, system, max_tokens)
                 return {**result, "layer": 2}
             except Exception as e:
-                logger.warning(f"[LLM] Layer 2 (Grok) failed: {e}")
+                logger.warning("[LLM] Layer 2 (Groq) failed: %s", type(e).__name__)
 
         # ── Layer 3: Offline template ──────────────────────
         logger.warning("[LLM] All AI layers failed — using offline template")
@@ -48,7 +48,10 @@ class LLMGateway:
 
     async def _claude(self, prompt: str, system: str, max_tokens: int) -> dict:
         import anthropic
-        client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
+        client = anthropic.AsyncAnthropic(
+            api_key=settings.ANTHROPIC_API_KEY,
+            timeout=max(1.0, min(float(settings.LLM_REQUEST_TIMEOUT_SECONDS), 120.0)),
+        )
         message = await client.messages.create(
             model=settings.LLM_PRIMARY,
             max_tokens=max_tokens,
@@ -62,7 +65,7 @@ class LLMGateway:
 
     async def _grok(self, prompt: str, system: str, max_tokens: int) -> dict:
         import httpx
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=max(1.0, min(float(settings.LLM_REQUEST_TIMEOUT_SECONDS), 120.0))) as client:
             r = await client.post(
                 "https://api.groq.com/openai/v1/chat/completions",
                 headers={"Authorization": f"Bearer {settings.GROQ_API_KEY}"},
@@ -88,10 +91,10 @@ class LLMGateway:
         Provides a safe, human-readable acknowledgement.
         """
         text = (
-            "Your request has been received and logged. "
-            "Our AI systems are temporarily unavailable. "
-            "A human agent will review this ticket within 2 business hours. "
-            "Ticket reference: [auto-assigned on save]"
+            "Your request has been received. "
+            "Automated assistance is temporarily unavailable. "
+            "A human support agent must review this ticket. "
+            "This acknowledgement is not confirmation that the underlying issue is resolved."
         )
         return {"text": text, "model": "offline-template", "layer": 3}
 
