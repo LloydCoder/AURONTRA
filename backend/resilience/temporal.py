@@ -171,9 +171,9 @@ class TemporalCorrelator:
         if latest_memory > 85:
             risk_factors.append("Memory above 85% — approaching critical threshold")
 
-        return {
+        result = {
             "trend": trend,
-            "predicted_score_72h": predicted_score,
+            "predicted_score": predicted_score,
             "current_score": current_score,
             "risk_factors": risk_factors,
             "slopes": {
@@ -188,3 +188,7 @@ class TemporalCorrelator:
             "calibration_status": "not_calibrated",
             "production_validation": False,
         }
+        # Preserve the legacy field only when it is semantically correct.
+        if self.forecast_horizon_hours == 72:
+            result["predicted_score_72h"] = predicted_score
+        return result
