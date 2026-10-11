@@ -340,10 +340,26 @@ async def claim_outbox_events(
     if not 5 <= lease_seconds <= 3600:
         raise ValueError("lease_seconds must be between 5 and 3600")
     now = _now()
+    # Reap publisher crashes after their final permitted attempt.
+    await session.execute(
+        update(OutboxEvent)
+        .where(
+            OutboxEvent.status == "publishing",
+            OutboxEvent.lease_expires_at <= now,
+            OutboxEvent.attempts >= 10,
+        )
+        .values(
+            status="dead_letter",
+            lease_owner=None,
+            lease_expires_at=None,
+            last_error_code="lease_expired_max_attempts",
+        )
+    )
     statement = (
         select(OutboxEvent)
         .where(
             OutboxEvent.available_at <= now,
+            OutboxEvent.attempts < 10,
             or_(
                 OutboxEvent.status == "pending",
                 and_(OutboxEvent.status == "publishing", OutboxEvent.lease_expires_at <= now),
