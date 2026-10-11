@@ -6,7 +6,9 @@
 **Follow-up implementation audit SHA:** `8fe28b3ba661f1287699e76984546b7b31884019`  
 **Original Phase 10 CI:** [Run 38101939727](https://github.com/LloydCoder/AURONTRA/actions/runs/38101939727)  
 **Follow-up PR CI:** [Run 38120645677](https://github.com/LloydCoder/AURONTRA/actions/runs/38120645677)  
-**Follow-up secret/archive scan:** [Run 38120645640](https://github.com/LloydCoder/AURONTRA/actions/runs/38120645640)
+**Follow-up secret/archive scan:** [Run 38120645640](https://github.com/LloydCoder/AURONTRA/actions/runs/38120645640)  
+**Post-merge main CI:** [Run 38120944398](https://github.com/LloydCoder/AURONTRA/actions/runs/38120944398)  
+**Post-merge secret/archive scan:** [Run 38120944414](https://github.com/LloydCoder/AURONTRA/actions/runs/38120944414)
 
 ## Follow-up forensic finding (2026-10-11)
 
@@ -14,10 +16,10 @@ PR [#8](https://github.com/LloydCoder/AURONTRA/pull/8) was closed as superseded.
 
 ## CI evidence
 
-- Follow-up backend suite: **488 passed, 1 skipped**, **84.85% total coverage**; configured 60% minimum passed. [PR CI run 38120645677](https://github.com/LloydCoder/AURONTRA/actions/runs/38120645677).
+- Follow-up backend suite: **488 passed, 1 skipped**, **84.85% total coverage**; configured 60% minimum passed in [PR CI run 38120645677](https://github.com/LloydCoder/AURONTRA/actions/runs/38120645677) and [post-merge main run 38120944398](https://github.com/LloydCoder/AURONTRA/actions/runs/38120944398).
 - Dependency validation, clean SQLite Alembic migration, backend compilation and full tests passed.
 - PostgreSQL migrations, non-owner tenant RLS tests and backup/restore smoke test passed.
-- Secret/archive scan passed: [PR run 38120645640](https://github.com/LloydCoder/AURONTRA/actions/runs/38120645640).
+- Secret/archive scan passed: [PR run 38120645640](https://github.com/LloydCoder/AURONTRA/actions/runs/38120645640) and [post-merge run 38120944414](https://github.com/LloydCoder/AURONTRA/actions/runs/38120944414).
 - Production deployment was **skipped by configuration**. No live Platform tool, endpoint, production database, or customer action was exercised.
 
 ## Code and security review

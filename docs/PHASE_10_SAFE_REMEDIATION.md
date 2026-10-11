@@ -39,6 +39,7 @@ Phase 10 creates a deterministic, pure remediation planner for the existing disk
 - Parent-main baseline: [CI run 38120377781](https://github.com/LloydCoder/AURONTRA/actions/runs/38120377781) passed 488 tests, 1 skipped, 84.85% coverage.
 - Follow-up PR validation: [CI run 38120645677](https://github.com/LloydCoder/AURONTRA/actions/runs/38120645677) passed 488 tests, 1 skipped, 84.85% coverage; SQLite migration, compile, PostgreSQL RLS and backup/restore passed.
 - Follow-up secret/archive scan: [run 38120645640](https://github.com/LloydCoder/AURONTRA/actions/runs/38120645640) passed.
+- Post-merge main CI: [run 38120944398](https://github.com/LloydCoder/AURONTRA/actions/runs/38120944398) passed 488 tests, 1 skipped, 84.85% coverage; [post-merge secret/archive scan 38120944414](https://github.com/LloydCoder/AURONTRA/actions/runs/38120944414) passed.
 - Deployment job was skipped; no live Platform action, endpoint, or production database was exercised.
 
 ## Exit criteria

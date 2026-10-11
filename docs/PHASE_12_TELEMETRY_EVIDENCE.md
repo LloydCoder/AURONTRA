@@ -1,6 +1,6 @@
 # Phase 12 — Telemetry Evidence Pipeline
 
-**Status:** Complete at repository/CI level. Migration `0012_telemetry_schema_v2` is validated by clean SQLite and PostgreSQL migration workflows. Production telemetry ingestion and retention remain disabled until Platform issuer configuration, collector deployment, and scheduled retention are verified. Offline SQL generation is intentionally unsupported for this reflection-based migration chain; use reviewed online Alembic upgrades.
+**Status:** Complete at repository/CI level. Migration `0012_telemetry_schema_v2` is validated by clean SQLite and PostgreSQL migration workflows; the current migration head is `0013_containment_awaiting_verification`, which reconciles the containment state constraint with the `awaiting_verification` workflow state. Production telemetry ingestion and retention remain disabled until Platform issuer configuration, collector deployment, and scheduled retention are verified. Offline SQL generation is intentionally unsupported for this reflection-based migration chain; use reviewed online Alembic upgrades.
 
 ## Purpose and boundaries
 
