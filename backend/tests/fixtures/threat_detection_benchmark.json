@@ -1,0 +1,364 @@
+{
+  "schema_version": "aurontra.threat-benchmark.v1",
+  "dataset_kind": "synthetic_contract_fixture",
+  "label_source": "synthetic scenario labels authored for deterministic contract and metric-pipeline tests; not production telemetry",
+  "split_strategy": "fixed, explicit calibration and holdout IDs; no record appears in both splits",
+  "records": [
+    {
+      "id": "cal-benign-01",
+      "split": "calibration",
+      "label": "benign",
+      "signal": {
+        "src_ip": "192.0.2.1",
+        "protocol": "HTTPS",
+        "entropy": 2.1,
+        "z_score": 0.2
+      }
+    },
+    {
+      "id": "cal-benign-02",
+      "split": "calibration",
+      "label": "benign",
+      "signal": {
+        "src_ip": "192.0.2.2",
+        "protocol": "HTTPS",
+        "entropy": 3.2,
+        "z_score": 0.4
+      }
+    },
+    {
+      "id": "cal-benign-03",
+      "split": "calibration",
+      "label": "benign",
+      "signal": {
+        "src_ip": "192.0.2.3",
+        "protocol": "DNS",
+        "entropy": 2.7,
+        "z_score": 1.2
+      }
+    },
+    {
+      "id": "cal-benign-04",
+      "split": "calibration",
+      "label": "benign",
+      "signal": {
+        "src_ip": "192.0.2.4",
+        "protocol": "SMB",
+        "entropy": 3.2,
+        "z_score": 0.5
+      }
+    },
+    {
+      "id": "cal-benign-05",
+      "split": "calibration",
+      "label": "benign",
+      "signal": {
+        "src_ip": "192.0.2.5",
+        "protocol": "DNS",
+        "entropy": 3.4,
+        "z_score": 0.3
+      }
+    },
+    {
+      "id": "cal-benign-06",
+      "split": "calibration",
+      "label": "benign",
+      "signal": {
+        "src_ip": "192.0.2.6",
+        "protocol": "ICMP",
+        "entropy": 2.5,
+        "z_score": 0.8
+      }
+    },
+    {
+      "id": "cal-benign-07",
+      "split": "calibration",
+      "label": "benign",
+      "signal": {
+        "src_ip": "192.0.2.7",
+        "protocol": "HTTPS",
+        "entropy": 4.2,
+        "z_score": 1.4
+      }
+    },
+    {
+      "id": "cal-benign-08",
+      "split": "calibration",
+      "label": "benign",
+      "signal": {
+        "src_ip": "192.0.2.8",
+        "protocol": "HTTPS",
+        "entropy": 3.1,
+        "z_score": 0.9
+      }
+    },
+    {
+      "id": "cal-malicious-01",
+      "split": "calibration",
+      "label": "malicious",
+      "signal": {
+        "src_ip": "192.0.2.9",
+        "protocol": "QUIC",
+        "entropy": 7.8,
+        "z_score": 14.7,
+        "bytes_out": 48200
+      }
+    },
+    {
+      "id": "cal-malicious-02",
+      "split": "calibration",
+      "label": "malicious",
+      "signal": {
+        "src_ip": "192.0.2.10",
+        "protocol": "DNS",
+        "entropy": 7.6,
+        "z_score": 6
+      }
+    },
+    {
+      "id": "cal-malicious-03",
+      "split": "calibration",
+      "label": "malicious",
+      "signal": {
+        "src_ip": "192.0.2.11",
+        "protocol": "QUIC",
+        "entropy": 7,
+        "z_score": 5.4
+      }
+    },
+    {
+      "id": "cal-malicious-04",
+      "split": "calibration",
+      "label": "malicious",
+      "signal": {
+        "src_ip": "192.0.2.12",
+        "protocol": "HTTPS",
+        "entropy": 6.8,
+        "z_score": 8.2
+      }
+    },
+    {
+      "id": "cal-malicious-05",
+      "split": "calibration",
+      "label": "malicious",
+      "signal": {
+        "src_ip": "192.0.2.13",
+        "protocol": "RDP",
+        "entropy": 6.9,
+        "z_score": 5
+      }
+    },
+    {
+      "id": "cal-malicious-06",
+      "split": "calibration",
+      "label": "malicious",
+      "signal": {
+        "src_ip": "192.0.2.14",
+        "protocol": "ICMP",
+        "entropy": 7.7,
+        "z_score": 3
+      }
+    },
+    {
+      "id": "cal-malicious-07",
+      "split": "calibration",
+      "label": "malicious",
+      "signal": {
+        "src_ip": "192.0.2.15",
+        "protocol": "QUIC",
+        "entropy": 6.4,
+        "z_score": 10.5
+      }
+    },
+    {
+      "id": "cal-malicious-08",
+      "split": "calibration",
+      "label": "malicious",
+      "signal": {
+        "src_ip": "192.0.2.16",
+        "protocol": "HTTPS",
+        "entropy": 6.9,
+        "z_score": 7.01,
+        "beacon_interval": 60,
+        "jitter": 0.1
+      }
+    },
+    {
+      "id": "holdout-benign-01",
+      "split": "holdout",
+      "label": "benign",
+      "signal": {
+        "src_ip": "192.0.2.17",
+        "protocol": "HTTPS",
+        "entropy": 2.4,
+        "z_score": 0.4
+      }
+    },
+    {
+      "id": "holdout-benign-02",
+      "split": "holdout",
+      "label": "benign",
+      "signal": {
+        "src_ip": "192.0.2.18",
+        "protocol": "DNS",
+        "entropy": 3,
+        "z_score": 0.6
+      }
+    },
+    {
+      "id": "holdout-benign-03",
+      "split": "holdout",
+      "label": "benign",
+      "signal": {
+        "src_ip": "192.0.2.19",
+        "protocol": "SMB",
+        "entropy": 3.2,
+        "z_score": 0.7
+      }
+    },
+    {
+      "id": "holdout-benign-04",
+      "split": "holdout",
+      "label": "benign",
+      "signal": {
+        "src_ip": "192.0.2.20",
+        "protocol": "HTTPS",
+        "entropy": 4,
+        "z_score": 1.1
+      }
+    },
+    {
+      "id": "holdout-benign-05",
+      "split": "holdout",
+      "label": "benign",
+      "signal": {
+        "src_ip": "192.0.2.21",
+        "protocol": "ICMP",
+        "entropy": 2.8,
+        "z_score": 0.2
+      }
+    },
+    {
+      "id": "holdout-benign-06",
+      "split": "holdout",
+      "label": "benign",
+      "signal": {
+        "src_ip": "192.0.2.22",
+        "protocol": "DNS",
+        "entropy": 3.2,
+        "z_score": 1.3
+      }
+    },
+    {
+      "id": "holdout-benign-07",
+      "split": "holdout",
+      "label": "benign",
+      "signal": {
+        "src_ip": "192.0.2.23",
+        "protocol": "QUIC",
+        "entropy": 7.6,
+        "z_score": 5.2,
+        "bytes_out": 900000
+      }
+    },
+    {
+      "id": "holdout-benign-08",
+      "split": "holdout",
+      "label": "benign",
+      "signal": {
+        "src_ip": "192.0.2.24",
+        "protocol": "HTTPS",
+        "entropy": 3.4,
+        "z_score": 0.9
+      }
+    },
+    {
+      "id": "holdout-malicious-01",
+      "split": "holdout",
+      "label": "malicious",
+      "signal": {
+        "src_ip": "192.0.2.25",
+        "protocol": "QUIC",
+        "entropy": 7.8,
+        "z_score": 14.7
+      }
+    },
+    {
+      "id": "holdout-malicious-02",
+      "split": "holdout",
+      "label": "malicious",
+      "signal": {
+        "src_ip": "192.0.2.26",
+        "protocol": "DNS",
+        "entropy": 7.6,
+        "z_score": 6
+      }
+    },
+    {
+      "id": "holdout-malicious-03",
+      "split": "holdout",
+      "label": "malicious",
+      "signal": {
+        "src_ip": "192.0.2.27",
+        "protocol": "QUIC",
+        "entropy": 7,
+        "z_score": 5.4
+      }
+    },
+    {
+      "id": "holdout-malicious-04",
+      "split": "holdout",
+      "label": "malicious",
+      "signal": {
+        "src_ip": "192.0.2.28",
+        "protocol": "HTTPS",
+        "entropy": 6.8,
+        "z_score": 8.2
+      }
+    },
+    {
+      "id": "holdout-malicious-05",
+      "split": "holdout",
+      "label": "malicious",
+      "signal": {
+        "src_ip": "192.0.2.29",
+        "protocol": "RDP",
+        "entropy": 6.9,
+        "z_score": 5
+      }
+    },
+    {
+      "id": "holdout-malicious-06",
+      "split": "holdout",
+      "label": "malicious",
+      "signal": {
+        "src_ip": "192.0.2.30",
+        "protocol": "ICMP",
+        "entropy": 7.7,
+        "z_score": 3
+      }
+    },
+    {
+      "id": "holdout-malicious-07",
+      "split": "holdout",
+      "label": "malicious",
+      "signal": {
+        "src_ip": "192.0.2.31",
+        "protocol": "QUIC",
+        "entropy": 6.4,
+        "z_score": 10.5
+      }
+    },
+    {
+      "id": "holdout-malicious-08",
+      "split": "holdout",
+      "label": "malicious",
+      "signal": {
+        "src_ip": "192.0.2.32",
+        "protocol": "HTTPS",
+        "entropy": 3.2,
+        "z_score": 1.2
+      }
+    }
+  ]
+}
