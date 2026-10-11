@@ -260,6 +260,18 @@ async def test_event_envelope_must_match_verified_tenant_context(identity_contex
 
 
 @pytest.mark.asyncio
+async def test_client_rejects_header_injection_in_idempotency_key(identity_context):
+    with pytest.raises(EcosystemIntegrationError) as error:
+        await request_json(
+            service="test-service", base_url="https://integration.example",
+            method="POST", path="/actions", payload={"action": "submit"},
+            identity_context=identity_context,
+            idempotency_key="event-1\r\nX-Injected: yes",
+        )
+    assert error.value.code == "bridge_idempotency_key_invalid"
+
+
+@pytest.mark.asyncio
 async def test_client_does_not_follow_redirects():
     calls = 0
 
