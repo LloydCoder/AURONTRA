@@ -297,3 +297,49 @@ class TestAutomationAPI:
         assert r.status_code == 200
         data = r.json()
         assert "executions" in data
+
+
+class TestPlaybookSafetyEnvelope:
+    """Regressions: recommendation output must never masquerade as execution."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("name", "context"),
+        [
+            ("disk_full", {"device_id": "srv-01", "disk_percent": 95}),
+            ("service_restart", {"device_id": "srv-01", "service_name": "application"}),
+            ("cert_expiry", {"device_id": "srv-01", "domain": "example.com", "days_until_expiry": 3}),
+            ("high_cpu", {"device_id": "srv-01", "cpu_percent": 98}),
+        ],
+    )
+    async def test_playbooks_report_recommendations_not_actions(self, name, context):
+        from resilience.playbooks.executor import execute_playbook
+
+        result = await execute_playbook(name, context)
+        assert result["status"] == "simulated"
+        assert result["execution_mode"] == "recommendation_only"
+        assert result["execution_enabled"] is False
+        assert result["business_outcome_verified"] is False
+        assert result["actions_taken"] == []
+        assert result["recommendations"]
+        assert result["timestamp_semantics"] == "recommendation_created"
+
+    @pytest.mark.asyncio
+    async def test_missing_service_target_is_not_silently_defaulted(self):
+        from resilience.playbooks.service_restart import ServiceRestartPlaybook
+
+        result = await ServiceRestartPlaybook().execute({"device_id": "srv-01"})
+        assert result["service_name"] is None
+        assert result["service_name_source"] == "not_provided"
+        assert result["recommendation_state"] == "blocked"
+        assert result["actions_taken"] == []
+
+    @pytest.mark.asyncio
+    async def test_caller_supplied_metrics_are_explicitly_unverified(self):
+        from resilience.playbooks.disk_full import DiskFullPlaybook
+        from resilience.playbooks.high_cpu import HighCPUPlaybook
+
+        disk = await DiskFullPlaybook().execute({"device_id": "srv-01", "disk_percent": 95})
+        cpu = await HighCPUPlaybook().execute({"device_id": "srv-01", "cpu_percent": 98})
+        assert disk["disk_percent_source"] == "caller_supplied_unverified"
+        assert cpu["cpu_percent_source"] == "caller_supplied_unverified"
