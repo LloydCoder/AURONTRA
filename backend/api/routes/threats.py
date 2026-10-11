@@ -276,7 +276,7 @@ async def contain_threat_finding(
     }
     if attempt.status == "contained" and attempt.verification_evidence_ids:
         return JSONResponse(status_code=200, content=body)
-    if attempt.status in {"submitting", "approval_pending", "platform_pending", "unknown_outcome"}:
+    if attempt.status in {"submitting", "approval_pending", "platform_pending", "unknown_outcome", "awaiting_verification"}:
         return JSONResponse(status_code=202, content=body)
     return JSONResponse(status_code=409, content=body)
 
