@@ -38,6 +38,7 @@ async def test_device_revocation_is_idempotent_and_tenant_scoped():
     async with AsyncSessionLocal() as db:
         db.add(Device(id="revoke-me", org_id="test-tenant", name="revocation test", is_active=True))
         db.add(Organization(id="other-tenant", name="Other Tenant", status="active"))
+        await db.flush()
         db.add(Device(id="other-device", org_id="other-tenant", name="other tenant device", is_active=True))
         await db.commit()
 
