@@ -144,6 +144,9 @@ def _normalize_signal(signal: dict) -> dict:
             raise ValueError("protocol must be a short protocol token.")
         normalized["protocol"] = protocol
 
+    elif "protocol" in normalized:
+        normalized.pop("protocol")
+
     bounds = {
         "entropy": (0.0, 8.0),
         "z_score": (-20.0, 100.0),
