@@ -1,5 +1,6 @@
 """Security and isolation tests for knowledge retrieval."""
 import hashlib
+from datetime import datetime, timezone
 
 import pytest
 
@@ -22,6 +23,8 @@ def _article(*, article_id, org_id, title, content, status="published", source_u
         status=status,
         version=1,
         source_url=source_url,
+        approved_by="knowledge-admin" if status == "published" else None,
+        approved_at=datetime.now(timezone.utc) if status == "published" else None,
     )
 
 
