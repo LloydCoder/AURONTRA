@@ -83,6 +83,20 @@ class GovernedActionError(RuntimeError):
 
 
 @dataclass(frozen=True, slots=True)
+class TrustedPlatformContext:
+    """Identity context built from verified server-side auth, never request JSON."""
+
+    tenant_id: str
+    subject_id: str
+
+    def __post_init__(self) -> None:
+        if not _bounded_text(self.tenant_id, maximum=128):
+            raise ValueError("trusted tenant identifier is invalid")
+        if not _bounded_text(self.subject_id, maximum=256):
+            raise ValueError("trusted subject identifier is invalid")
+
+
+@dataclass(frozen=True, slots=True)
 class GovernedActionDefinition:
     """Code-owned action contract; not a Platform authorization grant."""
 
@@ -193,18 +207,48 @@ def _configured_ids() -> tuple[UUID, UUID]:
     return agent_id, task_id
 
 
-def _new_platform_client(action_id: UUID, operation: str) -> AsyncAgentPlatform:
-    """Build one client per operation so spans differ while trace ID stays stable."""
+def _new_platform_client(
+    action_id: UUID,
+    operation: str,
+    context: TrustedPlatformContext,
+    *,
+    credential_provider: Callable[[TrustedPlatformContext], str] | None = None,
+) -> AsyncAgentPlatform:
+    """Build one client per operation with trusted tenant context and a fresh span."""
     if not settings.AGENT_PLATFORM_ENABLED:
         raise GovernedActionError("platform_integration_disabled")
-    required = (
-        settings.AGENT_PLATFORM_BASE_URL,
-        settings.AGENT_PLATFORM_BEARER_TOKEN,
-        settings.AGENT_PLATFORM_TENANT_ID,
-        settings.AGENT_PLATFORM_SUBJECT_ID,
-    )
-    if any(not isinstance(value, str) or not value.strip() for value in required):
-        raise GovernedActionError("platform_integration_not_configured")
+    if not isinstance(context, TrustedPlatformContext):
+        raise GovernedActionError("trusted_platform_context_required")
+    if not _bounded_text(settings.AGENT_PLATFORM_BASE_URL, maximum=2048):
+        raise GovernedActionError("platform_base_url_invalid")
+
+    if credential_provider is None:
+        # The environment-token mode is explicitly single-tenant. Never reuse
+        # one tenant's bearer credential for a different verified context.
+        if not all((
+            isinstance(settings.AGENT_PLATFORM_BEARER_TOKEN, str)
+            and settings.AGENT_PLATFORM_BEARER_TOKEN.strip(),
+            _bounded_text(settings.AGENT_PLATFORM_TENANT_ID, maximum=128),
+            _bounded_text(settings.AGENT_PLATFORM_SUBJECT_ID, maximum=256),
+        )):
+            raise GovernedActionError("platform_integration_not_configured")
+        if (
+            context.tenant_id != settings.AGENT_PLATFORM_TENANT_ID
+            or context.subject_id != settings.AGENT_PLATFORM_SUBJECT_ID
+        ):
+            raise GovernedActionError("platform_identity_context_mismatch")
+        bearer_token = settings.AGENT_PLATFORM_BEARER_TOKEN
+    else:
+        try:
+            bearer_token = credential_provider(context)
+        except Exception:
+            raise GovernedActionError("platform_credential_unavailable") from None
+        if (
+            not isinstance(bearer_token, str)
+            or not bearer_token
+            or any(character.isspace() for character in bearer_token)
+        ):
+            raise GovernedActionError("platform_credential_unavailable")
     parsed_base = urlsplit(settings.AGENT_PLATFORM_BASE_URL)
     if (
         parsed_base.scheme not in {"http", "https"}
@@ -241,9 +285,9 @@ def _new_platform_client(action_id: UUID, operation: str) -> AsyncAgentPlatform:
         # the transport or weakening the SDK's URL/token/timeout validation.
         return AsyncAgentPlatform(
             base_url=settings.AGENT_PLATFORM_BASE_URL,
-            bearer_token=settings.AGENT_PLATFORM_BEARER_TOKEN,
-            tenant_id=settings.AGENT_PLATFORM_TENANT_ID,
-            subject_id=settings.AGENT_PLATFORM_SUBJECT_ID,
+            bearer_token=bearer_token,
+            tenant_id=context.tenant_id,
+            subject_id=context.subject_id,
             timeout=settings.AGENT_PLATFORM_TIMEOUT_SECONDS,
             api_version=settings.AGENT_PLATFORM_API_VERSION,
             traceparent=_traceparent(action_id),
@@ -256,7 +300,8 @@ def _new_platform_client(action_id: UUID, operation: str) -> AsyncAgentPlatform:
         raise GovernedActionError("platform_client_configuration_invalid") from exc
 
 
-ClientFactory = Callable[[UUID, str], AsyncAgentPlatform]
+ClientFactory = Callable[[UUID, str, TrustedPlatformContext], AsyncAgentPlatform]
+CredentialProvider = Callable[[TrustedPlatformContext], str]
 
 
 class PlatformGovernedActionExecutor:
@@ -267,14 +312,29 @@ class PlatformGovernedActionExecutor:
         registry: GovernedActionRegistry,
         *,
         client_factory: ClientFactory | None = None,
+        credential_provider: CredentialProvider | None = None,
     ) -> None:
         self._registry = registry
-        self._client_factory = client_factory if client_factory is not None else _new_platform_client
+        self._client_factory = client_factory
+        self._credential_provider = credential_provider
+
+    def _make_client(
+        self, action_id: UUID, operation: str, context: TrustedPlatformContext
+    ) -> AsyncAgentPlatform:
+        if self._client_factory is not None:
+            return self._client_factory(action_id, operation, context)
+        return _new_platform_client(
+            action_id,
+            operation,
+            context,
+            credential_provider=self._credential_provider,
+        )
 
     async def submit(
         self,
         *,
         action_id: UUID,
+        context: TrustedPlatformContext,
         action_key: str,
         resource: str,
         intent: str,
@@ -287,6 +347,8 @@ class PlatformGovernedActionExecutor:
             raise GovernedActionError("action_id_must_be_uuid")
         if action_id.int == 0:
             raise GovernedActionError("action_id_invalid")
+        if not isinstance(context, TrustedPlatformContext):
+            raise GovernedActionError("trusted_platform_context_required")
         definition = self._registry.get(action_key)
         if not _bounded_text(resource, maximum=_MAX_TEXT_LENGTH):
             raise GovernedActionError("resource_invalid")
@@ -315,7 +377,7 @@ class PlatformGovernedActionExecutor:
         agent_id, task_id = _configured_ids()
         run_id: UUID | None = None
         try:
-            run_client = self._client_factory(action_id, "run")
+            run_client = self._make_client(action_id, "run", context)
             run = await run_client.runs.create(
                 task_id=task_id,
                 agent_id=agent_id,
@@ -339,7 +401,7 @@ class PlatformGovernedActionExecutor:
                     retryable=False,
                 )
 
-            execute_client = self._client_factory(action_id, "execute")
+            execute_client = self._make_client(action_id, "execute", context)
             execution = await execute_client.tools.execute(
                 run_id=run.run_id,
                 agent_id=agent_id,
