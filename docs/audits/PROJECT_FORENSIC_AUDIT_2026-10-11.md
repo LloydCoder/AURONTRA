@@ -1,0 +1,129 @@
+# AURONTRA Project Forensic Audit — 2026-10-11
+
+**Audit baseline:** `main` at `c804dc7d72da163c0fe3db928b753d5cc826544c`  
+**Repository:** `LloydCoder/AURONTRA`  
+**Audit type:** Repository, documentation, and CI evidence review. This is not a penetration test or production certification.  
+**Decision:** Continue sequential hardening. Keep the production data plane, remediation submission, and threat containment disabled.
+
+## Executive summary
+
+The repository contains backend, persistence, identity, remediation, telemetry, service-desk, and threat-analysis modules.
+
+The main-branch CI workflow and secret/archive scan both completed successfully at the baseline:
+- [CI run 38121327324](https://github.com/LloydCoder/AURONTRA/actions/runs/38121327324)
+- [Secret/archive scan 38121327325](https://github.com/LloydCoder/AURONTRA/actions/runs/38121327325)
+
+Those results validate the recorded repository checks. They do not prove production deployment, live identity-provider or Agent Platform connectivity, production worker/scheduler operation, customer-environment correctness, or predictive/detection efficacy.
+
+## Confirmed findings
+
+### F-01 — Phase numbering inconsistency
+
+- `docs/ROADMAP.md` defines 24 sequential phases (01–24). Older text in this audit incorrectly described an 18-phase Phase 0–17 sequence; the canonical roadmap table contains Phases 01–24.
+- `docs/audits/PHASE_16_FORENSIC_AUDIT.md` says “Phase 16 of 24.”
+- The Phase 16 audit header and all roadmap references must use the canonical Phase 01–24 sequence. Phases 18–24 already exist in the roadmap and must not be omitted from project completion tracking.
+
+### F-02 — TSIC registration and end-to-end integration remain incomplete
+
+TSIC registration is now merged and documented in the README and roadmap. Cross-repository contract conformance, live telemetry/finding flow, independent containment verification, and operational acceptance remain Phase 17 gates. Phase 09's pinned SDK and adapter baseline do not prove live end-to-end integration.
+
+TSIC PR #53 merged as `f12105f5a64fc365eae1bd151d01eed509f3108d` after TSIC CI and associated certification workflows passed on candidate `ae961f1cf6ea26ac0d468283b03159f016613caf`. The manifest, capability authority registry, canonical architecture, dependency graph, service registry, and reference adapter now include Aurontra. Runtime contract conformance is a separate requirement and remains open.
+
+### F-03 — Production capabilities are correctly fail-closed but not operationally proven
+
+Current `backend/core/config.py` defaults include:
+- `DATA_PLANE_ENABLED=false`
+- `AGENT_AUTH_ENABLED=false`
+- `AGENT_PLATFORM_ENABLED=false`
+- `REMEDIATION_SUBMISSION_ENABLED=false`
+- `THREAT_CONTAINMENT_ENABLED=false`
+
+Keep these flags disabled until each external prerequisite and end-to-end acceptance gate is satisfied. Do not enable them merely to mark a phase complete.
+
+### F-04 — Durable queue primitives do not prove production processing
+
+Phase 06 documents durable jobs/outbox, retries, leases, idempotency, and recovery. The README states that production worker/scheduler configuration and end-to-end processing are not established. A deployed worker, publisher destination, monitoring/alerting, restart/recovery drills, and duplicate-delivery handling still need runtime evidence.
+
+### F-05 — Tenant-isolation acceptance is deliberately scoped
+
+Phase 05 audit states that durable tenant-scoped persistence and PostgreSQL RLS are verified for core ticket/device resources, while other business subsystems remain gated. The global business data plane must stay closed until every public route and tenant-owned table is inventoried, durable persistence and object-level authorization are proven, and cross-tenant negative tests cover all resource paths.
+
+### F-06 — Predictive and threat-analysis claims require real-world evaluation
+
+Phase 13 documents offline evaluation against synthetic fixtures and uncalibrated confidence. Phase 15 documents evaluation machinery but no representative production-labelled dataset or real-world detection performance. Keep predictions and scores described as heuristic/offline results; do not claim validated predictive accuracy or confirmed threat prevention.
+
+### F-07 — External providers and deployment are not validated by CI
+
+The repository documentation says live LLM/provider integrations, billing/webhook provider reconciliation, production identity configuration, production DB migration, and deployment are not verified. Each integration needs explicit contract tests and a controlled smoke test with secrets supplied through the deployment secret manager. Do not commit secrets or test credentials.
+
+### F-08 — Phase evidence must be tied to exact commits
+
+Main CI and the secret/archive scan passed on the audit baseline. Historical phase records contain older candidate SHAs and run IDs. Each changed phase must record implementation SHA, exact CI run, security scan, database/RLS evidence, documentation reconciliation, and external verification where applicable. Documentation-only checks cannot substitute for implementation tests.
+
+### F-09 — Dependency vulnerability auditing is not evidenced by the current CI definition
+
+The original CI had dependency consistency checks but no resolved-package vulnerability audit. A pinned `pip-audit==2.10.1` workflow and CI discovery step are now in the candidate branch. The first scan reported 78 vulnerability findings across 10 packages, including LangChain packages not referenced by the inspected application code, PyJWT, pytest, python-dotenv, python-multipart, and Starlette. The candidate removes the unused LangChain requirements and upgrades affected packages, including FastAPI/Starlette, Pydantic, PyJWT, pytest/pytest-asyncio, python-dotenv, and python-multipart. The post-upgrade audit reports no known vulnerabilities, and the dependency audit is now blocking in both the dedicated workflow and main CI. Code candidate `a125f77fd12d623207698faac427d2fdce554ca7` passed with 515 tests passed, 1 skipped, and 85.28% coverage. The fully reconciled documentation candidate `b813d4bc45fc9a641c44b1ef4a83ca52fab1127f` also passed all workflows: CI run [38127115662](https://github.com/LloydCoder/AURONTRA/actions/runs/38127115662), dependency audit [38127115603](https://github.com/LloydCoder/AURONTRA/actions/runs/38127115603), and secret/archive scan [38127115609](https://github.com/LloydCoder/AURONTRA/actions/runs/38127115609).
+
+### F-10 — TSIC trace-context contract version drift
+
+The TSIC contract registry listed `trace-context` as `1.0.0`, while `contracts/telemetry/trace-context.json` declares `schema_version: 1.1.0`. This is a cross-system compatibility defect. TSIC PR #54 updates the registry to `1.1.0` and pins the Aurontra adapter's per-contract versions. TSIC PR #54 merged as `619db9e264cdc71369de621c981bfc2ba1615a1d` after all 32 associated workflows passed on the reviewed candidate. The registry and Aurontra adapter now agree on trace-context `1.1.0`. Aurontra's shared client now validates typed identity context and event envelopes, binds tenant/execution/trace/correlation fields, emits a semver contract header, propagates W3C trace context, and rejects unsafe correlation/idempotency header values. Regression tests pass; live end-to-end propagation remains unverified.
+
+### F-11 — Ecosystem client origin trust and response resource bounds
+
+The initial shared HTTP client accepted a caller-supplied `base_url` after scheme/path checks without proving that it matched the configured destination for the named service. That is an SSRF trust-boundary gap under the [OWASP SSRF Prevention Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html). The client now maps supported services to their configured origin settings and rejects unknown services and non-matching origins. Redirects remain disabled. This application-level allowlist is not a substitute for DNS-rebinding-resistant egress controls and private/link-local destination blocking at deployment time.
+
+The previous response-size check ran after `httpx` had buffered the full body, so it did not bound memory consumption. The client now consumes successful response bodies incrementally and stops once the 1 MiB cap is exceeded. Tenant-scoped operations also require a typed `TSICIdentityContext`; bridge operations for ThreatFade and FusionOps propagate that context, and the legacy threat-assessment bridge refuses mismatched organization context. Regression tests cover spoofed origins, unknown services, untyped context, oversized responses, and cross-tenant event mismatches. The documentation-reconciled candidate `b813d4bc45fc9a641c44b1ef4a83ca52fab1127f` passed all CI/security workflows on the same SHA.
+
+W3C trace-context parsing follows the current `00` format and rejects zero trace/span IDs, consistent with the [W3C Trace Context specification](https://www.w3.org/TR/trace-context/). Event-envelope shape is pinned to the TSIC contract rather than silently assumed from generic CloudEvents defaults.
+
+### F-12 — Half-open circuit breaker did not restart its cooldown after probe failure
+
+The circuit breaker opened after repeated upstream failures, but a failed half-open probe could leave the original `opened_at` timestamp unchanged. Once the original cooldown had elapsed, subsequent requests could immediately attempt another probe instead of observing a fresh cooldown. The client now restarts the cooldown after a failed half-open transport/retryable/oversized-response probe, while a real upstream HTTP rejection is treated as evidence of reachability and closes the half-open circuit. A regression test advances a controlled clock and verifies that a failed probe is followed by `bridge_circuit_open` without another network attempt.
+
+## Security and architecture invariants
+
+1. Tinlance Agent Platform remains the authoritative identity, authorization, policy, approvals, sandbox, secrets, execution, and evidence authority.
+2. Tenant identity must come from verified server-side context, never request JSON.
+3. Missing verifiers, missing Platform tool/approval configuration, stale or mismatched evidence, invalid signatures, and ambiguous outcomes fail closed.
+4. Consequential actions require stable idempotency identifiers and durable reconciliation.
+5. “Submitted,” “executed,” and “business postcondition independently verified” are distinct states.
+6. A threat finding or score is not proof of containment; claims require fresh, target-bound independent evidence.
+7. Test-mode authentication bypass is confined to explicit isolated tests and is forbidden in production.
+8. A skipped deployment is not a deployment pass.
+
+## Serial remediation sequence
+
+### Gate 0 — Baseline and traceability
+- [x] Record baseline SHA and current main CI/security scan runs.
+- [x] Identify phase-count inconsistency and production-readiness non-claims.
+- [x] Create a Phase 17 integration plan.
+- [ ] Map every phase acceptance criterion to current source, tests, migrations, and exact evidence.
+- [x] Add a reproducible pinned dependency vulnerability audit and remediate the reported findings.
+- [x] Maintain a release evidence ledger tied to exact candidate SHAs; update the current candidate entry after the latest CI run completes.
+
+### Gates 1–16 — Revalidate existing phase claims
+- Revalidate implementation and negative tests against the current candidate, not only historical prose.
+- Fix code defects on dedicated branches and add regression tests before documenting fixes.
+- Reconcile docs only after implementation and tests are verified.
+- Keep external/runtime requirements blocked where they cannot be proven.
+
+### Gate 17 — TSIC and end-to-end integration
+1. Validate TSIC registration and authority/graph/capability consistency.
+2. Add contract tests for tenant identity, versioning, event envelopes, trace propagation, idempotency, and sanitized failure behavior.
+3. Verify trusted telemetry-to-finding and finding-to-remediation paths with cross-tenant negative tests.
+4. Integrate and adversarially test the concrete independent containment verifier.
+5. Prove Platform approval/policy/tool configuration in a controlled environment without local execution bypass.
+6. Demonstrate worker/scheduler processing, recovery, observability, and runbooks.
+7. Keep production flags disabled until all prerequisites pass.
+
+### Final release gate
+- Backend suite, coverage, clean SQLite migration, PostgreSQL migration/RLS/restore, dependency checks, compilation, secret/history/archive scan, and security workflows pass on the same candidate SHA.
+- Frontend build and API integration checks pass.
+- Route/table tenant-isolation inventory is complete.
+- Worker/scheduler, observability, alerting, backup/restore, and rollback drills are evidenced.
+- External identity, Platform, verifier, and provider integrations pass controlled smoke tests.
+- A release decision records residual risks; CI alone is not production certification.
+
+## Scope limitations
+
+This review inspected live GitHub repository metadata/tree, README, roadmap, CI workflow, configuration, requirements, Phase 05–07 audits, Phase 09 design, Phase 10 forensic audit, Phase 16 forensic audit, recent workflow history, and the AURONTRA integration route. It did not execute code locally, conduct a penetration test, access production infrastructure, or verify external credentials. Those items remain unverified.

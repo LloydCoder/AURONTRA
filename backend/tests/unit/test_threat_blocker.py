@@ -5,6 +5,20 @@ RED phase: all tests written before implementation.
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 
+from core.tsic_contracts import TSICIdentityContext
+
+
+def _identity_context():
+    return TSICIdentityContext(
+        tenant_id="tenant-001",
+        organization_id="org-001",
+        workspace_id="workspace-001",
+        actor_id="service:aurontra",
+        execution_id="execution-001",
+        trace_id="4bf92f3577b34da6a3ce929d0e0e4736",
+        correlation_id="correlation-001",
+    )
+
 
 class TestThreatAnalyser:
     """Tests for signal analysis and threat scoring."""
@@ -111,6 +125,7 @@ class TestThreatBlockerAgent:
                 src_ip="185.220.101.47",
                 scenario="c2_beacon",
                 org_id="org-001",
+                identity_context=_identity_context(),
             )
         assert "event_id" in result
         assert "blocked" in result
@@ -129,6 +144,7 @@ class TestThreatBlockerAgent:
                 src_ip="185.220.101.47",
                 scenario="c2_beacon",
                 org_id="org-001",
+                identity_context=_identity_context(),
             )
         assert result["blocked"] is False
         assert result["action_taken"] == "containment_pending"
@@ -146,6 +162,7 @@ class TestThreatBlockerAgent:
                 src_ip="192.168.1.100",
                 scenario="normal_traffic",
                 org_id="org-001",
+                identity_context=_identity_context(),
             )
         assert result["blocked"] is False
         assert result["action_taken"] == "monitor"
@@ -160,6 +177,7 @@ class TestThreatBlockerAgent:
                 src_ip="10.0.0.1",
                 scenario="lateral_movement",
                 org_id="org-001",
+                identity_context=_identity_context(),
             )
         assert result["event_id"] == "evt-specific-777"
 
@@ -173,6 +191,7 @@ class TestThreatBlockerAgent:
                 src_ip="1.2.3.4",
                 scenario="unknown",
                 org_id="org-001",
+                identity_context=_identity_context(),
             )
         assert "event_id" in result
         assert result["blocked"] is False

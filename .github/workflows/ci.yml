@@ -40,6 +40,33 @@ jobs:
       - name: Validate dependency environment
         run: python -m pip check
 
+      - name: Audit resolved dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install pip-audit==2.10.1
+          report="$RUNNER_TEMP/pip-audit.json"
+          set +e
+          pip-audit --local --format=json --output "$report"
+          audit_status=$?
+          set -e
+          if [[ -s "$report" ]]; then
+            python - "$report" <<'PY'
+          import json, sys
+          with open(sys.argv[1], encoding="utf-8") as stream:
+              report = json.load(stream)
+          for dependency in report.get("dependencies", []):
+              for vulnerability in dependency.get("vulns", []):
+                  print("VULNERABILITY package={name} version={version} id={id} fix_versions={fix}".format(
+                      name=dependency.get("name", "unknown"),
+                      version=dependency.get("version", "unknown"),
+                      id=vulnerability.get("id", "unknown"),
+                      fix=",".join(vulnerability.get("fix_versions", [])) or "none-listed",
+                  ))
+          PY
+          fi
+          exit "$audit_status"
+
       - name: Validate Alembic migration on a clean SQLite database
         env:
           DATABASE_URL: sqlite+aiosqlite:///./migration_test.db

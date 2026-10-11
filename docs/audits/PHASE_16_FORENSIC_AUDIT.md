@@ -1,6 +1,6 @@
 # Phase 16 Forensic Audit — Platform-Governed Threat Containment
 
-**Phase:** 16 of 24
+**Phase:** 16 of 24 (canonical roadmap sequence)
 **Implementation commit:** `cdafe5f3eb840418f90437c1e0201bf0fe2746c9`
 **Decision:** Passed repository/CI gates; production containment remains disabled.
 
