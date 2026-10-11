@@ -40,19 +40,12 @@ Phases are sequential release gates. A phase is complete only after implementati
 
 ## Phase 12 implementation evidence
 
-- Phase 12 was audited at code commit `6b2e3a1f72afbf4bc1899b6b0bda96b1e7702ef4`; final documentation and audit are reconciled in the Phase 12 PR.
+- Phase 12 was audited at code commit `6b2e3a1f72afbf4bc1899b6b0bda96b1e7702ef4`; the design and forensic audit are reconciled in the Phase 12 PR.
 - CI: [run 38104429834](https://github.com/LloydCoder/AURONTRA/actions/runs/38104429834) — **392 passed, 1 skipped, 85.04% coverage**; clean SQLite migration, compile, PostgreSQL tenant RLS and backup/restore passed.
 - Secret/history/archive scan: [run 38104429792](https://github.com/LloydCoder/AURONTRA/actions/runs/38104429792) passed. Deployment was skipped; no production telemetry source, scheduler or identity provider was exercised.
+- The implementation provides strict schema and freshness validation, per-device rate limiting, event idempotency, DPoP proof replay protection, payload provenance, ordering and partial-metric safeguards, forced PostgreSQL RLS, and a bounded tenant-specific retention primitive.
 - Full design and release gates: [Phase 12 design](PHASE_12_TELEMETRY_EVIDENCE.md) and [Phase 12 forensic audit](audits/PHASE_12_FORENSIC_AUDIT.md).
-
-
-
-- Revision `0007_telemetry_evidence` adds durable telemetry evidence with tenant/device foreign keys, per-tenant event idempotency, DPoP proof uniqueness, request/payload hashes, metric completeness, quality flags, scoring status and retention expiry.
-- Ingestion validates the strict schema, timestamp bounds, enrolled device/key, scoped DPoP identity and event idempotency; the telemetry row and `telemetry.accepted` outbox event share the request transaction.
-- Out-of-order samples are retained as evidence but cannot overwrite current state. Partial CPU/memory/disk samples have no composite score and cannot overwrite the trusted device score.
-- The retention primitive is tenant-bound and batch-limited. No production retention scheduler or event consumer is configured.
-- The [Phase 12 design](PHASE_12_TELEMETRY_EVIDENCE.md) documents semantics and residual release gates. The phase-specific forensic audit will record the exact tested commit and CI results after all checks pass.
-- Production remains closed pending real identity-provider configuration, agent release/signing, scheduled retention, evidence consumers, observability and customer-environment validation.
+- Production remains closed pending real identity-provider configuration, signed agent release, scheduled retention, evidence consumers, observability and customer-environment validation.
 
 ## Phase 11 implementation evidence
 
