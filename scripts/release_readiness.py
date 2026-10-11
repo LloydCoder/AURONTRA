@@ -52,7 +52,19 @@ def evaluate() -> dict:
             "blockers": [{"id": "acceptance_manifest", "reason": "acceptance manifest is unreadable or invalid JSON"}],
         }
 
-    check("manifest_schema", manifest.get("schema_version") == 1 and isinstance(manifest.get("gates"), list),
+    if not isinstance(manifest, dict):
+        return {
+            "product": "Aurontra",
+            "release_status": "not_ready",
+            "production_release_ready": False,
+            "checks": [{"id": "manifest_schema", "passed": False,
+                        "detail": "Manifest root must be a JSON object."}],
+            "blockers": [{"id": "manifest_schema",
+                          "reason": "Manifest root must be a JSON object."}],
+        }
+
+    manifest_valid = manifest.get("schema_version") == 1 and isinstance(manifest.get("gates"), list)
+    check("manifest_schema", manifest_valid,
           "Manifest schema must be version 1 and contain a gates array.")
     gate_ids: set[str] = set()
     gates = manifest.get("gates", [])
@@ -66,7 +78,7 @@ def evaluate() -> dict:
             blockers.append({"id": "manifest_gate_id", "reason": "Gate IDs must be unique, non-empty strings."})
             continue
         gate_ids.add(gate_id)
-        if status not in ALLOWED_STATUSES:
+        if not isinstance(status, str) or status not in ALLOWED_STATUSES:
             blockers.append({"id": gate_id, "reason": "Gate status must be accepted or blocked."})
             continue
         evidence = gate.get("evidence")
@@ -120,8 +132,12 @@ def evaluate() -> dict:
           "Configured DB_SCHEMA_REVISION must match a checked-in Alembic migration.")
 
     declared_status = manifest.get("release_status")
-    all_accepted = bool(gates) and all(isinstance(g, dict) and g.get("status") == "accepted" for g in gates)
-    ready = not blockers and all_accepted and declared_status == "ready"
+    all_accepted = (
+        isinstance(gates, list)
+        and bool(gates)
+        and all(isinstance(g, dict) and g.get("status") == "accepted" for g in gates)
+    )
+    ready = manifest_valid and not blockers and all_accepted and declared_status == "ready"
     if declared_status != ("ready" if all_accepted else "not_ready"):
         blockers.append({"id": "manifest_release_status", "reason": "release_status must agree with the status of every required gate."})
         ready = False
