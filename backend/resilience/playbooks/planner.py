@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import re
 from datetime import datetime, timedelta, timezone
-from typing import Any, Callable, Literal
+from typing import Any, Awaitable, Callable, Literal
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, field_validator, model_validator
@@ -581,8 +581,10 @@ class PlaybookActionDispatcher:
         *,
         client_factory: Callable[[UUID, str, TrustedPlatformContext], AsyncAgentPlatform] | None = None,
         credential_provider: Callable[[TrustedPlatformContext], str] | None = None,
+        evidence_verifier: Callable[[PlaybookActionProposal], Awaitable[bool]] | None = None,
     ) -> None:
         self._registry = registry if registry is not None else GovernedActionRegistry()
+        self._evidence_verifier = evidence_verifier
         self._executor = PlatformGovernedActionExecutor(
             self._registry,
             client_factory=client_factory,
@@ -608,6 +610,14 @@ class PlaybookActionDispatcher:
             return self._not_dispatched(proposal, contract_problem)
         if not settings.AGENT_PLATFORM_ENABLED:
             return self._not_dispatched(proposal, "platform_integration_disabled")
+        if self._evidence_verifier is None:
+            return self._not_dispatched(proposal, "evidence_verifier_not_configured")
+        try:
+            evidence_verified = await self._evidence_verifier(proposal)
+        except Exception:
+            return self._not_dispatched(proposal, "evidence_verification_failed")
+        if evidence_verified is not True:
+            return self._not_dispatched(proposal, "source_evidence_unverified")
 
         try:
             definition: GovernedActionDefinition = self._registry.get(proposal.action_key)
