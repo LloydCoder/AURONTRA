@@ -106,3 +106,12 @@ Threat analysis is tenant-scoped, persisted in `threat_findings`, and identified
 Threat scores are deterministic heuristics, not calibrated probabilities. ATT&CK mappings are hypotheses rather than confirmation of attacker behavior. A repeatable offline evaluator reports confusion-matrix metrics and Wilson intervals only for the exact labelled dataset hash and threshold supplied; no production dataset or real-world performance claim is included. The containment endpoint remains disabled until Phase 16 adds a real Platform-governed enforcement path and independent postcondition verification.
 
 The production data plane remains closed. The Phase 15 code/CI gates passed (451 passed, 1 skipped, 85.49% coverage; PostgreSQL RLS/backup-restore and secret/history/archive scan green), but deployment was skipped. See [Phase 15 design](PHASE_15_THREAT_EVIDENCE.md) and [forensic audit](audits/PHASE_15_FORENSIC_AUDIT.md).
+
+
+## Platform-governed threat containment (Phase 16)
+
+Containment is a separate state machine, not an inference from a threat score. The durable `threat_containment_attempts` table is tenant-scoped and RLS-protected. Each finding can have one attempt, with a deterministic action ID and stable Platform idempotency key. The attempt is persisted before submission; ambiguous transport results remain `unknown_outcome`.
+
+The service accepts only high/critical findings tied to an active tenant-owned device and fresh, unexpired, good-quality endpoint-agent telemetry. Public `network_signal` findings cannot be contained. Only the code-owned `threat.containment.isolate_endpoint` action is eligible and it is submitted through `PlatformGovernedActionExecutor`; no local side effect exists.
+
+A finding becomes contained only when the Platform returns a completed execution with evidence/audit IDs and an independent verifier confirms the exact tenant/device/finding/execution, fresh observation, and active isolation state. The default FastAPI dependency has no verifier and the feature flags are false. The remote tool and approval policy are not verified; production containment remains disabled pending Phase 17.

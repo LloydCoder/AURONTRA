@@ -104,7 +104,7 @@ The phase replaces ephemeral threat-event handling with durable tenant-scoped fi
 3. ATT&CK labels are heuristic hypotheses, not confirmation that a technique occurred. MITRE ATT&CK's current detection strategy model should be used for future mapping validation.
 4. There is no public evaluation-upload API, signed benchmark manifest, model registry, or trusted ground-truth governance in this phase.
 5. Threat finding retention, durable append-only audit anchoring, alerting/SLOs and incident response are later-phase work.
-6. Containment remains disabled; no network/firewall/endpoint enforcement is invoked or verified.
+6. Phase 16 adds a gated Platform-governed state machine and verifier contract, but the concrete verifier and remote tool/policy registration remain absent. Containment stays disabled; no network/firewall/endpoint enforcement is invoked or verified.
 7. The data plane and deployment remain gated. Green CI is not production deployment evidence.
 
 ## Research basis

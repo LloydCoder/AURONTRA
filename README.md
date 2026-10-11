@@ -26,6 +26,10 @@ Until secure endpoint execution and authorization are implemented and tested:
 - ROI outputs are illustrative models, not measured savings; control mappings are not compliance certification.
 - Deployment status is reported separately from test status.
 
+## Threat containment orchestration (Phase 16)
+
+Phase 16 adds a durable containment-attempt ledger, a stable idempotent action ID, tenant/device/telemetry binding, and a Platform-governed critical-risk isolation action contract. Aurontra never runs local enforcement. A finding is marked contained only when the Platform reports execution evidence and an independent verifier confirms fresh, target-matched isolation evidence. The default verifier is intentionally absent, and `THREAT_CONTAINMENT_ENABLED=false` and `AGENT_PLATFORM_ENABLED=false`; real containment is still disabled pending Phase 17 telemetry/verifier integration and Platform-side tool/approval-policy verification. CI passed **465 tests, 1 skipped, 85.19% coverage**, PostgreSQL RLS/backup-restore, and secret/history/archive scanning. See [Phase 16 design](docs/PHASE_16_VERIFIED_CONTAINMENT.md) and [Phase 16 forensic audit](docs/audits/PHASE_16_FORENSIC_AUDIT.md).
+
 ## Development and verification
 
 Backend CI uses Python 3.12 and pytest. The CI workflow is the source of truth for currently enforced checks. Durable job/outbox worker primitives are covered by CI; production scheduler/broker configuration, frontend build/integration, remaining subsystem persistence, inbound billing-webhook idempotency, and deployment verification remain release gates. Ticket and device APIs now use durable tenant-scoped persistence; CI verifies cross-tenant behavior, PostgreSQL RLS for tenant-owned tables (including durable replay and remediation intent records), and a backup/restore smoke test. Other business modules remain gated, and no production database migration or tenant-isolated data-plane release is claimed.

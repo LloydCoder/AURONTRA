@@ -175,3 +175,14 @@ Ratings are qualitative and reflect the current repository and default-closed pr
 ## 9. Release decision
 
 **Not production-ready.** Default-closed posture and security regression tests reduce immediate exposure, but tenant persistence/resource authorization, production identity configuration, governed endpoint execution, durable webhook processing, reproducible frontend, dependency/SAST coverage, backup/recovery evidence, and actual deployment verification remain release blockers.
+
+
+## Phase 16 update — threat containment authority and failure modes
+
+Containment is not authorized by a threat score alone. The public analysis route creates only `network_signal` findings; the containment service requires a same-tenant enrolled device and a fresh, unexpired endpoint-agent telemetry record. Findings lacking that trusted source are rejected before Platform submission.
+
+The containment attempt is persisted before an external side effect and has one deterministic action identity per tenant/finding. A Platform run/execution state is not treated as proof of isolation. Only independent, fresh evidence matching tenant, device, finding and execution can set `containment_verified=true`. Unknown transport outcomes remain unknown; failed verification never promotes the finding to contained.
+
+The code-owned action is submitted through the Tinlance Agent Platform SDK. Aurontra does not run local shell/firewall commands and cannot certify the remote Platform tool registration or approval policy. The concrete verifier is not wired, the default dependency has no verifier, and both containment/platform flags remain disabled. This is a deliberate release gate, not a claim of production containment readiness.
+
+Evidence: [Phase 16 design](PHASE_16_VERIFIED_CONTAINMENT.md), [Phase 16 forensic audit](audits/PHASE_16_FORENSIC_AUDIT.md), [CI run](https://github.com/LloydCoder/AURONTRA/actions/runs/38118632295), [security scan](https://github.com/LloydCoder/AURONTRA/actions/runs/38118632275).
