@@ -57,3 +57,15 @@ The application rejects oversized declared request bodies before routing. The pr
 ## Database migration status
 
 The repository has Alembic migrations for the base schema and tenant foreign keys/RLS. Ticket and device route persistence is exercised in SQLite tests with foreign-key enforcement enabled; PostgreSQL CI validates tenant isolation for organizations, devices and tickets using a non-owner/non-bypass role, then performs a custom-format dump/restore smoke test that verifies restored tenant data and RLS policies. These are CI proofs, not evidence of a production database migration or managed-backup configuration. The migrations are intentionally non-destructive for pre-existing tables; before production adoption, back up the actual database, compare schema to models, and run a reviewed forward migration. Production startup must not use `create_all` as a substitute for migrations.
+
+
+## Durable jobs and event delivery (Phase 06)
+
+Aurontra now has tenant-scoped `durable_jobs` and `outbox_events` tables, introduced by Alembic revision `0003_durable_jobs_and_outbox`. Both tables have tenant foreign keys, idempotency uniqueness, queue-oriented indexes, and PostgreSQL forced row-level security. The production schema gate now expects this migration head.
+
+- Jobs are claimed in bounded batches with row locks and PostgreSQL `SKIP LOCKED`; leases expire and can be recovered. Attempt counts, bounded exponential backoff, cooperative cancellation, lease-owner checks and terminal dead-letter states are persisted.
+- A transactional outbox avoids a dual-write gap: ticket creation writes the ticket and a `ticket.created` event in the same database transaction. Event payloads contain the ticket identifier and source only; consumers must refetch data through tenant-scoped access.
+- Worker execution is explicit allowlist dispatch. An unregistered job type is dead-lettered; handlers receive an idempotency key and bounded JSON payloads/results. No handler is implicitly authorized to perform privileged infrastructure actions.
+- Outbox publication is at-least-once. A publisher may deliver an event and crash before recording its acknowledgement, so downstream consumers must deduplicate by event/idempotency identifier.
+- The code provides reusable worker loops, but no production scheduler, broker, publisher destination, or service deployment is configured. This phase is implementation and CI evidence, not proof of live production processing.
+- These workers do not replace the Tinlance Agent Platform. Any consequential remediation must still go through the official Platform SDK and its policy, approval, sandbox, budget, secret, execution and evidence controls.

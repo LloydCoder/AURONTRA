@@ -27,7 +27,7 @@ Until secure endpoint execution and authorization are implemented and tested:
 
 ## Development and verification
 
-Backend CI uses Python 3.12 and pytest. The CI workflow is the source of truth for currently enforced checks. Security, persistence, frontend, integration, and deployment gates will be expanded as hardening proceeds. Ticket and device APIs now use durable tenant-scoped persistence; CI verifies cross-tenant behavior, PostgreSQL RLS for organizations/devices/tickets, and a backup/restore smoke test. Other business modules remain gated, and no production database migration or tenant-isolated data-plane release is claimed.
+Backend CI uses Python 3.12 and pytest. The CI workflow is the source of truth for currently enforced checks. Durable job/outbox worker primitives are covered by CI; production scheduler/broker configuration, frontend build/integration, remaining subsystem persistence, inbound billing-webhook idempotency, and deployment verification remain release gates. Ticket and device APIs now use durable tenant-scoped persistence; CI verifies cross-tenant behavior, PostgreSQL RLS for organizations/devices/tickets, and a backup/restore smoke test. Other business modules remain gated, and no production database migration or tenant-isolated data-plane release is claimed.
 
 ## Architecture and security principles
 

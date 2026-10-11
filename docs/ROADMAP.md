@@ -2,7 +2,7 @@
 
 Aurontra is a Tinlance ecosystem product and a consumer of the four-repository Tinlance Agent System. It must not duplicate the Agent Platform's authoritative identity, authorization, policy, approval, sandbox, secrets, execution, or evidence controls.
 
-Phases are sequential release gates. A phase is complete only after implementation, tests, documentation reconciliation, security review, and CI evidence. Passing CI does not certify production readiness. Phase 04's threat model is reviewed. Phase 05's foundational ticket/device tenant persistence and RLS acceptance checks are complete; Phase 06 is now active. The production data plane remains closed because several other business subsystems are not yet migrated.
+Phases are sequential release gates. A phase is complete only after implementation, tests, documentation reconciliation, security review, and CI evidence. Passing CI does not certify production readiness. Phase 04's threat model is reviewed. Phase 05's foundational ticket/device tenant persistence and RLS acceptance checks are complete. Phase 06 durable jobs/outbox implementation and acceptance checks are complete; Phase 07 is now active. The production data plane remains closed because several other business subsystems are not yet migrated.
 
 | Phase | Scope | Acceptance evidence | Status |
 |---|---|---|---|
@@ -11,8 +11,8 @@ Phases are sequential release gates. A phase is complete only after implementati
 | 03 | Authentication and role-based API perimeter | JWT signature/issuer/audience checks, HTTPS identity config, role-policy tests | Complete — business data plane remains closed |
 | 04 | Threat model and security design | STRIDE/trust-boundary model, abuse cases, mitigation/evidence mapping | Complete — 18 threats and verification matrix reviewed; CI green |
 | 05 | Durable tenant persistence and resource-level authorization | Migrations, tenant-scoped ticket/device repositories, PostgreSQL RLS, cross-tenant tests, transaction/backup tests | Complete — core ticket/device repositories, active-tenant gate, FK enforcement, RLS, rollback and restore smoke tests pass; other subsystems remain gated |
-| 06 | Durable jobs and event processing | Retry, idempotency, replay, cancellation and dead-letter tests | **Active — next phase** |
-| 07 | Organization/device lifecycle | Enrollment, revocation, ownership and offboarding tests | Not started |
+| 06 | Durable jobs and event processing | Retry, idempotency, replay, cancellation, lease recovery, dead-letter, outbox atomicity, PostgreSQL RLS and CI evidence | Complete — 285 passed, 1 skipped; PostgreSQL RLS/restore and history scan green; deployment remains intentionally skipped |
+| 07 | Organization/device lifecycle | Enrollment, revocation, ownership and offboarding tests | **Active — next phase** |
 | 08 | Authenticated endpoint agent | Device identity, signed requests, replay protection, versioning tests | Not started |
 | 09 | Governed action engine | Tinlance Agent Platform contract tests, policy/approval evidence | Not started |
 | 10 | Safe remediation playbooks | Allowlist, least privilege, bounded execution and postcondition tests | Not started |
@@ -37,9 +37,12 @@ Phases are sequential release gates. A phase is complete only after implementati
 - Threat containment is disabled until a real enforcement adapter and independent verification exist.
 - Billing webhook signatures fail closed; checkout and onboarding remain disabled.
 - JWT/JWKS verification and conservative role policy are implemented and tested. Ticket and device APIs now use durable tenant-scoped queries, require an active organization, and have cross-tenant negative tests. This is not a complete object-level authorization claim for every business route.
-- Organization, API-key metadata, audit-event and webhook-idempotency models plus Alembic migrations exist. Ticket/device routes use durable SQLAlchemy persistence, explicit tenant predicates, and active-organization checks; remaining legacy in-memory modules are not enabled in production.
+- Organization, API-key metadata, audit-event, webhook inbox metadata, durable job and transactional outbox models plus Alembic migrations exist. Ticket/device routes use durable SQLAlchemy persistence, explicit tenant predicates, and active-organization checks; remaining legacy in-memory modules are not enabled in production.
 - Production startup no longer mutates schema with `create_all`; it requires the configured migration revision when the data plane is requested.
 - The production data plane remains closed by a code-level release gate until every business subsystem is durable, tenant-scoped, and independently tested.
+- Ticket creation writes a tenant-scoped `ticket.created` outbox event in the same database transaction; the outbox payload contains identifiers only, not ticket content or reporter PII.
+- Durable worker loops use explicit handler/publisher allowlists, bounded timeouts, lease ownership, retries, cooperative cancellation, idempotency keys and dead-letter behavior. Delivery is at-least-once, not exactly-once.
+- No production worker scheduler, message broker, external publisher, or production deployment has been configured. Queue primitives and CI tests are not evidence of a running production worker.
 - The old deployment archive is removed from the working tree. The security workflow rejects future tracked tarballs and scans historical blobs as data only.
 
 ## Serial execution protocol

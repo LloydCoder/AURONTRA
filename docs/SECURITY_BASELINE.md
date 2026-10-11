@@ -62,3 +62,14 @@ Production release remains blocked until all of the following have evidence:
 - Content-Length checking does not by itself stop oversized chunked requests.
 - The old deployment archive is removed from the working tree. Its historical blob remains in Git history; the workflow scans history for matching secrets but does not execute historical artifacts.
 - This document is not a substitute for independent penetration testing, production environment verification, or external compliance assessment.
+
+
+## Phase 06 evidence — durable jobs and transactional outbox
+
+- Implemented by code changes through commit `91c80eb9ef167fd7a44a5d30fde1c7f7789dab89`; final CI run for that commit is [38097810533](https://github.com/LloydCoder/AURONTRA/actions/runs/38097810533), and secret/archive/history scan is [38097810453](https://github.com/LloydCoder/AURONTRA/actions/runs/38097810453).
+- Backend CI: 285 passed, 1 skipped; 83.65% total coverage. Alembic clean SQLite upgrade, Python compile, PostgreSQL tenant RLS integration and backup/restore smoke tests passed. The secret/archive/history scan passed.
+- Migration `0003_durable_jobs_and_outbox` creates tenant-scoped queue/outbox tables, uniqueness constraints, check constraints, indexes and forced PostgreSQL RLS policies. The production schema revision default is advanced to this migration.
+- Worker primitives cover idempotent enqueue, tenant-scoped outbox writes, row-locked claims, lease ownership and expiry, retries, bounded result metadata, cancellation, terminal dead-letter handling, outbox publication acknowledgement and sanitized error codes.
+- Ticket creation now commits its `ticket.created` event atomically with the ticket. A regression test proves the event exists and a separate rollback test proves domain and outbox writes roll back together.
+- PostgreSQL RLS tests run as a non-owner, non-BYPASSRLS role and cover tenant visibility and cross-tenant write denial for organizations, devices, tickets, durable jobs and outbox events. Backup/restore checks verify restored queue tables retain forced RLS and policies.
+- **Known limitations:** no production worker scheduler/broker/publisher target is configured; inbound Lemon Squeezy webhook deduplication and provider reconciliation remain unimplemented; exactly-once delivery is not claimed; queue/outbox payloads are intended to be small and contain no secrets; the production data plane remains code-gated. Deployment was skipped because `vars.DEPLOY_ENABLED` is not enabled, so there is no production-host verification.
