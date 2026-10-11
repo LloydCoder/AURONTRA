@@ -1,0 +1,37 @@
+groups:
+  - name: aurontra-slo
+    interval: 30s
+    rules:
+      - alert: AurontraHighServerErrorRate
+        expr: |
+          (
+            sum(rate(aurontra_http_requests_total{status_class="5xx"}[5m]))
+            /
+            clamp_min(sum(rate(aurontra_http_requests_total[5m])), 1)
+          ) > 0.01
+        for: 10m
+        labels:
+          severity: page
+        annotations:
+          summary: "Aurontra server error rate exceeds 1%"
+          description: "More than 1% of observed requests returned server errors for 10 minutes."
+      - alert: AurontraHighP95Latency
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (rate(aurontra_http_request_duration_seconds_bucket[5m]))
+          ) > 0.5
+        for: 10m
+        labels:
+          severity: ticket
+        annotations:
+          summary: "Aurontra p95 latency exceeds 500ms"
+          description: "The observed request p95 latency exceeded the provisional target for 10 minutes."
+      - alert: AurontraScrapeUnavailable
+        expr: up{job="aurontra"} == 0
+        for: 2m
+        labels:
+          severity: page
+        annotations:
+          summary: "Aurontra metrics scrape is unavailable"
+          description: "Prometheus cannot scrape the configured Aurontra metrics endpoint."
