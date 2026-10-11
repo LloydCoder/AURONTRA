@@ -16,6 +16,7 @@ from models.ticket import Ticket, TicketPriority, TicketSource, TicketStatus
 async def test_ticket_list_and_detail_never_disclose_another_tenant():
     async with AsyncSessionLocal() as session:
         session.add(Organization(id="other-tenant", name="Other Tenant", status="active"))
+        await session.flush()
         session.add(Ticket(
             id="private-ticket",
             org_id="other-tenant",
@@ -42,6 +43,7 @@ async def test_ticket_list_and_detail_never_disclose_another_tenant():
 async def test_ticket_cannot_attach_device_owned_by_another_tenant():
     async with AsyncSessionLocal() as session:
         session.add(Organization(id="other-tenant", name="Other Tenant", status="active"))
+        await session.flush()
         session.add(Device(id="private-device", org_id="other-tenant", name="Private device"))
         await session.commit()
 
@@ -62,6 +64,7 @@ async def test_ticket_cannot_attach_device_owned_by_another_tenant():
 async def test_telemetry_cannot_update_device_owned_by_another_tenant():
     async with AsyncSessionLocal() as session:
         session.add(Organization(id="other-tenant", name="Other Tenant", status="active"))
+        await session.flush()
         session.add(Device(
             id="private-device",
             org_id="other-tenant",
