@@ -78,6 +78,36 @@ async def enroll_agent(
             "enrolled_at": now.isoformat(), "agent_version": device.agent_version}
 
 
+@router.post("/rotate-key")
+async def rotate_agent_key(
+    payload: AgentEnrollmentPayload,
+    identity: AgentIdentity = Depends(get_agent_identity),
+    db: AsyncSession = Depends(get_agent_tenant_db),
+):
+    if "aurontra:agent:key:rotate" not in identity.scopes:
+        raise HTTPException(status_code=403, detail="Agent key-rotation scope is required.")
+    device = await db.scalar(select(Device).where(
+        Device.id == identity.device_id,
+        Device.org_id == identity.tenant_id,
+        Device.is_active.is_(True),
+        Device.enrolled_at.is_not(None),
+        Device.revoked_at.is_(None),
+    ).with_for_update())
+    if device is None:
+        raise HTTPException(status_code=404, detail="Enrolled device not found.")
+    if device.agent_key_thumbprint == identity.key_thumbprint:
+        raise HTTPException(status_code=409, detail="The presented key is already enrolled.")
+    await _consume_proof(db, identity)
+    now = datetime.now(timezone.utc)
+    device.agent_key_thumbprint = identity.key_thumbprint
+    device.agent_key_rotated_at = now
+    device.agent_version = payload.agent_version
+    await db.flush()
+    return {"device_id": device.id, "lifecycle_state": "key_rotated",
+            "key_thumbprint": identity.key_thumbprint, "key_rotated_at": now.isoformat(),
+            "agent_version": device.agent_version}
+
+
 @router.post("/telemetry")
 async def ingest_agent_telemetry(
     payload: AgentTelemetryPayload,
