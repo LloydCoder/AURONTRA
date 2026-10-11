@@ -113,7 +113,11 @@ async def request_json(
     timeout_seconds: float | None = None,
     transport: httpx.AsyncBaseTransport | None = None,
 ) -> Any:
-    """Call a configured service with auth, bounded retry, and a circuit breaker."""
+    """Call a configured service with auth, bounded retry, and a circuit breaker.
+
+    Tenant-scoped calls require identity_context built from verified server-side
+    authentication state; never populate it from caller-controlled request data.
+    """
     method = method.upper()
     if method not in {"GET", "POST", "PUT", "PATCH", "DELETE"}:
         raise EcosystemIntegrationError("bridge_method_not_allowed", 405)
