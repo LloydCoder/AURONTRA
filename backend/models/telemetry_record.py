@@ -17,7 +17,7 @@ class TelemetryRecord(Base):
             name="fk_telemetry_records_org_device",
             ondelete="RESTRICT",
         ),
-        CheckConstraint("schema_version = '1'", name="ck_telemetry_schema_version"),
+        CheckConstraint("schema_version IN ('1', '2')", name="ck_telemetry_schema_version"),
         CheckConstraint(
             "computed_score IS NULL OR (computed_score >= 0 AND computed_score <= 100)",
             name="ck_telemetry_computed_score_range",
