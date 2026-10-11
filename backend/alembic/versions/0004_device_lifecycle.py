@@ -20,6 +20,9 @@ def upgrade():
         op.add_column("devices", sa.Column("revoked_at", sa.DateTime(timezone=True), nullable=True))
     if "agent_version" not in columns:
         op.add_column("devices", sa.Column("agent_version", sa.String(64), nullable=True))
+    # Fail closed for pre-existing devices: no row is trusted as agent-enrolled
+    # merely because a legacy flag happened to be active.
+    op.execute("UPDATE devices SET is_active = false WHERE enrolled_at IS NULL")
     indexes = {item["name"] for item in sa.inspect(op.get_bind()).get_indexes("devices")}
     if "ix_devices_org_active" not in indexes:
         op.create_index("ix_devices_org_active", "devices", ["org_id", "is_active"])
