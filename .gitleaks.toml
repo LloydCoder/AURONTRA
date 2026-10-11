@@ -30,3 +30,15 @@ condition = "AND"
 regexTarget = "line"
 regexes = ['''THREAT_VERIFIER_HMAC_KEYS_JSON=''']
 paths = ['''\.env\.example''']
+
+
+# Narrow historical exception for non-credential HMAC fixture literals used only
+# by the billing webhook regression test. The current fixture uses "abc"; these
+# patterns cover only the old test-only strings in that one test path.
+[[allowlists]]
+description = "Historical billing webhook test fixture strings, not credentials"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+regexes = ['''test-webhook-secret-that-is-not-a-real-provider-secret''', '''test_secret_1234567890''']
+paths = ['''backend/tests/integration/test_billing_webhook_durability\.py''']
