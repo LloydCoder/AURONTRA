@@ -62,7 +62,7 @@ Main CI and the secret/archive scan passed on the audit baseline. Historical pha
 
 ### F-09 — Dependency vulnerability auditing is not evidenced by the current CI definition
 
-The current CI runs dependency-environment consistency checks, compilation, tests, migrations, PostgreSQL RLS/restore checks, and secret scanning. The inspected workflow does not show a dedicated vulnerability audit of resolved Python dependencies or an SBOM policy gate. Add a pinned, reproducible dependency-audit job, triage findings, and update affected dependencies with regression testing before claiming supply-chain assurance.
+The original CI had dependency consistency checks but no resolved-package vulnerability audit. A pinned `pip-audit==2.10.1` workflow and CI discovery step are now in the candidate branch. The first scan reported 78 vulnerability findings across 10 packages, including LangChain packages not referenced by the inspected application code, PyJWT, pytest, python-dotenv, python-multipart, and Starlette. The candidate removes the unused LangChain packages and upgrades affected packages, including FastAPI/Starlette, Pydantic, PyJWT, pytest/pytest-asyncio, python-dotenv, and python-multipart. The post-upgrade audit and full regression suite are pending; supply-chain assurance is not yet closed.
 
 ## Security and architecture invariants
 
