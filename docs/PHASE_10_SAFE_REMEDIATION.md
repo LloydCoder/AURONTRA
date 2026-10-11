@@ -1,6 +1,6 @@
 # Phase 10 — Safe Remediation Playbooks
 
-**Status:** Phase implementation remains code/CI-gated and not production-enabled. Follow-up safety-envelope changes are being validated on main; this document must not be treated as a green result until the current workflow passes. No public remediation route is enabled.  
+**Status:** Complete at repository/CI level after the follow-up forensic audit; production remediation remains disabled. Baseline CI at `9685e413ac1be3529d118eec65d290637d24cb3a` passed 488 tests (1 skipped, 84.85% coverage); see [run 38120377781](https://github.com/LloydCoder/AURONTRA/actions/runs/38120377781). No public remediation route is enabled.  
 **Authority:** Tinlance Agent Platform remains the only execution/policy/approval authority.  
 **Research basis:** NIST SP 800-53 Rev. 5 AC-5/AC-6 and CM-3; OWASP Authorization Cheat Sheet and Secure-by-Default guidance. These sources support least privilege, separation of duties, explicit change control, and default-deny behavior. See [NIST SP 800-53 Rev. 5](https://csrc.nist.gov/pubs/sp/800/53/r5/upd1/final), [OWASP Authorization Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html), and [OWASP Secure by Default](https://devguide.owasp.org/en/04-design/02-web-app-checklist/01-secure-by-default/).
 
@@ -20,18 +20,25 @@ Phase 10 creates a deterministic, pure remediation planner for the existing disk
 - Disk cleanup is destructive and always requires approval; the only proposal is review of app-owned cleanup candidates.
 - Service restart is disruptive, restricted to a small allowlist, and always requires approval.
 - Certificate renewal requires a syntactically valid public FQDN and a reference to domain-ownership evidence. The planner does not probe the domain and does not assert that a reference itself proves ownership; the calling service must resolve and validate it from the tenant's durable asset inventory.
-- High-CPU handling is read-only diagnostic collection; no process killing, reprioritization, or arbitrary command execution is proposed.
+- High-CPU handling proposes read-only diagnostics; it does not inspect processes or collect host telemetry. No process killing, reprioritization, or arbitrary command execution occurs.
 - Every plan explicitly marks execution, Platform submission, enforcement, and business outcome verification as false. Plan IDs are deterministic for identical tenant/device/evidence/action inputs to support idempotent orchestration. Phase 11 now persists remediation intents, atomically creates job/outbox records, and schedules reconciliation; the production worker/scheduler remains unconfigured.
 - A plan is not an approval or authorization grant. Platform policy, approvals, budgets, sandbox, secrets, tool registration and evidence remain authoritative.
 
 ## Verification record
 
 - Original implementation PR: [#6 — Phase 10 safe remediation](https://github.com/LloydCoder/AURONTRA/pull/6).
-- Follow-up PR #8 was reviewed and found to be based on a stale pre-Phase-11 branch; its alternate planner duplicates and is incompatible with the current `RemediationService`/durable orchestration API. Selected safety-envelope improvements were ported to main; the duplicate planner is not accepted as a second execution path.
+- Follow-up PR [#8](https://github.com/LloydCoder/AURONTRA/pull/8) was reviewed and closed as superseded because it was based on a stale pre-Phase-11 branch, proposed an incompatible duplicate planner, and contained an undefined variable. Selected safety-envelope improvements were ported to main; the duplicate planner is not accepted as a second execution path.
 - Audited implementation commit: `aa40ac0cc7779fe4522ace7a9bc2979c7aa7ef49`.
 - CI: [run 38101939727](https://github.com/LloydCoder/AURONTRA/actions/runs/38101939727) — 371 passed, 1 skipped, 84.79% coverage; PostgreSQL tenant RLS and backup/restore passed.
 - Secret/history/archive scan: [run 38101939719](https://github.com/LloydCoder/AURONTRA/actions/runs/38101939719) — success.
 - Deployment: skipped by configuration. No live Platform tool registration, endpoint, or production runtime was tested.
+
+## Follow-up audit evidence (2026-10-11)
+
+- Code audit baseline: `9685e413ac1be3529d118eec65d290637d24cb3a`.
+- [CI run 38120377781](https://github.com/LloydCoder/AURONTRA/actions/runs/38120377781): 488 passed, 1 skipped, 84.85% coverage; SQLite migration, compile, PostgreSQL RLS and backup/restore passed.
+- [Secret/archive scan 38120377788](https://github.com/LloydCoder/AURONTRA/actions/runs/38120377788): success.
+- Deployment job was skipped; no live Platform action, endpoint, or production database was exercised.
 
 ## Exit criteria
 
