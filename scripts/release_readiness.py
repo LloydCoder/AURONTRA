@@ -13,6 +13,16 @@ ROOT = Path(__file__).resolve().parents[1]
 MANIFEST_PATH = ROOT / "release" / "acceptance-manifest.json"
 EVIDENCE_ROOT = (ROOT / "release" / "evidence").resolve()
 ALLOWED_STATUSES = {"accepted", "blocked"}
+REQUIRED_GATE_IDS = {
+    "phase17_agent_platform_integration",
+    "phase18_authenticated_console",
+    "phase19_billing_checkout_and_entitlements",
+    "phase20_api_key_runtime_authentication",
+    "phase21_compliance_control_mapping_review",
+    "phase22_production_slo_and_disaster_recovery",
+    "phase23_frontend_reproducible_dependencies",
+    "phase24_production_deployment_and_rollback",
+}
 
 
 def _sha256(path: Path) -> str:
@@ -104,6 +114,13 @@ def evaluate() -> dict:
             blockers.append({"id": gate_id, "reason": "Evidence SHA-256 does not match the manifest."})
             continue
         checks.append({"id": gate_id, "passed": True, "detail": "Accepted evidence digest verified."})
+
+    missing_gate_ids = REQUIRED_GATE_IDS - gate_ids
+    unexpected_gate_ids = gate_ids - REQUIRED_GATE_IDS
+    for gate_id in sorted(missing_gate_ids):
+        blockers.append({"id": gate_id, "reason": "Required release gate is missing from the acceptance manifest."})
+    for gate_id in sorted(unexpected_gate_ids):
+        blockers.append({"id": gate_id, "reason": "Unexpected release gate ID is not part of the canonical 24-phase release contract."})
 
     config_path = ROOT / "backend" / "core" / "config.py"
     config = config_path.read_text(encoding="utf-8") if config_path.is_file() else ""
