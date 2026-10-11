@@ -1,6 +1,6 @@
 """Durable tenant-scoped threat assessment evidence (not proof of containment)."""
 from sqlalchemy import (
-    Boolean, CheckConstraint, Column, DateTime, ForeignKey, Index, Integer, JSON,
+    Boolean, CheckConstraint, Column, DateTime, ForeignKey, ForeignKeyConstraint, Index, Integer, JSON,
     String, UniqueConstraint, func,
 )
 from core.database import Base
@@ -10,6 +10,8 @@ class ThreatFinding(Base):
     __tablename__ = "threat_findings"
     __table_args__ = (
         UniqueConstraint("org_id", "event_id", name="uq_threat_findings_org_event"),
+        UniqueConstraint("org_id", "id", name="uq_threat_findings_org_id_id"),
+        ForeignKeyConstraint(["org_id", "device_id"], ["devices.org_id", "devices.id"], name="fk_threat_findings_org_device", ondelete="RESTRICT"),
         CheckConstraint("score >= 0 AND score <= 100", name="ck_threat_findings_score_range"),
         CheckConstraint(
             "threat_level IN ('info', 'low', 'medium', 'high', 'critical')",
@@ -27,6 +29,7 @@ class ThreatFinding(Base):
     id = Column(String(36), primary_key=True)
     org_id = Column(String(64), ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False)
     event_id = Column(String(128), nullable=False)
+    device_id = Column(String(128), nullable=True)
     source = Column(String(32), nullable=False, default="network_signal", server_default="network_signal")
     detector_version = Column(String(64), nullable=False)
     observed_at = Column(DateTime(timezone=True), nullable=False)
