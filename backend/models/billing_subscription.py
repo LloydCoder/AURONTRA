@@ -59,6 +59,6 @@ class BillingSubscription(Base):
     renews_at = Column(DateTime(timezone=True), nullable=True)
     ends_at = Column(DateTime(timezone=True), nullable=True)
     provider_updated_at = Column(DateTime(timezone=True), nullable=True)
-    metadata = Column(JSON, nullable=False, default=dict)
+    provider_metadata = Column(JSON, nullable=False, default=dict)
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
