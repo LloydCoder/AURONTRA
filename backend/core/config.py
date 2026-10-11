@@ -47,6 +47,10 @@ class Settings(BaseSettings):
     AGENT_PLATFORM_TIMEOUT_SECONDS: float = 10.0
     AGENT_PLATFORM_ALLOW_INSECURE_HTTP: bool = False
 
+    # Internal remediation submission is disabled until the Platform operator
+    # registers the exact code-owned tools and a tenant-scoped verifier is wired.
+    REMEDIATION_SUBMISSION_ENABLED: bool = False
+
     # Local development default; production must explicitly configure PostgreSQL.
     DATABASE_URL: str = "sqlite+aiosqlite:///./aurontra_dev.db"
     REDIS_URL: str = "redis://localhost:6379"

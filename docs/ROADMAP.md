@@ -2,7 +2,7 @@
 
 Aurontra is a Tinlance ecosystem product and a consumer of the four-repository Tinlance Agent System. It must not duplicate the Agent Platform's authoritative identity, authorization, policy, approval, sandbox, secrets, execution, or evidence controls.
 
-Phases are sequential release gates. A phase is complete only after implementation, tests, documentation reconciliation, security review, and CI evidence. Passing CI does not certify production readiness. Phases 01–09 are complete at the repository/CI level with per-phase reviews. Phase 08 is merged at `830047fa11b75c97f2b7b67847cd28f727b3b4a8`; Phase 09's governed-action adapter was merged in PR #4 at `90b8760560b7efb773861e0297c86235638a014a` and passed CI (325 passed, 1 skipped; 84.08% coverage), PostgreSQL RLS/backup-restore checks, and secret/history/archive scan; post-merge main CI and scan are green. The deployment job is skipped; no live Platform connection or production action is claimed. Phase 08 issuer configuration and Phase 09 tenant-scoped Platform credentials/tool registrations remain external release prerequisites. Phase 10 is next after the Phase 09 documentation reconciliation PR passes CI and merges. The production data plane remains closed because several other business subsystems are not yet migrated.
+Phases are sequential release gates. A phase is complete only after implementation, tests, documentation reconciliation, security review, and CI evidence. Passing CI does not certify production readiness. Phases 01–10 are complete at the repository/CI level with per-phase reviews. Phase 08 is merged at `830047fa11b75c97f2b7b67847cd28f727b3b4a8`; Phase 09's governed-action adapter was merged in PR #4 at `90b8760560b7efb773861e0297c86235638a014a` and passed CI (325 passed, 1 skipped; 84.08% coverage), PostgreSQL RLS/backup-restore checks, and secret/history/archive scan; post-merge main CI and scan are green. The deployment job is skipped; no live Platform connection or production action is claimed. Phase 08 issuer configuration and Phase 09 tenant-scoped Platform credentials/tool registrations remain external release prerequisites. Phase 10 is next after the Phase 09 documentation reconciliation PR passes CI and merges. The production data plane remains closed because several other business subsystems are not yet migrated.
 
 | Phase | Scope | Acceptance evidence | Status |
 |---|---|---|---|
@@ -15,8 +15,8 @@ Phases are sequential release gates. A phase is complete only after implementati
 | 07 | Organization/device lifecycle | Tenant-scoped provisioning, inactive-by-default devices, idempotent revocation, offboarding, retention, negative isolation tests | **Complete — PR #2 merged; 292 passed, PostgreSQL RLS/restore green; secret/history scan green** |
 | 08 | Authenticated endpoint agent | Platform-bound DPoP tokens, per-request proof, body binding, replay table/RLS, enrollment, scoped key rotation, telemetry, versioning tests | **Complete — PR #3 merged; 300 passed, 1 skipped; 83.06% coverage; PostgreSQL RLS/restore and secret/history scan green; production identity-provider configuration remains a release prerequisite** |
 | 09 | Governed action engine | Official Platform SDK/TSIC contracts, pinned reviewed dependency, policy/approval/evidence contract tests, no local execution authority | **Complete — PR #4 merged at `90b8760560b7efb773861e0297c86235638a014a`; 325 passed, 1 skipped; 84.08% coverage; PostgreSQL RLS/restore and secret/history/archive scan green; post-merge main CI green; deployment skipped** |
-| 10 | Safe remediation playbooks | Allowlist, least privilege, bounded execution and postcondition tests | **Next — Phase 09 merged and audited; start after documentation reconciliation CI is green** |
-| 11 | Orchestration recovery | Crash, retry, duplicate, partial failure and reconciliation tests | Not started |
+| 10 | Safe remediation playbooks | Allowlist, least privilege, bounded Platform submission, postcondition verification contract and adversarial tests | **Complete at code/CI level — PR #6; 371 passed, 1 skipped, 84.79% coverage; PostgreSQL RLS/restore and secret/history/archive scans green. Public execution remains disabled pending exact Platform tool registration and a concrete tenant-scoped verifier.** |
+| 11 | Orchestration recovery | Durable action intents, crash/retry/duplicate/partial-failure recovery, leases, reconciliation and outbox integration | **Next — Phase 10 code and forensic audit complete; no production worker or live action is claimed** |
 | 12 | Telemetry pipeline | Provenance, freshness, schema, missing-data and retention tests | Not started |
 | 13 | Predictive resilience evaluation | Reproducible labeled benchmark and model-quality report | Not started |
 | 14 | AI service desk and retrieval | Prompt-injection, privacy, escalation, timeout and output validation tests | Not started |
@@ -30,6 +30,13 @@ Phases are sequential release gates. A phase is complete only after implementati
 | 22 | SRE, observability and disaster recovery | SLOs, alerting, restore drills, RTO/RPO evidence | Not started |
 | 23 | Security assurance and release integrity | SAST, dependency/secret scans, integration/load/fault tests, provenance | Not started |
 | 24 | Production release certification gate | Full forensic audit, clean deployment, rollback/recovery and go/no-go | Not started |
+
+## Phase 10 implementation evidence
+
+- Pure planner supports disk pressure, allowlisted service restart, certificate expiry, and read-only high-CPU diagnostics. It enforces evidence freshness, numeric ranges, allowlists, deterministic IDs, and explicit non-execution state.
+- Internal submission service maps only four code-owned action contracts to the official Platform SDK adapter. Submission is disabled by default, requires verified target/context agreement, a valid unmodified plan, and an independent postcondition verifier. Platform approval-pending and incomplete states are never promoted to success.
+- No public automation route is connected to the service. Exact Platform tool registrations are not confirmed, and no concrete tenant-scoped postcondition verifier is configured. The production data plane remains closed.
+- Phase 10 CI: [run 38101939727](https://github.com/LloydCoder/AURONTRA/actions/runs/38101939727) — 371 passed, 1 skipped, 84.79% coverage; PostgreSQL RLS/backup-restore passed. [Secret/history/archive scan](https://github.com/LloydCoder/AURONTRA/actions/runs/38101939719) passed. Deployment was skipped; no production runtime was exercised.
 
 ## Current implementation evidence
 
