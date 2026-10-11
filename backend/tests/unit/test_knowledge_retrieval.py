@@ -109,3 +109,18 @@ async def test_database_rejects_published_article_without_approval_metadata():
         with pytest.raises(IntegrityError):
             await db.commit()
         await db.rollback()
+
+
+@pytest.mark.asyncio
+async def test_database_rejects_oversized_knowledge_article_content():
+    oversized = "x" * 100001
+    async with AsyncSessionLocal() as db:
+        db.add(_article(
+            article_id="oversized-vpn",
+            org_id="test-tenant",
+            title="Oversized VPN",
+            content=oversized,
+        ))
+        with pytest.raises(IntegrityError):
+            await db.commit()
+        await db.rollback()
