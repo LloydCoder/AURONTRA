@@ -17,7 +17,7 @@ import models  # noqa: F401 — register SQLAlchemy models before metadata creat
 from api.routes import (
     health, tickets, devices, resilience,
     automation, threats, billing, reports,
-    onboarding, kb, sla, organizations, agent,
+    onboarding, kb, sla, organizations, agent, integrations,
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -120,6 +120,7 @@ app.add_middleware(
     allow_headers=[
         "Authorization", "Content-Type", "X-Request-ID", "DPoP", "X-Aurontra-Agent-Version",
         "X-Tinlance-API-Version", "Idempotency-Key", "traceparent",
+        "X-Aurontra-Timestamp", "X-Aurontra-Nonce", "X-Aurontra-Signature",
     ],
 )
 
@@ -137,6 +138,7 @@ app.include_router(reports.router,     prefix="/reports",     tags=["reports"])
 app.include_router(onboarding.router,  prefix="/onboarding",  tags=["onboarding"])
 app.include_router(organizations.router, prefix="/organizations", tags=["organizations"])
 app.include_router(agent.router, prefix="/agent/v1", tags=["endpoint-agent"])
+app.include_router(integrations.router, prefix="/integrations/v1", tags=["integrations"])
 
 # Gap fills
 app.include_router(kb.router,          prefix="/kb",          tags=["knowledge-base"])
