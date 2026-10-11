@@ -49,10 +49,14 @@ async def execute_playbook(playbook_name: str, context: dict) -> dict:
 
     result = await playbook.execute(context)
 
-    # Guarantee standard fields are always present
+    # Compatibility API: this dispatcher only builds recommendations. It is
+    # not an execution authority and must never claim a verified outcome.
     result.setdefault("playbook", playbook_name)
     result.setdefault("device_id", context.get("device_id", "unknown"))
     result.setdefault("executed_at", datetime.now(timezone.utc).isoformat())
-    result.setdefault("status", "executed")
+    result.setdefault("status", "simulated")
+    result.setdefault("execution_mode", "recommendation_only")
+    result.setdefault("execution_enabled", False)
+    result.setdefault("business_outcome_verified", False)
 
     return result
