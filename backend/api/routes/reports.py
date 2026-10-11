@@ -116,7 +116,12 @@ async def _persist_report(
     db: AsyncSession, *, tenant_id: str, actor: str, report_type: str,
     start: datetime, end: datetime, provenance: dict, report: dict,
 ) -> dict:
-    canonical = json.dumps(report, sort_keys=True, separators=(",", ":"), ensure_ascii=True, default=str)
+    digest_material = {
+        "org_id": tenant_id, "report_type": report_type,
+        "period_start": start.isoformat(), "period_end": end.isoformat(),
+        "created_by": actor, "input_provenance": provenance, "report_payload": report,
+    }
+    canonical = json.dumps(digest_material, sort_keys=True, separators=(",", ":"), ensure_ascii=True, default=str)
     digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
     artifact_id = str(uuid4())
     db.add(ReportArtifact(
