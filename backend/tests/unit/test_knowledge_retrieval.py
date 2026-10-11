@@ -10,7 +10,7 @@ from models.organization import Organization
 from knowledge.retrieval import KnowledgeIntegrityError, retrieve_knowledge_articles
 
 
-def _article(*, article_id, org_id, title, content, status="published", source_url=None):
+def _article(*, article_id, org_id, title, content, status="published", source_url=None, approved=True):
     return KnowledgeArticle(
         id=article_id,
         org_id=org_id,
@@ -23,8 +23,8 @@ def _article(*, article_id, org_id, title, content, status="published", source_u
         status=status,
         version=1,
         source_url=source_url,
-        approved_by="knowledge-admin" if status == "published" else None,
-        approved_at=datetime.now(timezone.utc) if status == "published" else None,
+        approved_by="knowledge-admin" if status == "published" and approved else None,
+        approved_at=datetime.now(timezone.utc) if status == "published" and approved else None,
     )
 
 
@@ -37,6 +37,7 @@ async def test_retrieval_returns_only_published_global_and_current_tenant_articl
             _article(article_id="own-vpn", org_id="test-tenant", title="VPN troubleshooting", content="Reconnect to the approved VPN client."),
             _article(article_id="global-vpn", org_id=None, title="VPN basics", content="Check network access and reconnect."),
             _article(article_id="other-vpn", org_id="other-tenant", title="VPN secret", content="Tenant-private VPN details."),
+            _article(article_id="unapproved-vpn", org_id="test-tenant", title="Unapproved VPN", content="Unreviewed steps.", approved=False),
             _article(article_id="draft-vpn", org_id="test-tenant", title="Draft VPN", content="Unapproved steps.", status="draft"),
         ])
         await db.commit()
@@ -48,6 +49,7 @@ async def test_retrieval_returns_only_published_global_and_current_tenant_articl
     assert "global-vpn" in ids
     assert "other-vpn" not in ids
     assert "draft-vpn" not in ids
+    assert "unapproved-vpn" not in ids
 
 
 @pytest.mark.asyncio
