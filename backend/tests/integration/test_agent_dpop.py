@@ -15,6 +15,7 @@ from sqlalchemy import select
 from core import agent_auth
 from core.config import settings
 from core.database import AsyncSessionLocal
+from models.agent_request_replay import AgentRequestReplay
 from models.device import Device
 from models.durable_job import OutboxEvent
 from models.organization import Organization
