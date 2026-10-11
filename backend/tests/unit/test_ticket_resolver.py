@@ -148,8 +148,8 @@ class TestTicketResolverAgent:
             })
             result = await resolve_ticket(
                 ticket_id="tkt-004",
-                title="Network issue",
-                description="Cannot reach internet",
+                title="VPN issue",
+                description="Cannot connect to the company VPN",
                 reporter_email="bob@corp.com",
             )
         assert result["resolved"] is False
