@@ -35,7 +35,7 @@ async def test_analysis_persists_immutable_evidence_and_score_components():
     finding = payload["finding"]
     evidence = {key: value for key, value in signal.items() if key != "source_event_id"}
     evidence["protocol"] = "QUIC"
-    assert finding["org_id"] if "org_id" in finding else True
+    assert "org_id" not in finding
     assert finding["source_event_id"] == "event-threat-001"
     assert finding["score"] >= 70
     assert sum(finding["score_components"].values()) == finding["score"]
