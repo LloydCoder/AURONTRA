@@ -62,8 +62,10 @@ def upgrade():
         op.execute(
             "CREATE POLICY knowledge_articles_read ON knowledge_articles FOR SELECT USING ("
             "NULLIF(current_setting('app.current_org_id', true), '') IS NOT NULL "
-            "AND status = 'published' AND approved_by IS NOT NULL AND approved_at IS NOT NULL "
-            "AND (org_id = NULLIF(current_setting('app.current_org_id', true), '') OR org_id IS NULL))"
+            "AND ((status = 'published' AND approved_by IS NOT NULL AND approved_at IS NOT NULL "
+            "AND (org_id = NULLIF(current_setting('app.current_org_id', true), '') OR org_id IS NULL)) "
+            "OR (org_id = NULLIF(current_setting('app.current_org_id', true), '') "
+            "AND status = 'draft' AND approved_by IS NULL AND approved_at IS NULL)))"
         )
         op.execute(
             "CREATE POLICY knowledge_articles_insert ON knowledge_articles FOR INSERT "
