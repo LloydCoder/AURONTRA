@@ -20,6 +20,9 @@ from models.device import Device
 from models.durable_job import OutboxEvent
 from models.telemetry_record import TelemetryRecord
 from core.job_queue import enqueue_outbox_event
+from agents.threat_blocker import analyse_signal
+from core.threat_evidence import DETECTOR_VERSION, sha256_json, validate_signal
+from models.threat_finding import ThreatFinding
 from resilience.scorer import score_device
 
 router = APIRouter()
@@ -29,12 +32,24 @@ class AgentEnrollmentPayload(BaseModel):
     agent_version: str = Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$")
 
 
+class NetworkSignalPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    src_ip: str = Field(min_length=3, max_length=64)
+    protocol: str | None = Field(default=None, max_length=16)
+    entropy: float | None = Field(default=None, ge=0, le=8, allow_inf_nan=False)
+    z_score: float | None = Field(default=None, ge=-1000, le=1000, allow_inf_nan=False)
+    beacon_interval: int | None = Field(default=None, ge=1, le=86400)
+    jitter: float | None = Field(default=None, ge=0, le=1, allow_inf_nan=False)
+    bytes_out: int | None = Field(default=None, ge=0, le=2**63 - 1)
+
+
 class AgentTelemetryPayload(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     event_id: UUID
     device_id: str | None = Field(default=None, min_length=1, max_length=128)
-    schema_version: Literal["1"] = "1"
+    schema_version: Literal["1", "2"] = "1"
     observed_at: datetime = Field(alias="timestamp")
     cpu_percent: float | None = Field(default=None, ge=0, le=100, allow_inf_nan=False)
     memory_percent: float | None = Field(default=None, ge=0, le=100, allow_inf_nan=False)
@@ -42,6 +57,7 @@ class AgentTelemetryPayload(BaseModel):
     boot_time: float | None = Field(default=None, ge=0, allow_inf_nan=False)
     process_count: int | None = Field(default=None, ge=0, le=1_000_000)
     platform: Literal["Linux", "Windows", "Darwin", "FreeBSD", "OpenBSD", "NetBSD", "Unknown"] | None = None
+    network_signals: list[NetworkSignalPayload] = Field(default_factory=list, max_length=64)
 
     @field_validator("observed_at")
     @classmethod
@@ -169,6 +185,18 @@ async def ingest_agent_telemetry(
     metrics = {name: getattr(payload, name) for name in metric_names if getattr(payload, name) is not None}
     if not metrics:
         raise HTTPException(status_code=422, detail="At least one CPU, memory, or disk metric is required.")
+    if payload.network_signals and payload.schema_version != "2":
+        raise HTTPException(status_code=422, detail="Network threat signals require telemetry schema version 2.")
+    if payload.network_signals and "aurontra:threat:write" not in identity.scopes:
+        raise HTTPException(status_code=403, detail="Threat signal write scope is required.")
+    if payload.network_signals and set(metrics) != set(metric_names):
+        raise HTTPException(status_code=422, detail="Threat signals require complete CPU, memory, and disk telemetry.")
+    normalized_signals = []
+    for signal_item in payload.network_signals:
+        try:
+            normalized_signals.append(validate_signal(signal_item.model_dump(exclude_none=True)))
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail="Network threat signal is invalid.") from exc
 
     now = datetime.now(timezone.utc)
     if (
@@ -199,6 +227,8 @@ async def ingest_agent_telemetry(
         "platform": payload.platform,
     }
     telemetry_values = {**metrics, **{key: value for key, value in metadata.items() if value is not None}}
+    if normalized_signals:
+        telemetry_values["network_signals"] = normalized_signals
     canonical = {
         "event_id": str(payload.event_id),
         "device_id": identity.device_id,
@@ -225,6 +255,10 @@ async def ingest_agent_telemetry(
                 status_code=409,
                 content={"detail": "Telemetry event ID already exists with different content."},
             )
+        existing_findings = (await db.scalars(select(ThreatFinding).where(
+            ThreatFinding.org_id == identity.tenant_id,
+            ThreatFinding.telemetry_record_id == existing.id,
+        ).order_by(ThreatFinding.event_id.asc()))).all()
         return {
             "device_id": device.id,
             "event_id": existing.event_id,
@@ -236,6 +270,10 @@ async def ingest_agent_telemetry(
             "observed_at": existing.observed_at.isoformat(),
             "received_at": existing.received_at.isoformat(),
             "quality_flags": existing.quality_flags,
+            "threat_findings": [
+                {"id": item.id, "event_id": item.event_id, "score": item.score, "threat_level": item.threat_level}
+                for item in existing_findings
+            ],
         }
 
     if settings.TELEMETRY_MAX_EVENTS_PER_MINUTE < 1:
@@ -322,6 +360,50 @@ async def ingest_agent_telemetry(
     if current_state_updated and record.computed_score is not None:
         device.resilience_score = record.computed_score
     await db.flush()
+    threat_findings = []
+    for index, signal in enumerate(normalized_signals):
+        signal_hash = sha256_json(signal)
+        assessment = analyse_signal(dict(signal))
+        assessment.update({
+            "detector_version": DETECTOR_VERSION,
+            "signal_sha256": signal_hash,
+            "score_semantics": "deterministic_heuristic_not_calibrated_probability",
+            "mitre_mapping_semantics": "heuristic_hypothesis_not_confirmed_behavior",
+            "containment_verified": False,
+            "blocked": False,
+            "telemetry_record_id": record.id,
+            "telemetry_event_id": record.event_id,
+        })
+        score = int(max(0, min(100, assessment.get("score", 0))))
+        level = assessment.get("threat_level")
+        if level not in {"info", "low", "medium", "high", "critical"}:
+            level = "info"
+        ttp = assessment.get("mitre_ttp")
+        if not isinstance(ttp, str) or len(ttp) > 32:
+            ttp = "T1071"
+        finding = ThreatFinding(
+            id=str(uuid4()),
+            org_id=identity.tenant_id,
+            event_id=f"{payload.event_id}:signal:{index}",
+            device_id=device.id,
+            telemetry_record_id=record.id,
+            source="endpoint_agent",
+            detector_version=DETECTOR_VERSION,
+            observed_at=payload.observed_at,
+            signal_sha256=signal_hash,
+            signal=signal,
+            assessment=assessment,
+            score=score,
+            threat_level=level,
+            mitre_ttp=ttp,
+            decision_status="assessed",
+            containment_verified=False,
+        )
+        db.add(finding)
+        threat_findings.append(finding)
+    if threat_findings:
+        await db.flush()
+
     await enqueue_outbox_event(
         db,
         org_id=identity.tenant_id,
@@ -340,6 +422,7 @@ async def ingest_agent_telemetry(
             "quality_flags": quality_flags,
             "computed_score": record.computed_score,
             "current_state_updated": current_state_updated,
+            "threat_finding_ids": [item.id for item in threat_findings],
         },
     )
     return {
@@ -356,4 +439,8 @@ async def ingest_agent_telemetry(
         "quality_flags": quality_flags,
         "missing_metrics": missing_metrics,
         "retention_expires_at": record.retention_expires_at.isoformat(),
+        "threat_findings": [
+            {"id": item.id, "event_id": item.event_id, "score": item.score, "threat_level": item.threat_level}
+            for item in threat_findings
+        ],
     }
