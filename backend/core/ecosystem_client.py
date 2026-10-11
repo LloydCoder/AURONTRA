@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -19,7 +20,9 @@ import httpx
 from core.config import settings
 
 logger = logging.getLogger(__name__)
-CONTRACT_VERSION = "1"
+CONTRACT_VERSION = "1.0.0"
+_TRACEPARENT_RE = re.compile(r"^00-([0-9a-f]{32})-([0-9a-f]{16})-([0-9a-f]{2})$")
+_CORRELATION_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
 MAX_RESPONSE_BYTES = 1_048_576
 RETRYABLE_STATUS = frozenset({408, 425, 429, 500, 502, 503, 504})
 
@@ -102,6 +105,8 @@ async def request_json(
     payload: dict[str, Any] | None = None,
     params: dict[str, Any] | None = None,
     idempotency_key: str | None = None,
+    traceparent: str | None = None,
+    correlation_id: str | None = None,
     timeout_seconds: float | None = None,
     transport: httpx.AsyncBaseTransport | None = None,
 ) -> Any:
@@ -121,11 +126,31 @@ async def request_json(
         method in {"POST", "PATCH"} and isinstance(idempotency_key, str)
         and 1 <= len(idempotency_key) <= 128
     )
+    request_id = __import__("uuid").uuid4().hex
+    if correlation_id is not None and (
+        not isinstance(correlation_id, str) or not _CORRELATION_ID_RE.fullmatch(correlation_id)
+    ):
+        raise EcosystemIntegrationError("bridge_correlation_id_invalid", 400)
+
+    if traceparent is None:
+        trace_id = __import__("uuid").uuid4().hex
+        span_id = __import__("uuid").uuid4().hex[:16]
+        traceparent = f"00-{trace_id}-{span_id}-01"
+    else:
+        match = _TRACEPARENT_RE.fullmatch(traceparent) if isinstance(traceparent, str) else None
+        if match is None or match.group(1) == "0" * 32 or match.group(2) == "0" * 16:
+            raise EcosystemIntegrationError("bridge_trace_context_invalid", 400)
+        trace_id, span_id = match.group(1), match.group(2)
+
     headers = {
         "Authorization": f"Bearer {token}",
         "Accept": "application/json",
         "X-Tinlance-Contract-Version": CONTRACT_VERSION,
-        "X-Request-ID": __import__("uuid").uuid4().hex,
+        "X-Request-ID": request_id,
+        "X-Correlation-ID": correlation_id or request_id,
+        "traceparent": traceparent,
+        "X-Trace-ID": trace_id,
+        "X-Span-ID": span_id,
     }
     if idempotency_key and retry_safe:
         headers["Idempotency-Key"] = idempotency_key
