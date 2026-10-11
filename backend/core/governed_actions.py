@@ -12,6 +12,7 @@ import math
 import re
 from dataclasses import dataclass
 from typing import Any, Callable
+from urllib.parse import urlsplit
 from uuid import UUID, uuid4
 
 from tinlance_agent_platform_sdk.async_client import AsyncAgentPlatform
@@ -178,6 +179,17 @@ def _new_platform_client(action_id: UUID, operation: str) -> AsyncAgentPlatform:
     )
     if any(not isinstance(value, str) or not value.strip() for value in required):
         raise GovernedActionError("platform_integration_not_configured")
+    parsed_base = urlsplit(settings.AGENT_PLATFORM_BASE_URL)
+    if (
+        parsed_base.scheme not in {"http", "https"}
+        or not parsed_base.hostname
+        or parsed_base.username is not None
+        or parsed_base.password is not None
+        or parsed_base.query
+        or parsed_base.fragment
+        or parsed_base.path not in {"", "/"}
+    ):
+        raise GovernedActionError("platform_base_url_invalid")
     if settings.AGENT_PLATFORM_API_VERSION != "1.1":
         raise GovernedActionError("platform_api_version_unsupported")
     if settings.AGENT_PLATFORM_TIMEOUT_SECONDS <= 0:
