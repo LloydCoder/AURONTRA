@@ -129,7 +129,8 @@ async def _commit_with_tenant_context(db: AsyncSession, tenant_id: str) -> None:
         )
 
 
-def _iso_utc(value: datetime | None) -> str | None:    if value is None:
+def _iso_utc(value: datetime | None) -> str | None:
+    if value is None:
         return None
     if value.tzinfo is None or value.utcoffset() is None:
         value = value.replace(tzinfo=timezone.utc)
