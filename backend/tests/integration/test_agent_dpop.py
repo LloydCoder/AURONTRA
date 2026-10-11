@@ -573,3 +573,36 @@ async def test_telemetry_rate_limit_bounds_device_ingestion_and_consumes_rejecte
         ))).all())
     assert len(rows) == 1
     assert len(proofs) == 2
+
+
+@pytest.mark.asyncio
+async def test_payload_device_id_is_only_a_hint_and_must_match_authenticated_identity(monkeypatch):
+    device_id = "telemetry-bound-device"
+    key = ec.generate_private_key(ec.SECP256R1())
+    thumbprint = agent_auth.jwk_thumbprint(_jwk(key))
+    async with AsyncSessionLocal() as db:
+        db.add(Device(
+            id=device_id, org_id="test-tenant", name="identity-bound endpoint",
+            is_active=True, enrolled_at=datetime.now(timezone.utc),
+            agent_key_thumbprint=thumbprint,
+        ))
+        await db.commit()
+
+    body = _body(_telemetry_payload(
+        device_id="attacker-selected-device",
+        cpu_percent=20.0,
+        memory_percent=30.0,
+        disk_percent=40.0,
+    ))
+    headers, _ = _headers(
+        monkeypatch, device_id=device_id, tenant_id="test-tenant",
+        scope="aurontra:telemetry:write", path="/agent/v1/telemetry", body=body, device_key=key,
+    )
+    async with await _client() as client:
+        response = await client.post("/agent/v1/telemetry", content=body, headers=headers)
+
+    assert response.status_code == 403
+    async with AsyncSessionLocal() as db:
+        assert await db.scalar(select(TelemetryRecord.id).where(
+            TelemetryRecord.device_id == device_id
+        )) is None
