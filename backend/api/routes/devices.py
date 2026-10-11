@@ -122,6 +122,7 @@ async def ingest_telemetry(
             Device.id == payload.device_id,
             Device.org_id == request.state.tenant_id,
             Device.is_active.is_(True),
+            Device.enrolled_at.is_not(None),
         )
     )
     if device is None:
