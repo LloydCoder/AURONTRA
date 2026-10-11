@@ -51,6 +51,11 @@ def do_run_migrations(connection) -> None:
         elif connection.dialect.name == "sqlite" and getattr(version_column["type"], "length", None) != 64:
             # SQLite does not enforce VARCHAR lengths; no rebuild is necessary.
             pass
+    # Schema inspection and the preflight ALTER/CREATE above may start an
+    # implicit SQLAlchemy transaction. Commit that bookkeeping transaction
+    # before Alembic opens its own migration transaction; otherwise the
+    # connection context can roll back the schema migrations on close.
+    connection.commit()
     context.configure(connection=connection, target_metadata=target_metadata, compare_type=True)
     with context.begin_transaction():
         context.run_migrations()
