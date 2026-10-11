@@ -199,7 +199,7 @@ class ThreatContainmentService:
             raise ThreatContainmentError("finding_not_bound_to_device", 409)
         if finding.threat_level not in {"high", "critical"} or finding.score < 70:
             raise ThreatContainmentError("finding_below_containment_threshold", 409)
-        if finding.assessment.get("containment_recommended") is not True:
+        if not isinstance(finding.assessment, dict) or finding.assessment.get("containment_recommended") is not True:
             raise ThreatContainmentError("containment_not_recommended", 409)
         if finding.containment_verified is True:
             attempt = await db.scalar(select(ThreatContainmentAttempt).where(
@@ -232,11 +232,14 @@ class ThreatContainmentService:
             ThreatContainmentAttempt.finding_id == finding.id,
         ))
         if attempt is not None:
-            if attempt.status != "unknown_outcome":
+            if attempt.status not in {"unknown_outcome", "submitting"}:
                 return attempt, True
-            # Retry only an ambiguous transport outcome, with the same action ID and
-            # Platform request/idempotency key. Never mint a second action.
+            # Retry only an ambiguous outcome, with the same action ID and Platform
+            # request/idempotency key. Never mint a second action.
             action_id = UUID(attempt.platform_action_id)
+            attempt.status = "submitting"
+            attempt.version += 1
+            await _commit_with_tenant_context(db, tenant_id)
         else:
             action_id = uuid5(NAMESPACE_URL, f"aurontra:threat-containment:v1:{tenant_id}:{finding.id}")
             idempotency_key = f"threat-containment:{tenant_id}:{finding.id}:v1"
