@@ -59,7 +59,14 @@ def wilson_interval(successes: int, trials: int, z: float = 1.959963984540054) -
     denominator = 1 + z * z / trials
     center = (p + z * z / (2 * trials)) / denominator
     radius = z * math.sqrt((p * (1 - p) / trials) + (z * z / (4 * trials * trials))) / denominator
-    return [max(0.0, center - radius), min(1.0, center + radius)]
+    lower = max(0.0, center - radius)
+    upper = min(1.0, center + radius)
+    # Preserve exact mathematical boundaries despite floating-point rounding.
+    if successes == 0:
+        lower = 0.0
+    if successes == trials:
+        upper = 1.0
+    return [lower, upper]
 
 def evaluate_labeled_dataset(dataset_id: str, examples: list[dict[str, Any]], threshold: int = 60) -> dict[str, Any]:
     """Compute reproducible confusion-matrix metrics on labelled score examples.
