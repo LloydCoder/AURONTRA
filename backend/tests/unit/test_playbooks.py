@@ -382,6 +382,7 @@ class TestPlaybookSafetyEnvelope:
                     "execution_enabled": True,
                     "business_outcome_verified": True,
                     "actions_taken": ["restart service"],
+                    "device_id": "forged-device",
                 }
 
         monkeypatch.setitem(executor._REGISTRY, "unsafe_legacy_test", UnsafeLegacyPlaybook)
@@ -392,3 +393,5 @@ class TestPlaybookSafetyEnvelope:
         assert result["business_outcome_verified"] is False
         assert result["actions_taken"] == []
         assert result["timestamp_semantics"] == "recommendation_created"
+        assert result["device_id"] == "srv-01"
+        assert result["device_id_source"] == "caller_supplied_unverified"
