@@ -68,56 +68,54 @@ def map_mitre_ttp(
     return "T1071"
 
 
-def _compute_score(signal: dict) -> int:
-    """
-    Compute a 0-100 threat score from raw signal data.
-    Weights: z_score (40%), entropy (35%), protocol risk (15%), beacon pattern (10%)
-    """
-    score = 0
-
-    # Z-score contribution (0-40 pts)
+def _score_components(signal: dict) -> dict[str, int]:
+    """Return deterministic component points without mutating caller-owned evidence."""
     z = float(signal.get("z_score", 0))
     if z >= 10.0:
-        score += 40
+        z_points = 40
     elif z >= 5.0:
-        score += 25
+        z_points = 25
     elif z >= 2.0:
-        score += 12
+        z_points = 12
     elif z >= 1.0:
-        score += 5
+        z_points = 5
+    else:
+        z_points = 0
 
-    # Entropy contribution (0-35 pts) — high entropy = obfuscated/encrypted C2
-    e = float(signal.get("entropy", 0))
-    if e >= 7.5:
-        score += 35
-    elif e >= 6.5:
-        score += 25
-    elif e >= 5.0:
-        score += 12
-    elif e >= 3.5:
-        score += 5
+    entropy = float(signal.get("entropy", 0))
+    if entropy >= 7.5:
+        entropy_points = 35
+    elif entropy >= 6.5:
+        entropy_points = 25
+    elif entropy >= 5.0:
+        entropy_points = 12
+    elif entropy >= 3.5:
+        entropy_points = 5
+    else:
+        entropy_points = 0
 
-    # Protocol risk (0-15 pts)
-    proto = signal.get("protocol", "").upper()
-    proto_risk = {"QUIC": 15, "ICMP": 12, "DNS": 8, "SMB": 10, "RDP": 10}
-    score += proto_risk.get(proto, 0)
+    protocol = str(signal.get("protocol", "")).upper()
+    protocol_points = {"QUIC": 15, "ICMP": 12, "DNS": 8, "SMB": 10, "RDP": 10}.get(protocol, 0)
 
-    # Periodicity signal (0-10 pts); periodicity alone does not confirm C2
+    periodicity_points = 0
     if "beacon_interval" in signal and "jitter" in signal:
         jitter = float(signal.get("jitter", 1.0))
         if jitter < 0.2:
-            score += 10
+            periodicity_points = 10
         elif jitter < 0.5:
-            score += 5
+            periodicity_points = 5
 
-    # Mark a periodic pattern for scoring context; this is not confirmed C2.
-    signal["_periodic_pattern"] = (
-        "beacon_interval" in signal and
-        float(signal.get("jitter", 1.0)) < 0.2
-    )
+    return {
+        "z_score_points": z_points,
+        "entropy_points": entropy_points,
+        "protocol_risk_points": protocol_points,
+        "periodicity_points": periodicity_points,
+    }
 
-    return min(100, score)
 
+def _compute_score(signal: dict) -> int:
+    """Compute the legacy 0-100 heuristic score. It is not a probability."""
+    return min(100, sum(_score_components(signal).values()))
 
 def analyse_signal(signal: dict) -> dict:
     """
@@ -134,17 +132,31 @@ def analyse_signal(signal: dict) -> dict:
         return {
             "threat_level": "info",
             "score": 0,
+            "score_components": {
+                "z_score_points": 0,
+                "entropy_points": 0,
+                "protocol_risk_points": 0,
+                "periodicity_points": 0,
+            },
+            "detector_version": "heuristic-threat-score.v2",
+            "score_semantics": "heuristic_0_to_100_not_probability",
+            "periodic_pattern": False,
             "mitre_ttp": "T1071",
             "auto_block": False,
             "containment_recommended": False,
             "reason": "No signal data provided",
         }
 
-    score = _compute_score(signal)
+    score_components = _score_components(signal)
+    score = min(100, sum(score_components.values()))
+    periodic_pattern = (
+        "beacon_interval" in signal
+        and "jitter" in signal
+        and float(signal.get("jitter", 1.0)) < 0.2
+    )
 
     # A periodic pattern may lower the recommendation threshold, but does not
     # confirm C2 and never authorizes an enforcement action by itself.
-    periodic_pattern = signal.get("_periodic_pattern", False)
     recommendation_threshold = 55 if periodic_pattern else _CONTAINMENT_RECOMMENDATION_SCORE
     if score >= _HIGH_THREAT_SCORE:
         threat_level = "critical" if score >= 80 else "high"
@@ -178,6 +190,10 @@ def analyse_signal(signal: dict) -> dict:
     return {
         "threat_level": threat_level,
         "score": score,
+        "score_components": score_components,
+        "detector_version": "heuristic-threat-score.v2",
+        "score_semantics": "heuristic_0_to_100_not_probability",
+        "periodic_pattern": periodic_pattern,
         "mitre_ttp": ttp,
         # Keep the legacy field false so clients cannot confuse a score with an action.
         "auto_block": False,
