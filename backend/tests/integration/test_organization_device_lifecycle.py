@@ -87,7 +87,7 @@ async def test_offboarding_disables_org_and_all_owned_devices_without_deleting_t
 
 
 @pytest.mark.asyncio
-async def test_offboarded_organization_cannot_read_active_tenant_context():
+async def test_offboarded_organization_can_only_inspect_lifecycle_state():
     async with AsyncSessionLocal() as db:
         org = await db.get(Organization, "test-tenant")
         org.status = "offboarded"
@@ -96,6 +96,8 @@ async def test_offboarded_organization_cannot_read_active_tenant_context():
     from main import app
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.get("/organizations/me")
+        blocked_business_access = await client.get("/devices/")
 
     assert response.status_code == 200
     assert response.json()["status"] == "offboarded"
+    assert blocked_business_access.status_code == 403
