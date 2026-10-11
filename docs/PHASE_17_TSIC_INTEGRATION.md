@@ -18,7 +18,9 @@ Register Aurontra in the canonical TSIC ecosystem and prove versioned, tenant-sa
 - [x] Registered Aurontra as a domain product, added its reference adapter, declared the Agent Platform dependency, and bound identity-context, event-envelope, delivery-semantics, trace-context, and agent-registration contracts.
 - [x] Kept Aurontra's authority narrowly scoped to `it_resilience_product`; no execution authority was added.
 - [x] Preserved the rule that reference registration does not enable production flags or certify runtime integration.
-- [x] Upgraded the shared ecosystem client to emit contract version `1.0.0`, W3C `traceparent`, explicit trace/span IDs, and a validated correlation ID; added positive and negative regression tests. Candidate `511284c176fd4ab8eabf2b0d45079becffca64f9` passed CI with 490 tests passed, 1 skipped, 84.91% coverage, PostgreSQL RLS/restore checks, dependency audit, and secret/archive scan.
+- [x] Added a pinned TSIC contract snapshot (`identity-context` 1.0.0, `event-envelope` 1.0.0, `trace-context` 1.1.0) tied to TSIC registry revision `619db9e264cdc71369de621c981bfc2ba1615a1d`.
+- [x] The shared ecosystem client validates tenant identity context and CloudEvents envelopes, binds tenant/execution/trace/correlation fields, requires context for non-health calls, propagates W3C `traceparent` and explicit trace/span IDs, and rejects unsafe correlation/idempotency values.
+- [x] Candidate `161a0fa988a02ddd7ffe134bddcacff8d8d2f540` passed CI: 503 tests passed, 1 skipped, 85.08% coverage; PostgreSQL RLS/restore checks, dependency audit, and secret/archive scan passed.
 - [ ] Complete identity/event-envelope contract tests, live end-to-end contracts, independent verification, and operational release gates.
 
 ## Required implementation gates
