@@ -17,7 +17,8 @@ Register Aurontra in the canonical TSIC ecosystem and prove versioned, tenant-sa
 - [x] Registered Aurontra as a domain product, added its reference adapter, declared the Agent Platform dependency, and bound identity-context, event-envelope, delivery-semantics, trace-context, and agent-registration contracts.
 - [x] Kept Aurontra's authority narrowly scoped to `it_resilience_product`; no execution authority was added.
 - [x] Preserved the rule that reference registration does not enable production flags or certify runtime integration.
-- [ ] Complete live end-to-end contracts, independent verification, and operational release gates.
+- [x] Upgraded the shared ecosystem client to emit contract version `1.0.0`, W3C `traceparent`, explicit trace/span IDs, and a validated correlation ID; added positive and negative regression tests. Candidate `511284c176fd4ab8eabf2b0d45079becffca64f9` passed CI with 490 tests passed, 1 skipped, 84.91% coverage, PostgreSQL RLS/restore checks, dependency audit, and secret/archive scan.
+- [ ] Complete identity/event-envelope contract tests, live end-to-end contracts, independent verification, and operational release gates.
 
 ## Required implementation gates
 
