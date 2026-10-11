@@ -271,12 +271,7 @@ class TestReportingAPI:
     @pytest.mark.asyncio
     async def test_roi_report_endpoint(self, client):
         r = await client.post("/reports/roi", json={
-            "org_id": "org-001",
-            "device_count": 50,
-            "tickets_resolved_ai": 120,
-            "tickets_total": 150,
-            "threats_blocked": 8,
-            "avg_hourly_rate": 45,
+            "avg_hourly_rate_usd": 45,
             "period_days": 30,
         })
         assert r.status_code == 200
@@ -286,14 +281,8 @@ class TestReportingAPI:
     @pytest.mark.asyncio
     async def test_compliance_report_endpoint(self, client):
         r = await client.post("/reports/compliance", json={
-            "org_id": "org-001",
             "framework": "NIS2",
-            "device_count": 50,
-            "threats_blocked": 8,
-            "avg_resilience_score": 84,
-            "tickets_resolved": 120,
-            "siem_active": True,
-            "mfa_enabled": True,
+            "period_days": 30,
         })
         assert r.status_code == 200
         data = r.json()
@@ -302,7 +291,7 @@ class TestReportingAPI:
 
     @pytest.mark.asyncio
     async def test_summary_report_endpoint(self, client):
-        r = await client.get("/reports/summary/org-001")
+        r = await client.get("/reports/summary")
         assert r.status_code == 200
         data = r.json()
         assert "org_id" in data

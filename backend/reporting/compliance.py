@@ -26,50 +26,50 @@ def _nis2_controls(params: dict) -> list[dict]:
     return [
         {
             "control": "Art.21(2)(a) — Policies on risk analysis",
-            "status": "pass" if avg_score >= 70 else "partial",
-            "evidence": f"Resilience score {avg_score}/100 across all devices. Automated risk scoring active.",
+            "status": "partial",
+            "evidence": f"Observed resilience score {avg_score}/100; risk-analysis policies and governance artifacts were not independently supplied.",
             "weight": 15,
-            "score": 15 if avg_score >= 70 else 8,
+            "score": 10 if avg_score >= 70 else 6,
         },
         {
             "control": "Art.21(2)(b) — Incident handling",
-            "status": "pass" if tickets_resolved > 0 else "fail",
-            "evidence": f"{tickets_resolved} incidents handled via AI agent. Full audit trail maintained.",
+            "status": "partial" if tickets_resolved > 0 else "fail",
+            "evidence": f"{tickets_resolved} resolved/closed tickets observed in the reporting window; this metric alone does not prove incident-handling process conformance.",
             "weight": 20,
-            "score": 20 if tickets_resolved > 0 else 0,
+            "score": 10 if tickets_resolved > 0 else 0,
         },
         {
             "control": "Art.21(2)(c) — Business continuity",
-            "status": "pass" if avg_score >= 60 else "partial",
-            "evidence": f"Predictive resilience scoring with 72-hour failure forecasting active. Self-healing playbooks deployed.",
+            "status": "partial",
+            "evidence": f"Observed resilience score {avg_score}/100; continuity exercises and recovery evidence were not independently supplied.",
             "weight": 15,
-            "score": 15 if avg_score >= 60 else 7,
+            "score": 8 if avg_score >= 60 else 5,
         },
         {
             "control": "Art.21(2)(d) — Supply chain security",
             "status": "partial",
-            "evidence": "Third-party bridge monitoring active (ThreatFade, FusionOps). Full vendor risk scoring in roadmap.",
+            "evidence": "Tenant-specific supplier assessments, contracts, and supply-chain risk evidence were not independently supplied.",
             "weight": 10,
-            "score": 6,
+            "score": 4,
         },
         {
             "control": "Art.21(2)(e) — Network security (detection)",
-            "status": "pass" if threats_blocked > 0 or siem_active else "fail",
-            "evidence": f"ThreatFade C2 detection active. {threats_blocked} threats blocked. SIEM export: {'active' if siem_active else 'inactive'}.",
+            "status": "partial" if threats_blocked > 0 or siem_active else "fail",
+            "evidence": f"Verified containment attempts observed: {threats_blocked}. SIEM export verified: {'active' if siem_active else 'not verified'}. Containment counts alone do not prove monitoring coverage.",
             "weight": 20,
-            "score": 20 if (threats_blocked > 0 or siem_active) else 0,
+            "score": 10 if (threats_blocked > 0 or siem_active) else 0,
         },
         {
             "control": "Art.21(2)(g) — Cryptography policies",
-            "status": "pass",
-            "evidence": "Hash-chained audit log with SHA-256 integrity verification. TLS enforced on all endpoints.",
+            "status": "partial",
+            "evidence": "Application audit records use hash linkage; deployment-wide cryptography policies and TLS configuration were not independently verified by this report.",
             "weight": 5,
-            "score": 5,
+            "score": 2,
         },
         {
             "control": "Art.21(2)(i) — Multi-factor authentication",
             "status": "pass" if mfa_enabled else "fail",
-            "evidence": f"MFA: {'enabled via Clerk auth' if mfa_enabled else 'not yet configured — action required'}.",
+            "evidence": f"Verified identity token indicates MFA: {'yes' if mfa_enabled else 'not proven; configuration evidence required'}.",
             "weight": 15,
             "score": 15 if mfa_enabled else 0,
         },
@@ -86,29 +86,29 @@ def _dora_controls(params: dict) -> list[dict]:
     return [
         {
             "control": "Art.9(2) — ICT risk management framework",
-            "status": "pass" if avg_score >= 70 else "partial",
-            "evidence": f"Continuous device resilience monitoring. Score: {avg_score}/100.",
+            "status": "partial",
+            "evidence": f"Observed device resilience score: {avg_score}/100. A score is not evidence of a complete ICT risk-management framework.",
             "weight": 25,
-            "score": 25 if avg_score >= 70 else 12,
+            "score": 15 if avg_score >= 70 else 8,
         },
         {
             "control": "Art.10 — ICT-related incident detection",
             "status": "pass" if siem_active else "partial",
-            "evidence": f"ThreatFade C2 detection. {threats_blocked} threats blocked. SIEM: {'active' if siem_active else 'inactive'}.",
+            "evidence": f"Verified containment attempts observed: {threats_blocked}. SIEM state: {'active' if siem_active else 'not tenant-verified'}.",
             "weight": 25,
             "score": 25 if siem_active else 12,
         },
         {
             "control": "Art.11 — ICT Business continuity policy",
-            "status": "pass",
-            "evidence": "Self-healing playbooks (disk_full, service_restart, cert_expiry, high_cpu) active. 72h forecasting deployed.",
+            "status": "partial",
+            "evidence": "Business continuity policy, exercises, and recovery-test evidence were not independently supplied to this report.",
             "weight": 25,
-            "score": 25,
+            "score": 10,
         },
         {
             "control": "Art.9(4)(e) — Strong authentication",
             "status": "pass" if mfa_enabled else "fail",
-            "evidence": f"MFA: {'Clerk JWT + MFA active' if mfa_enabled else 'not configured — remediation required'}.",
+            "evidence": f"Verified identity token indicates MFA: {'yes' if mfa_enabled else 'not proven; configuration evidence required'}.",
             "weight": 25,
             "score": 25 if mfa_enabled else 0,
         },
@@ -176,11 +176,11 @@ def generate_compliance_report(
     failed_controls = [c["control"] for c in controls if c["status"] == "fail"]
     recommendations = []
     if not mfa_enabled:
-        recommendations.append("Enable MFA via Clerk auth settings — required for all frameworks")
+        recommendations.append("Review tenant MFA enrollment and identity-provider policy evidence; this report could not verify MFA.")
     if not siem_active:
-        recommendations.append("Activate SIEM export (Splunk HEC or CEF) to satisfy detection requirements")
+        recommendations.append("Configure and verify tenant-scoped SIEM export if required by the applicable control framework.")
     if avg_resilience_score < 70:
-        recommendations.append("Deploy additional self-healing playbooks to raise fleet resilience above 70")
+        recommendations.append("Review resilience observations alongside documented recovery exercises and business-continuity evidence.")
 
     return {
         "org_id": org_id,
@@ -197,9 +197,11 @@ def generate_compliance_report(
         },
         "failed_controls": failed_controls,
         "recommendations": recommendations,
+        "assessment_type": "observed_control_evidence_summary",
+        "certification_claim": False,
         "report_narrative": (
-            f"Organisation {org_id} achieved a {compliance_score}% {framework} compliance score "
-            f"based on ResilientAI telemetry. {pass_count}/{len(controls)} controls fully satisfied. "
-            f"{'No critical gaps detected.' if fail_count == 0 else f'{fail_count} control(s) require immediate remediation.'}"
+            f"Organisation {org_id} has an observed {framework} control-evidence score of {compliance_score}%. This is not a legal compliance score or certification. "
+            f"{pass_count}/{len(controls)} controls are marked pass under configured evidence rules. "
+            f"{partial_count} control(s) have partial evidence and {fail_count} control(s) are marked fail; this summary is not a certification."
         ),
     }

@@ -35,10 +35,16 @@ async def test_rls_scopes_organization_and_device_rows_and_rejects_cross_tenant_
     try:
         await admin.execute(f'CREATE ROLE "{role}" LOGIN PASSWORD \'{password}\' NOSUPERUSER NOBYPASSRLS')
         await admin.execute(f'GRANT USAGE ON SCHEMA public TO "{role}"')
-        await admin.execute(f'GRANT SELECT, INSERT, UPDATE, DELETE ON organizations, devices, tickets, durable_jobs, outbox_events, agent_request_replays, remediation_intents, telemetry_records, knowledge_articles, threat_findings, threat_containment_attempts, containment_verification_evidence TO "{role}"')
+        await admin.execute(f'GRANT SELECT, INSERT, UPDATE, DELETE ON organizations, devices, tickets, durable_jobs, outbox_events, agent_request_replays, remediation_intents, telemetry_records, knowledge_articles, threat_findings, threat_containment_attempts, containment_verification_evidence, report_artifacts TO "{role}"')
         await admin.execute(
             "INSERT INTO organizations (id, name, status) VALUES ($1, $1, 'active'), ($2, $2, 'active')",
             org_a, org_b,
+        )
+        await admin.execute(
+            "INSERT INTO report_artifacts (id, org_id, report_type, period_start, period_end, created_by, input_provenance, report_payload, payload_sha256) "
+            "VALUES ($1, $2, 'roi', now() - interval '1 day', now(), 'actor-a', '{}'::jsonb, '{}'::jsonb, repeat('a', 64)), "
+            "($3, $4, 'roi', now() - interval '1 day', now(), 'actor-b', '{}'::jsonb, '{}'::jsonb, repeat('b', 64))",
+            f"report-a-{suffix}", org_a, f"report-b-{suffix}", org_b,
         )
         await admin.execute(
             "INSERT INTO knowledge_articles (id, org_id, article_key, slug, title, category, content, content_sha256, status, version, approved_by, approved_at) "
@@ -148,6 +154,15 @@ async def test_rls_scopes_organization_and_device_rows_and_rejects_cross_tenant_
         assert [row["id"] for row in visible_verification] == [f"evidence-a-{suffix}"]
         visible_knowledge = await app.fetch("SELECT id FROM knowledge_articles ORDER BY id")
         assert [row["id"] for row in visible_knowledge] == [kb_a, kb_draft_a, kb_global]
+        visible_reports = await app.fetch("SELECT id FROM report_artifacts")
+        assert [row["id"] for row in visible_reports] == [f"report-a-{suffix}"]
+        with pytest.raises(asyncpg.PostgresError):
+            await app.execute(
+                "UPDATE report_artifacts SET report_payload='{\"tampered\":true}'::jsonb WHERE id=$1",
+                f"report-a-{suffix}",
+            )
+        with pytest.raises(asyncpg.PostgresError):
+            await app.execute("DELETE FROM report_artifacts WHERE id=$1", f"report-a-{suffix}")
 
         await app.execute("SELECT set_config('app.current_org_id', '', false)")
         assert await app.fetch("SELECT id FROM devices") == []
@@ -161,8 +176,15 @@ async def test_rls_scopes_organization_and_device_rows_and_rejects_cross_tenant_
         assert await app.fetch("SELECT id FROM threat_containment_attempts") == []
         assert await app.fetch("SELECT id FROM containment_verification_evidence") == []
         assert await app.fetch("SELECT id FROM knowledge_articles") == []
+        assert await app.fetch("SELECT id FROM report_artifacts") == []
 
         await app.execute("SELECT set_config('app.current_org_id', $1, false)", org_a)
+        with pytest.raises(asyncpg.InsufficientPrivilegeError):
+            await app.execute(
+                "INSERT INTO report_artifacts (id, org_id, report_type, period_start, period_end, created_by, input_provenance, report_payload, payload_sha256) "
+                "VALUES ($1, $2, 'roi', now() - interval '1 day', now(), 'actor', '{}'::jsonb, '{}'::jsonb, repeat('c', 64))",
+                f"forbidden-report-{suffix}", org_b,
+            )
         with pytest.raises(asyncpg.InsufficientPrivilegeError):
             await app.execute(
                 "INSERT INTO devices (id, org_id, name) VALUES ($1, $2, $3)",
