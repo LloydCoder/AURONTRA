@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from agents.threat_blocker import analyse_signal, export_siem
 from core.database import get_tenant_db
+from core.config import settings
 from core.threat_evidence import DETECTOR_VERSION, sha256_json, validate_signal
 from models.threat_finding import ThreatFinding
 from models.device import Device
