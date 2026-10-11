@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "product": "Aurontra",
+  "release_status": "not_ready",
+  "gates": [
+    {
+      "id": "phase17_agent_platform_integration",
+      "status": "blocked",
+      "owner": "Tinlance Agent Platform operator",
+      "evidence": null,
+      "reason": "Live tenant-scoped Platform contracts, trusted telemetry, independent verifier, and worker/scheduler acceptance are not recorded."
+    },
+    {
+      "id": "phase18_authenticated_console",
+      "status": "blocked",
+      "owner": "Aurontra product engineering",
+      "evidence": null,
+      "reason": "Authenticated end-to-end tenant integration and customer-console acceptance remain open."
+    },
+    {
+      "id": "phase19_billing_checkout_and_entitlements",
+      "status": "blocked",
+      "owner": "Billing operations",
+      "evidence": null,
+      "reason": "Provider sandbox checkout, subscription reconciliation, and server-side entitlement enforcement are not accepted."
+    },
+    {
+      "id": "phase20_api_key_runtime_authentication",
+      "status": "blocked",
+      "owner": "Identity and security engineering",
+      "evidence": null,
+      "reason": "API-key lifecycle management exists, but API keys are not an accepted runtime authentication method; role-policy negative JWT tests remain open."
+    },
+    {
+      "id": "phase21_compliance_control_mapping_review",
+      "status": "blocked",
+      "owner": "Compliance counsel",
+      "evidence": null,
+      "reason": "NIS2/DORA mappings require qualified legal/control-owner review before customer-facing assurance."
+    },
+    {
+      "id": "phase22_production_slo_and_disaster_recovery",
+      "status": "blocked",
+      "owner": "SRE and database operations",
+      "evidence": null,
+      "reason": "Durable telemetry, alert delivery, production restore drill, and measured/approved RTO/RPO are not evidenced."
+    },
+    {
+      "id": "phase23_frontend_reproducible_dependencies",
+      "status": "blocked",
+      "owner": "Frontend engineering",
+      "evidence": null,
+      "reason": "A reviewed frontend package-lock.json is not committed; frontend CI currently resolves transitive dependencies during each run."
+    },
+    {
+      "id": "phase24_production_deployment_and_rollback",
+      "status": "blocked",
+      "owner": "Release manager",
+      "evidence": null,
+      "reason": "Production deployment, rollback, customer-tenant smoke tests, and go/no-go approval have not been recorded. CI deployment is skipped."
+    }
+  ]
+}
