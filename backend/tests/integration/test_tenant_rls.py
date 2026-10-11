@@ -20,6 +20,8 @@ async def test_rls_scopes_organization_and_device_rows_and_rejects_cross_tenant_
     ticket_a = f"ticket-a-{suffix}"
     ticket_b = f"ticket-b-{suffix}"
     replay_a = f"replay-a-{suffix}"
+    kb_a = f"kb-a-{suffix}"
+    kb_b = f"kb-b-{suffix}"
     replay_b = f"replay-b-{suffix}"
     role = f"aurontra_rls_{suffix}"
     password = f"test-{suffix}-only"
@@ -28,10 +30,16 @@ async def test_rls_scopes_organization_and_device_rows_and_rejects_cross_tenant_
     try:
         await admin.execute(f'CREATE ROLE "{role}" LOGIN PASSWORD \'{password}\' NOSUPERUSER NOBYPASSRLS')
         await admin.execute(f'GRANT USAGE ON SCHEMA public TO "{role}"')
-        await admin.execute(f'GRANT SELECT, INSERT, UPDATE, DELETE ON organizations, devices, tickets, durable_jobs, outbox_events, agent_request_replays, remediation_intents, telemetry_records TO "{role}"')
+        await admin.execute(f'GRANT SELECT, INSERT, UPDATE, DELETE ON organizations, devices, tickets, durable_jobs, outbox_events, agent_request_replays, remediation_intents, telemetry_records, knowledge_articles TO "{role}"')
         await admin.execute(
             "INSERT INTO organizations (id, name, status) VALUES ($1, $1, 'active'), ($2, $2, 'active')",
             org_a, org_b,
+        )
+        await admin.execute(
+            "INSERT INTO knowledge_articles (id, org_id, article_key, slug, title, category, content, content_sha256, status, version, approved_by, approved_at) "
+            "VALUES ($1, $2, $3, $4, 'A approved', 'connectivity', 'a', repeat('a', 64), 'published', 1, 'admin', now()), "
+            "($5, $6, $7, $8, 'B approved', 'connectivity', 'b', repeat('b', 64), 'published', 1, 'admin', now())",
+            kb_a, org_a, kb_a, kb_a, kb_b, org_b, kb_b, kb_b,
         )
         await admin.execute(
             "INSERT INTO devices (id, org_id, name) VALUES ($1, $2, $1), ($3, $4, $3)",
@@ -96,6 +104,8 @@ async def test_rls_scopes_organization_and_device_rows_and_rejects_cross_tenant_
         assert [row["id"] for row in visible_intents] == [f"intent-a-{suffix}"]
         visible_telemetry = await app.fetch("SELECT id FROM telemetry_records")
         assert [row["id"] for row in visible_telemetry] == [f"telemetry-a-{suffix}"]
+        visible_knowledge = await app.fetch("SELECT id FROM knowledge_articles ORDER BY id")
+        assert [row["id"] for row in visible_knowledge] == [kb_a]
 
         await app.execute("SELECT set_config('app.current_org_id', '', false)")
         assert await app.fetch("SELECT id FROM devices") == []
@@ -105,12 +115,19 @@ async def test_rls_scopes_organization_and_device_rows_and_rejects_cross_tenant_
         assert await app.fetch("SELECT jti FROM agent_request_replays") == []
         assert await app.fetch("SELECT id FROM remediation_intents") == []
         assert await app.fetch("SELECT id FROM telemetry_records") == []
+        assert await app.fetch("SELECT id FROM knowledge_articles") == []
 
         await app.execute("SELECT set_config('app.current_org_id', $1, false)", org_a)
         with pytest.raises(asyncpg.InsufficientPrivilegeError):
             await app.execute(
                 "INSERT INTO devices (id, org_id, name) VALUES ($1, $2, $3)",
                 f"forbidden-{suffix}", org_b, "cross-tenant-write",
+            )
+        with pytest.raises(asyncpg.InsufficientPrivilegeError):
+            await app.execute(
+                "INSERT INTO knowledge_articles (id, org_id, article_key, slug, title, category, content, content_sha256, status, version, approved_by, approved_at) "
+                "VALUES ($1, $2, $3, $4, 'self-approved', 'connectivity', 'unsafe', repeat('c', 64), 'published', 1, 'tenant-user', now())",
+                f"forbidden-kb-{suffix}", org_a, f"forbidden-kb-{suffix}", f"forbidden-kb-{suffix}",
             )
         with pytest.raises(asyncpg.InsufficientPrivilegeError):
             await app.execute(
