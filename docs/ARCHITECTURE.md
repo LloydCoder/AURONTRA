@@ -43,6 +43,10 @@ The Phase 09 governed-action adapter was merged in PR #4 at `90b8760560b7efb7738
 
 At the pinned SDK revision, `ClientConfig.as_client_kwargs()` emits `tracestate` and `trace_context` arguments that the pinned `AgentPlatform.__init__` does not accept. Aurontra uses the SDK's supported direct constructor and has a regression test. This avoids duplicating the transport but does not fix the upstream SDK defect; the SDK should receive a separate compatibility patch before consumers rely on the `ClientConfig` constructor path.
 
+## TSIC ecosystem registration status
+
+The reviewed four-repository Agent System baseline is documented above, but the current TSIC `manifests/ecosystem.json` and dependency graph do not yet register Aurontra. Phase 17 must add a schema-valid Aurontra system entry, dependency edges, product contract/version, and TSIC-17 conformance evidence through a reviewed TSIC pull request. Until that PR is merged and its conformance gate passes, Aurontra is an ecosystem consumer by architecture intent, not a TSIC-certified integrated system.
+
 ## Conformance and release
 
 The Tinlance Agent Developer conformance suite is a release gate for the four-repository system, and TSIC is the canonical ecosystem certification authority. Aurontra should add product-specific contract tests against the reviewed SDK/Platform wire contract and must keep those tests green alongside its own CI/security workflows. Passing repository conformance does not prove production database, secrets, sandbox, TLS, telemetry, backups, or incident response are deployed.
@@ -60,7 +64,7 @@ The application rejects oversized declared request bodies before routing. The pr
 
 ## Database migration status
 
-The repository has Alembic migrations for the base schema and tenant foreign keys/RLS. Ticket and device route persistence is exercised in SQLite tests with foreign-key enforcement enabled; PostgreSQL CI validates tenant isolation for organizations, devices and tickets using a non-owner/non-bypass role, then performs a custom-format dump/restore smoke test that verifies restored tenant data and RLS policies. These are CI proofs, not evidence of a production database migration or managed-backup configuration. The migrations are intentionally non-destructive for pre-existing tables; before production adoption, back up the actual database, compare schema to models, and run a reviewed forward migration. Production startup must not use `create_all` as a substitute for migrations.
+The repository has Alembic migrations for the base schema, tenant foreign keys/RLS, durable jobs, agent identity, remediation, telemetry and threat-containment evidence. The current repository migration head is `0012_telemetry_schema_v2`; `alembic_version.version_num` is widened to 64 characters because the existing descriptive revision IDs exceed Alembic's default 32-character limit. The online migration environment commits only this version-table preflight before starting the Alembic migration transaction, so a failed migration leaves the revision bookkeeping consistent. Offline SQL generation is explicitly rejected because the migration chain uses live-schema inspection and reflection-based batch operations; use reviewed online Alembic migrations. Ticket/device route persistence is exercised in SQLite tests with foreign-key enforcement enabled; PostgreSQL CI validates tenant isolation using a non-owner/non-bypass role, then performs a custom-format dump/restore smoke test. These are CI proofs, not evidence of a production database migration or managed-backup configuration. Before production adoption, back up the actual database, compare schema to models, and run a reviewed forward migration. Production startup must not use `create_all` as a substitute for migrations.
 
 
 ## Durable jobs and event delivery (Phase 06)
