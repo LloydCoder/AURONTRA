@@ -42,6 +42,14 @@ Phase 10 adds deterministic, evidence-freshness-bounded plans for disk pressure,
 
 Phase 11 persists remediation intents with deterministic plan/idempotency keys, state/version transitions, platform/evidence references, and tenant-scoped RLS. Intent, submit job, and outbox event are committed atomically. The worker gets tenant identity from the claimed job row, marks ambiguous external outcomes as `unknown_outcome`, and schedules idempotent reconciliation for stale external states. A plan is only marked verified when Platform execution is completed and independent postcondition evidence exists. The processor and scheduler are not configured in production; no live execution is claimed. See [Phase 11 design](docs/PHASE_11_ORCHESTRATION_RECOVERY.md) and [Phase 11 forensic audit](docs/audits/PHASE_11_FORENSIC_AUDIT.md).
 
+## Telemetry evidence and predictive evaluation (Phases 12–13)
+
+Phase 12 adds tenant-scoped telemetry evidence with DPoP replay protection, event idempotency, payload provenance hashes, timestamp freshness/order checks, partial-metric safeguards, per-device rate limiting, forced PostgreSQL RLS, and a bounded retention primitive. Production ingestion and retention scheduling remain disabled until the approved identity provider, signed endpoint-agent release, evidence consumers, scheduler and customer environment are verified.
+
+Phase 13 adds strict predictor input validation, time-aware trend slopes, trusted-digest checks before model artifact deserialization, and offline evaluation reports for anomaly detection and temporal forecast errors. Anomaly confidence is explicitly uncalibrated; 72-hour forecasts remain linear heuristics. CI passed **409 tests, 1 skipped, 85.14% coverage**, plus PostgreSQL tenant RLS/backup-restore and secret/history/archive scans. Deployment was skipped.
+
+These checks validate code paths and synthetic fixtures, not real-world predictive performance. Production decisioning remains blocked on a representative, authorized, labeled holdout dataset, calibration/drift evaluation, monitoring and human-approved thresholds. See [Phase 12 design](docs/PHASE_12_TELEMETRY_EVIDENCE.md), [Phase 12 audit](docs/audits/PHASE_12_FORENSIC_AUDIT.md), [Phase 13 design](docs/PHASE_13_PREDICTIVE_EVALUATION.md), and [Phase 13 audit](docs/audits/PHASE_13_FORENSIC_AUDIT.md).
+
 ## Governed action engine (Phase 09)
 
 The governed-action adapter was merged in PR #4 at `90b8760560b7efb773861e0297c86235638a014a` against the pinned Tinlance Agent Platform SDK. It uses a code-owned action allowlist, trusted tenant/subject/agent/task context, stable idempotency keys, bounded JSON arguments, and Platform-owned policy/approval/execution/evidence. It does not execute local shell commands or treat execution acceptance as proof of a business outcome.
