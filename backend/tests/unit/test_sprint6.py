@@ -65,7 +65,8 @@ class TestLemonSqueezyWebhook:
     @pytest.mark.asyncio
     async def test_webhook_endpoint_exists(self, client):
         r = await client.post("/billing/webhook", json={}, headers={"X-Signature": "test"})
-        assert r.status_code in (200, 400, 422)
+        # Missing provider secret must fail closed; route existence is not acceptance.
+        assert r.status_code == 401
 
     @pytest.mark.asyncio
     async def test_billing_overview_endpoint(self, client):
