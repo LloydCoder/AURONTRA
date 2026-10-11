@@ -48,10 +48,11 @@ def event_payload(context, **overrides):
 def reset_circuit_state(monkeypatch):
     reset_circuits_for_tests()
     monkeypatch.setattr(settings, "BRIDGE_AUTH_TOKENS_JSON", json.dumps({
-        "test-service": "t" * 48,
+        "threatfade": "t" * 48,
     }))
     monkeypatch.setattr(settings, "ENVIRONMENT", "test")
     monkeypatch.setattr(settings, "BRIDGE_ALLOW_INSECURE_HTTP", False)
+    monkeypatch.setattr(settings, "THREATFADE_URL", "https://integration.example")
     yield
     reset_circuits_for_tests()
 
@@ -65,7 +66,7 @@ async def test_client_sends_bearer_and_versioned_contract_headers():
         return httpx.Response(200, json={"status": "ok"})
 
     result = await request_json(
-        service="test-service",
+        service="threatfade",
         base_url="https://integration.example",
         method="GET",
         path="/health",
@@ -91,7 +92,7 @@ async def test_client_preserves_valid_trace_context_and_correlation_id(identity_
         return httpx.Response(200, json={"status": "ok"})
 
     await request_json(
-        service="test-service",
+        service="threatfade",
         base_url="https://integration.example",
         method="GET",
         path="/health",
@@ -115,7 +116,7 @@ async def test_client_preserves_valid_trace_context_and_correlation_id(identity_
 async def test_client_rejects_invalid_trace_context_and_correlation_id():
     with pytest.raises(EcosystemIntegrationError) as trace_error:
         await request_json(
-            service="test-service",
+            service="threatfade",
             base_url="https://integration.example",
             method="GET",
             path="/health",
@@ -125,7 +126,7 @@ async def test_client_rejects_invalid_trace_context_and_correlation_id():
 
     with pytest.raises(EcosystemIntegrationError) as correlation_error:
         await request_json(
-            service="test-service",
+            service="threatfade",
             base_url="https://integration.example",
             method="GET",
             path="/health",
@@ -139,7 +140,7 @@ async def test_client_fails_closed_without_per_service_credentials(monkeypatch):
     monkeypatch.setattr(settings, "BRIDGE_AUTH_TOKENS_JSON", "{}")
     with pytest.raises(EcosystemIntegrationError) as error:
         await request_json(
-            service="test-service", base_url="https://integration.example",
+            service="threatfade", base_url="https://integration.example",
             method="GET", path="/health",
         )
     assert error.value.code == "bridge_credentials_missing"
@@ -150,7 +151,7 @@ async def test_production_rejects_plain_http(monkeypatch):
     monkeypatch.setattr(settings, "ENVIRONMENT", "production")
     with pytest.raises(EcosystemIntegrationError) as error:
         await request_json(
-            service="test-service", base_url="http://integration.example",
+            service="threatfade", base_url="http://integration.example",
             method="GET", path="/health",
         )
     assert error.value.code == "bridge_https_required"
@@ -160,12 +161,12 @@ async def test_production_rejects_plain_http(monkeypatch):
 async def test_origin_and_path_validation_prevent_url_injection():
     with pytest.raises(EcosystemIntegrationError):
         await request_json(
-            service="test-service", base_url="https://user:pass@integration.example",
+            service="threatfade", base_url="https://user:pass@integration.example",
             method="GET", path="/health",
         )
     with pytest.raises(EcosystemIntegrationError):
         await request_json(
-            service="test-service", base_url="https://integration.example",
+            service="threatfade", base_url="https://integration.example",
             method="GET", path="//evil.example/steal",
         )
 
@@ -182,7 +183,7 @@ async def test_retryable_get_retries_transient_upstream_failures(identity_contex
         return httpx.Response(200, json={"events": []})
 
     result = await request_json(
-        service="test-service", base_url="https://integration.example",
+        service="threatfade", base_url="https://integration.example",
         method="GET", path="/events", identity_context=identity_context,
         transport=httpx.MockTransport(handler),
     )
@@ -201,7 +202,7 @@ async def test_non_idempotent_post_is_not_retried(identity_context):
 
     with pytest.raises(EcosystemIntegrationError) as error:
         await request_json(
-            service="test-service", base_url="https://integration.example",
+            service="threatfade", base_url="https://integration.example",
             method="POST", path="/actions", payload={"action": "submit"},
             identity_context=identity_context, transport=httpx.MockTransport(handler),
         )
@@ -223,7 +224,7 @@ async def test_post_retries_only_with_explicit_idempotency_key(identity_context)
         return httpx.Response(200, json={"accepted": True})
 
     result = await request_json(
-        service="test-service", base_url="https://integration.example",
+        service="threatfade", base_url="https://integration.example",
         method="POST", path="/events", payload=event_payload(identity_context),
         identity_context=identity_context, idempotency_key="event-123",
         transport=httpx.MockTransport(handler),
@@ -237,7 +238,7 @@ async def test_post_retries_only_with_explicit_idempotency_key(identity_context)
 async def test_tenant_scoped_call_requires_identity_context():
     with pytest.raises(EcosystemIntegrationError) as error:
         await request_json(
-            service="test-service", base_url="https://integration.example",
+            service="threatfade", base_url="https://integration.example",
             method="GET", path="/events",
         )
     assert error.value.code == "bridge_identity_context_missing"
@@ -250,7 +251,7 @@ async def test_event_envelope_must_match_verified_tenant_context(identity_contex
 
     with pytest.raises(EcosystemIntegrationError) as error:
         await request_json(
-            service="test-service", base_url="https://integration.example",
+            service="threatfade", base_url="https://integration.example",
             method="POST", path="/events",
             payload=event_payload(identity_context, tenant_id="other-tenant"),
             identity_context=identity_context, idempotency_key="event-1",
@@ -263,12 +264,32 @@ async def test_event_envelope_must_match_verified_tenant_context(identity_contex
 async def test_client_rejects_header_injection_in_idempotency_key(identity_context):
     with pytest.raises(EcosystemIntegrationError) as error:
         await request_json(
-            service="test-service", base_url="https://integration.example",
+            service="threatfade", base_url="https://integration.example",
             method="POST", path="/actions", payload={"action": "submit"},
             identity_context=identity_context,
             idempotency_key="event-1\r\nX-Injected: yes",
         )
     assert error.value.code == "bridge_idempotency_key_invalid"
+
+
+@pytest.mark.asyncio
+async def test_client_rejects_unconfigured_or_spoofed_origin(identity_context):
+    with pytest.raises(EcosystemIntegrationError) as error:
+        await request_json(
+            service="threatfade", base_url="https://attacker.example",
+            method="GET", path="/health", identity_context=identity_context,
+        )
+    assert error.value.code == "bridge_origin_not_allowlisted"
+
+
+@pytest.mark.asyncio
+async def test_client_rejects_unknown_service_even_with_valid_https_origin():
+    with pytest.raises(EcosystemIntegrationError) as error:
+        await request_json(
+            service="attacker-controlled-service", base_url="https://integration.example",
+            method="GET", path="/health",
+        )
+    assert error.value.code == "bridge_service_invalid"
 
 
 @pytest.mark.asyncio
@@ -282,7 +303,7 @@ async def test_client_does_not_follow_redirects():
 
     with pytest.raises(EcosystemIntegrationError) as error:
         await request_json(
-            service="test-service", base_url="https://integration.example",
+            service="threatfade", base_url="https://integration.example",
             method="GET", path="/health", transport=httpx.MockTransport(handler),
         )
     assert error.value.code == "bridge_upstream_rejected"
@@ -298,13 +319,13 @@ async def test_repeated_upstream_failures_open_circuit_without_leaking_body():
     for _ in range(5):
         with pytest.raises(EcosystemIntegrationError):
             await request_json(
-                service="test-service", base_url="https://integration.example",
+                service="threatfade", base_url="https://integration.example",
                 method="GET", path="/health", transport=transport,
             )
 
     with pytest.raises(EcosystemIntegrationError) as error:
         await request_json(
-            service="test-service", base_url="https://integration.example",
+            service="threatfade", base_url="https://integration.example",
             method="GET", path="/health", transport=transport,
         )
     assert error.value.code == "bridge_circuit_open"
