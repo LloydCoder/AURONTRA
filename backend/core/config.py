@@ -21,6 +21,10 @@ class Settings(BaseSettings):
     JWT_ISSUER: str = ""
     JWT_AUDIENCE: str = ""
     MAX_REQUEST_BODY_BYTES: int = 1048576
+    BRIDGE_HEALTH_TIMEOUT_SECONDS: float = 1.5
+    METRICS_ENABLED: bool = True
+    SLO_TARGET_AVAILABILITY: float = 0.999
+    SLO_TARGET_P95_SECONDS: float = 0.5
 
     # Endpoint-agent identity is verified against the Platform-approved issuer.
     # Aurontra never mints agent credentials or stores private keys.
