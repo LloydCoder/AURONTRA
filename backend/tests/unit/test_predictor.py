@@ -4,6 +4,11 @@ RED phase: all tests written before implementation.
 """
 import pytest
 import numpy as np
+from datetime import datetime, timedelta, timezone
+
+
+def _timestamp_for_hour(hour: int) -> str:
+    return (datetime(2026, 6, 20, tzinfo=timezone.utc) + timedelta(hours=hour)).isoformat().replace('+00:00', 'Z')
 
 
 class TestIsolationForestPredictor:
@@ -75,6 +80,47 @@ class TestIsolationForestPredictor:
         assert "confidence" in result
         assert 0.0 <= result["confidence"] <= 1.0
 
+    @pytest.mark.parametrize("reading", [
+        {"cpu_percent": 10, "memory_percent": 20},
+        {"cpu_percent": float("nan"), "memory_percent": 20, "disk_percent": 30},
+        {"cpu_percent": float("inf"), "memory_percent": 20, "disk_percent": 30},
+        {"cpu_percent": -1, "memory_percent": 20, "disk_percent": 30},
+        {"cpu_percent": 10, "memory_percent": 20, "disk_percent": 101},
+        {"cpu_percent": True, "memory_percent": 20, "disk_percent": 30},
+    ])
+    def test_predictor_rejects_incomplete_or_invalid_telemetry(self, reading):
+        from resilience.predictor import ResiliencePredictor
+        with pytest.raises(ValueError):
+            ResiliencePredictor._extract_features(reading)
+
+    def test_predictor_rejects_invalid_configuration(self):
+        from resilience.predictor import ResiliencePredictor
+        with pytest.raises(ValueError):
+            ResiliencePredictor(contamination=0.0)
+        with pytest.raises(ValueError):
+            ResiliencePredictor(contamination=0.9)
+        with pytest.raises(ValueError):
+            ResiliencePredictor(n_estimators=0)
+
+    def test_model_load_requires_trusted_digest_and_rejects_tampering(self):
+        import tempfile, os
+        from resilience.predictor import ResiliencePredictor
+        predictor = ResiliencePredictor()
+        data = [{"cpu_percent": 20 + i, "memory_percent": 30, "disk_percent": 40} for i in range(15)]
+        predictor.train(data)
+        with tempfile.NamedTemporaryFile(suffix=".pkl", delete=False) as f:
+            path = f.name
+        try:
+            digest = predictor.save(path)
+            with pytest.raises(ValueError, match="trusted 64-character"):
+                ResiliencePredictor.load(path)
+            with open(path, "ab") as f:
+                f.write(b"tampered")
+            with pytest.raises(ValueError, match="SHA-256"):
+                ResiliencePredictor.load(path, expected_sha256=digest)
+        finally:
+            os.unlink(path)
+
     def test_model_can_be_serialised_and_loaded(self):
         import tempfile, os
         from resilience.predictor import ResiliencePredictor
@@ -84,8 +130,8 @@ class TestIsolationForestPredictor:
         with tempfile.NamedTemporaryFile(suffix=".pkl", delete=False) as f:
             path = f.name
         try:
-            predictor.save(path)
-            loaded = ResiliencePredictor.load(path)
+            expected_sha256 = predictor.save(path)
+            loaded = ResiliencePredictor.load(path, expected_sha256=expected_sha256)
             assert loaded.is_trained is True
             result = loaded.predict({"cpu_percent": 22, "memory_percent": 30, "disk_percent": 40})
             assert "is_anomaly" in result
@@ -100,7 +146,7 @@ class TestTemporalCorrelator:
         from resilience.temporal import TemporalCorrelator
         tc = TemporalCorrelator()
         series = [
-            {"timestamp": f"2026-06-20T{10+i:02d}:00:00Z",
+            {"timestamp": _timestamp_for_hour(10 + i),
              "cpu_percent": 20 + i * 3,
              "memory_percent": 30,
              "disk_percent": 40}
@@ -116,7 +162,7 @@ class TestTemporalCorrelator:
         tc = TemporalCorrelator()
         # CPU rising fast — 20% → 80% over 10 readings
         series = [
-            {"timestamp": f"2026-06-20T{i:02d}:00:00Z",
+            {"timestamp": _timestamp_for_hour(i),
              "cpu_percent": 20 + i * 6,
              "memory_percent": 30,
              "disk_percent": 40}
@@ -130,7 +176,7 @@ class TestTemporalCorrelator:
         from resilience.temporal import TemporalCorrelator
         tc = TemporalCorrelator()
         series = [
-            {"timestamp": f"2026-06-20T{i:02d}:00:00Z",
+            {"timestamp": _timestamp_for_hour(i),
              "cpu_percent": 20,
              "memory_percent": 30,
              "disk_percent": 40}
@@ -156,7 +202,7 @@ class TestTemporalCorrelator:
         from resilience.temporal import TemporalCorrelator
         tc = TemporalCorrelator()
         series = [
-            {"timestamp": f"2026-06-20T{i:02d}:00:00Z",
+            {"timestamp": _timestamp_for_hour(i),
              "cpu_percent": 50,
              "memory_percent": 50,
              "disk_percent": 50}
@@ -169,7 +215,7 @@ class TestTemporalCorrelator:
         from resilience.temporal import TemporalCorrelator
         tc = TemporalCorrelator()
         series = [
-            {"timestamp": f"2026-06-20T{i:02d}:00:00Z",
+            {"timestamp": _timestamp_for_hour(i),
              "cpu_percent": 20,
              "memory_percent": 30,
              "disk_percent": 50 + i * 4}
@@ -251,7 +297,7 @@ class TestResilienceAPIEndpoints:
         r = await client.post("/resilience/predict", json={
             "device_id": "srv-001",
             "history": [
-                {"timestamp": f"2026-06-20T{i:02d}:00:00Z",
+                {"timestamp": _timestamp_for_hour(i),
                  "cpu_percent": 20 + i,
                  "memory_percent": 30,
                  "disk_percent": 40}
