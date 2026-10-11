@@ -16,6 +16,7 @@ from core.threat_containment import (
 from models.device import Device
 from models.threat_containment_attempt import ThreatContainmentAttempt
 from models.threat_finding import ThreatFinding
+from models.telemetry_record import TelemetryRecord
 
 
 def _context():
@@ -40,12 +41,37 @@ async def _seed_finding(*, device_id="contain-device-01", last_seen=None):
             revoked_at=None,
             last_seen_at=last_seen or now,
         ))
+        telemetry_id = str(uuid4())
+        telemetry = TelemetryRecord(
+            id=telemetry_id,
+            org_id="test-tenant",
+            device_id=device_id,
+            event_id=str(uuid4()),
+            schema_version="1",
+            source="endpoint_agent",
+            agent_version="test-agent/1.0",
+            key_thumbprint="test-thumbprint",
+            proof_jti=f"proof-{uuid4().hex}",
+            request_id=f"request-{uuid4().hex}",
+            request_hash="a" * 64,
+            payload_hash="b" * 64,
+            observed_at=now,
+            metrics={"cpu_percent": 97},
+            missing_metrics=[],
+            quality_flags=[],
+            computed_score=91,
+            score_components={"cpu_percent": 97},
+            score_status="ok",
+            retention_expires_at=now + timedelta(days=90),
+        )
+        session.add(telemetry)
         finding = ThreatFinding(
             id=str(uuid4()),
             org_id="test-tenant",
             event_id=f"contain-event-{uuid4().hex}",
             device_id=device_id,
-            source="network_signal",
+            telemetry_record_id=telemetry_id,
+            source="endpoint_agent",
             detector_version="threat-heuristic.v2",
             observed_at=now,
             signal_sha256="a" * 64,
