@@ -256,6 +256,7 @@ async def test_invalid_resource_and_control_characters_are_rejected_before_netwo
     executor, calls, _ = _executor(monkeypatch)
     base = {
         "action_id": uuid4(),
+        "context": _context(),
         "action_key": "diagnostic.read",
         "intent": "Read diagnostic metrics",
         "arguments": {"metric": "cpu"},
@@ -293,7 +294,7 @@ def test_platform_sdk_configuration_is_rejected_without_https_in_production(monk
     monkeypatch.setattr(settings, "AGENT_PLATFORM_ALLOW_INSECURE_HTTP", True)
     monkeypatch.setattr(settings, "ENVIRONMENT", "production")
     with pytest.raises(GovernedActionError, match="platform_https_required"):
-        _new_platform_client(uuid4(), "run", _context())
+        _new_platform_client(uuid4(), "run", _context("tenant-test", "subject-test"))
 
 
 @pytest.mark.asyncio
@@ -528,3 +529,40 @@ async def test_feature_flag_cannot_be_bypassed_by_custom_client_factory(monkeypa
             arguments={"metric": "cpu"},
         )
     assert factory_calls == []
+
+
+def test_static_platform_credential_cannot_cross_tenant_context(monkeypatch):
+    from core.governed_actions import _new_platform_client
+
+    monkeypatch.setattr(settings, "AGENT_PLATFORM_ENABLED", True)
+    monkeypatch.setattr(settings, "AGENT_PLATFORM_BASE_URL", "https://platform.example.invalid")
+    monkeypatch.setattr(settings, "AGENT_PLATFORM_BEARER_TOKEN", "tenant-a-credential")
+    monkeypatch.setattr(settings, "AGENT_PLATFORM_TENANT_ID", "tenant-a")
+    monkeypatch.setattr(settings, "AGENT_PLATFORM_SUBJECT_ID", "service-a")
+    monkeypatch.setattr(settings, "AGENT_PLATFORM_API_VERSION", "1.1")
+    monkeypatch.setattr(settings, "AGENT_PLATFORM_TIMEOUT_SECONDS", 10.0)
+    monkeypatch.setattr(settings, "AGENT_PLATFORM_ALLOW_INSECURE_HTTP", False)
+    monkeypatch.setattr(settings, "ENVIRONMENT", "test")
+    with pytest.raises(GovernedActionError, match="platform_identity_context_mismatch"):
+        _new_platform_client(uuid4(), "run", _context("tenant-b", "service-b"))
+
+
+def test_dynamic_credential_provider_binds_each_client_to_trusted_context(monkeypatch):
+    from core.governed_actions import _new_platform_client
+
+    monkeypatch.setattr(settings, "AGENT_PLATFORM_ENABLED", True)
+    monkeypatch.setattr(settings, "AGENT_PLATFORM_BASE_URL", "https://platform.example.invalid")
+    monkeypatch.setattr(settings, "AGENT_PLATFORM_API_VERSION", "1.1")
+    monkeypatch.setattr(settings, "AGENT_PLATFORM_TIMEOUT_SECONDS", 10.0)
+    monkeypatch.setattr(settings, "AGENT_PLATFORM_ALLOW_INSECURE_HTTP", False)
+    monkeypatch.setattr(settings, "ENVIRONMENT", "test")
+    context = _context("tenant-b", "service-b")
+    client = _new_platform_client(
+        uuid4(),
+        "run",
+        context,
+        credential_provider=lambda verified: f"credential-for-{verified.tenant_id}",
+    )
+    assert client._sync._tenant_id == "tenant-b"
+    assert client._sync._subject_id == "service-b"
+    assert client._sync._bearer_token == "credential-for-tenant-b"
