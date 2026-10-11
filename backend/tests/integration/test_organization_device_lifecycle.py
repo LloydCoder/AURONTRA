@@ -76,7 +76,7 @@ async def test_offboarding_disables_org_and_all_owned_devices_without_deleting_t
     assert response.json()["status"] == "offboarded"
     assert repeated.status_code == 200
     assert repeated.json()["already_offboarded"] is True
-    assert provision.status_code == 409
+    assert provision.status_code == 403
     async with AsyncSessionLocal() as db:
         org = await db.get(Organization, "test-tenant")
         device = await db.get(Device, "offboard-device")
