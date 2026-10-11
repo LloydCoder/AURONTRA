@@ -59,6 +59,13 @@ def _bounded_text(value: Any, *, maximum: int) -> bool:
     )
 
 
+def _safe_platform_code(value: Any, *, fallback: str) -> str:
+    """Accept only compact machine codes, never arbitrary server text or token-like strings."""
+    if isinstance(value, str) and re.fullmatch(r"[A-Za-z0-9_-]{1,80}", value):
+        return value
+    return fallback
+
+
 class GovernedActionError(RuntimeError):
     """Sanitized error from the governed-action boundary."""
 
@@ -360,7 +367,10 @@ class PlatformGovernedActionExecutor:
                 execution_id=execution.execution_id,
                 evidence_ids=execution.evidence_ids,
                 audit_event_ids=execution.audit_event_ids,
-                error_code=execution.error_code,
+                error_code=(
+                    _safe_platform_code(execution.error_code, fallback="execution_error")
+                    if execution.error_code is not None else None
+                ),
                 retryable=execution.retryable,
                 business_outcome_verified=False,
             )
@@ -379,7 +389,7 @@ class PlatformGovernedActionExecutor:
             ) from None
         except SdkError as exc:
             raw_code = getattr(exc, "error_code", None) or type(exc).__name__.lower()
-            code = re.sub(r"[^A-Za-z0-9_.-]", "_", str(raw_code))[:80] or "platform_error"
+            code = _safe_platform_code(raw_code, fallback="sdk_error")
             retryable = bool(getattr(exc, "retryable", False))
             logger.warning(
                 "Governed Platform request failed operation=%s code=%s retryable=%s",
