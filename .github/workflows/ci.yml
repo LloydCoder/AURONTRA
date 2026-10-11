@@ -49,6 +49,9 @@ jobs:
       - name: Compile backend
         run: python -m compileall -q .
 
+      - name: Evaluate threat detection benchmark deterministically
+        run: python -m scripts.evaluate_threat_detection --check-determinism --output /tmp/aurontra-threat-benchmark.json
+
       - name: Run full test suite with coverage
         timeout-minutes: 5
         env:
