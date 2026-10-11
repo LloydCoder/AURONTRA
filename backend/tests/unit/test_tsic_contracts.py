@@ -64,6 +64,25 @@ def test_identity_context_rejects_header_injection_in_optional_ids():
         TSICIdentityContext.model_validate(_context(agent_id="agent-1\r\nX-Injected: yes"))
 
 
+def test_event_envelope_accepts_and_binds_optional_tsic_extensions():
+    context_data = _context(agent_id="agent-1", service_id="service-1", causation_id="cause-1")
+    context = TSICIdentityContext.model_validate(context_data)
+    event = _event(
+        context_data,
+        organization_id=context.organization_id,
+        workspace_id=context.workspace_id,
+        actor_id=context.actor_id,
+        agent_id=context.agent_id,
+        service_id=context.service_id,
+        causation_id=context.causation_id,
+        schema_uri="https://schemas.example/telemetry/v1",
+        data_classification="internal",
+    )
+    validated = validate_event_envelope(event, context)
+    assert validated.agent_id == "agent-1"
+    assert validated.data_classification == "internal"
+
+
 def test_event_envelope_is_bound_to_verified_identity_context():
     context = TSICIdentityContext.model_validate(_context())
     event = validate_event_envelope(_event(_context()), context)
@@ -80,6 +99,12 @@ def test_event_envelope_is_bound_to_verified_identity_context():
         ("execution_id", "other-execution"),
         ("trace_id", "0" * 32),
         ("correlation_id", "other-correlation"),
+        ("organization_id", "other-organization"),
+        ("workspace_id", "other-workspace"),
+        ("actor_id", "other-actor"),
+        ("agent_id", "other-agent"),
+        ("service_id", "other-service"),
+        ("causation_id", "other-causation"),
     ],
 )
 def test_event_envelope_rejects_context_mismatch(field, value):
