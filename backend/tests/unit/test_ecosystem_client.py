@@ -5,6 +5,8 @@ import httpx
 import pytest
 
 from core.config import settings
+from core.tsic_contracts import TSICIdentityContext
+
 from core.ecosystem_client import (
     MAX_RESPONSE_BYTES,
     EcosystemIntegrationError,
@@ -15,15 +17,15 @@ from core.ecosystem_client import (
 
 @pytest.fixture
 def identity_context():
-    return {
-        "tenant_id": "tenant-1",
-        "organization_id": "org-1",
-        "workspace_id": "workspace-1",
-        "actor_id": "service:aurontra",
-        "execution_id": "execution-1",
-        "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
-        "correlation_id": "correlation-1",
-    }
+    return TSICIdentityContext(
+        tenant_id="tenant-1",
+        organization_id="org-1",
+        workspace_id="workspace-1",
+        actor_id="service:aurontra",
+        execution_id="execution-1",
+        trace_id="4bf92f3577b34da6a3ce929d0e0e4736",
+        correlation_id="correlation-1",
+    )
 
 
 def event_payload(context, **overrides):
@@ -36,10 +38,10 @@ def event_payload(context, **overrides):
         "subject": "device:device-1",
         "data": {"status": "accepted"},
         "data_content_type": "application/json",
-        "tenant_id": context["tenant_id"],
-        "execution_id": context["execution_id"],
-        "trace_id": context["trace_id"],
-        "correlation_id": context["correlation_id"],
+        "tenant_id": context.tenant_id,
+        "execution_id": context.execution_id,
+        "trace_id": context.trace_id,
+        "correlation_id": context.correlation_id,
     }
     event.update(overrides)
     return event
@@ -233,6 +235,18 @@ async def test_post_retries_only_with_explicit_idempotency_key(identity_context)
     assert result == {"accepted": True}
     assert calls == 2
     assert keys == ["event-123", "event-123"]
+
+
+@pytest.mark.asyncio
+async def test_client_rejects_untyped_identity_context(identity_context):
+    with pytest.raises(EcosystemIntegrationError) as error:
+        await request_json(
+            service="threatfade", base_url="https://integration.example",
+            method="GET", path="/events", identity_context={
+                "tenant_id": identity_context.tenant_id,
+            },
+        )
+    assert error.value.code == "bridge_identity_context_invalid"
 
 
 @pytest.mark.asyncio
