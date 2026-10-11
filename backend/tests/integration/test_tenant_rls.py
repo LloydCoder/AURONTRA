@@ -156,6 +156,13 @@ async def test_rls_scopes_organization_and_device_rows_and_rejects_cross_tenant_
         assert [row["id"] for row in visible_knowledge] == [kb_a, kb_draft_a, kb_global]
         visible_reports = await app.fetch("SELECT id FROM report_artifacts")
         assert [row["id"] for row in visible_reports] == [f"report-a-{suffix}"]
+        with pytest.raises(asyncpg.PostgresError):
+            await app.execute(
+                "UPDATE report_artifacts SET report_payload='{\"tampered\":true}'::jsonb WHERE id=$1",
+                f"report-a-{suffix}",
+            )
+        with pytest.raises(asyncpg.PostgresError):
+            await app.execute("DELETE FROM report_artifacts WHERE id=$1", f"report-a-{suffix}")
 
         await app.execute("SELECT set_config('app.current_org_id', '', false)")
         assert await app.fetch("SELECT id FROM devices") == []
