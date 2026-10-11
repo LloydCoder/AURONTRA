@@ -50,14 +50,22 @@ class SIEMExportRequest(BaseModel):
     action_taken: str | None = "monitor"
 
 
+def _iso_utc(value: datetime | None) -> str | None:
+    if value is None:
+        return None
+    if value.tzinfo is None or value.utcoffset() is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc).isoformat()
+
+
 def _serialize(finding: ThreatFinding) -> dict:
     return {
         "id": finding.id,
         "event_id": finding.event_id,
         "source": finding.source,
         "detector_version": finding.detector_version,
-        "observed_at": finding.observed_at.isoformat(),
-        "received_at": finding.received_at.isoformat() if finding.received_at else None,
+        "observed_at": _iso_utc(finding.observed_at),
+        "received_at": _iso_utc(finding.received_at),
         "signal_sha256": finding.signal_sha256,
         "signal": finding.signal,
         "assessment": finding.assessment,
@@ -122,6 +130,7 @@ async def analyse_threat(
         "detector_version": DETECTOR_VERSION,
         "signal_sha256": signal_hash,
         "score_semantics": "deterministic_heuristic_not_calibrated_probability",
+        "mitre_mapping_semantics": "heuristic_hypothesis_not_confirmed_behavior",
         "containment_verified": False,
         "blocked": False,
     })
