@@ -247,7 +247,7 @@ async def test_stale_pending_intent_gets_idempotent_reconciliation_job(monkeypat
             session, org_id="test-tenant", older_than_seconds=60
         )
         assert scheduled == 1
-        assert again == 1
+        assert again == 0
         jobs = list((await session.scalars(select(DurableJob).where(
             DurableJob.org_id == "test-tenant",
             DurableJob.job_type == "remediation.reconcile",

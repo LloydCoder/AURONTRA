@@ -163,6 +163,13 @@ async def enqueue_remediation_intent(
     # Reconcile missing queue/outbox rows idempotently if a retry observes an
     # existing intent. All three writes are inside the caller's transaction.
     if settings.REMEDIATION_SUBMISSION_ENABLED:
+        if intent.status == "proposed":
+            intent = await transition_remediation_intent(
+                session,
+                org_id=plan.tenant_id,
+                intent_id=plan.plan_id,
+                to_status="queued",
+            )
         await enqueue_job(
             session,
             org_id=plan.tenant_id,
@@ -171,22 +178,23 @@ async def enqueue_remediation_intent(
             payload={"org_id": plan.tenant_id, "intent_id": plan.plan_id, "operation": "submit"},
             max_attempts=5,
         )
-    await enqueue_outbox_event(
-        session,
-        org_id=plan.tenant_id,
-        aggregate_type="remediation_intent",
-        aggregate_id=plan.plan_id,
-        event_type="remediation.intent.created",
-        idempotency_key=f"remediation:{plan.plan_id}:created",
-        payload={
-            "intent_id": plan.plan_id,
-            "plan_id": plan.plan_id,
-            "device_id": plan.device_id,
-            "playbook": plan.playbook,
-            "status": intent.status,
-            "version": intent.version,
-        },
-    )
+    if created:
+        await enqueue_outbox_event(
+            session,
+            org_id=plan.tenant_id,
+            aggregate_type="remediation_intent",
+            aggregate_id=plan.plan_id,
+            event_type="remediation.intent.created",
+            idempotency_key=f"remediation:{plan.plan_id}:created",
+            payload={
+                "intent_id": plan.plan_id,
+                "plan_id": plan.plan_id,
+                "device_id": plan.device_id,
+                "playbook": plan.playbook,
+                "status": intent.status,
+                "version": intent.version,
+            },
+        )
     return intent, created
 
 
@@ -303,8 +311,9 @@ async def enqueue_stale_reconciliation_jobs(
             RemediationIntent.updated_at <= cutoff,
         ).order_by(RemediationIntent.updated_at, RemediationIntent.id).limit(limit).with_for_update(skip_locked=True)
     )).all())
+    scheduled = 0
     for intent in intents:
-        await enqueue_job(
+        _, created = await enqueue_job(
             session,
             org_id=org_id,
             job_type="remediation.reconcile",
@@ -317,7 +326,8 @@ async def enqueue_stale_reconciliation_jobs(
             },
             max_attempts=5,
         )
-    return len(intents)
+        scheduled += int(created)
+    return scheduled
 
 
 class RemediationProcessor(Protocol):
@@ -431,19 +441,7 @@ def make_remediation_job_handler(
             raise RemediationOrchestrationError("processor_outcome_unknown") from None
 
         status = getattr(result, "status", None)
-        postcondition_ids = getattr(result, "postcondition_evidence_ids", ())
         outcome_claim = getattr(result, "business_outcome_verified", False) is True
-        mapping = {
-            "approval_pending": "approval_pending",
-            "platform_not_completed": "platform_pending",
-            "verification_failed": "verification_failed",
-        }
-        if status == "verified" and outcome_claim and isinstance(postcondition_ids, (tuple, list)) and len(postcondition_ids) > 0:
-            target_status = "verified"
-        elif status == "verified":
-            target_status = "verification_failed"
-        else:
-            target_status = mapping.get(status, "failed")
         platform_state = getattr(result, "platform_state", None)
         if not isinstance(platform_state, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", platform_state):
             platform_state = "unknown"
@@ -452,9 +450,36 @@ def make_remediation_job_handler(
         execution_id = getattr(result, "execution_id", None)
         platform_evidence = getattr(result, "platform_evidence_ids", ())
         audit_ids = getattr(result, "audit_event_ids", ())
+        postcondition_ids = getattr(result, "postcondition_evidence_ids", ())
         reason_code = getattr(result, "reason_code", None)
-        if target_status == "verification_failed" and status == "verified":
-            reason_code = "postcondition_evidence_missing_or_unverified"
+        try:
+            clean_platform_evidence = _safe_ids(platform_evidence, "platform_evidence_ids")
+            clean_audit_ids = _safe_ids(audit_ids, "audit_event_ids")
+            clean_postcondition_ids = _safe_ids(postcondition_ids, "postcondition_evidence_ids")
+        except ValueError:
+            clean_platform_evidence, clean_audit_ids, clean_postcondition_ids = [], [], []
+            reason_code = "processor_evidence_invalid"
+        safe_execution_id = str(execution_id) if execution_id is not None else ""
+        execution_id_valid = bool(safe_execution_id and _SAFE_ID.fullmatch(safe_execution_id))
+        mapping = {
+            "approval_pending": "approval_pending",
+            "platform_not_completed": "platform_pending",
+            "verification_failed": "verification_failed",
+        }
+        if (
+            status == "verified"
+            and outcome_claim
+            and platform_state in {"completed", "succeeded"}
+            and execution_id_valid
+            and bool(clean_postcondition_ids)
+            and reason_code != "processor_evidence_invalid"
+        ):
+            target_status = "verified"
+        elif status == "verified":
+            target_status = "verification_failed"
+            reason_code = reason_code if reason_code == "processor_evidence_invalid" else "postcondition_evidence_missing_or_unverified"
+        else:
+            target_status = mapping.get(status, "failed")
         if target_status == "failed" and not isinstance(reason_code, str):
             reason_code = "processor_result_invalid"
         safe_action_id = str(action_id) if action_id is not None else ""
@@ -462,7 +487,7 @@ def make_remediation_job_handler(
             safe_action_id = ""
         safe_metadata = {
             "action_id": safe_action_id,
-            "business_outcome_verified": target_status == "verified" and outcome_claim and bool(postcondition_ids),
+            "business_outcome_verified": target_status == "verified" and outcome_claim and bool(clean_postcondition_ids),
         }
         async with session_factory() as session:
             await _set_database_rls(session, trusted_org_id)
@@ -485,9 +510,9 @@ def make_remediation_job_handler(
                 platform_state=platform_state if isinstance(platform_state, str) else None,
                 platform_run_id=str(run_id) if run_id is not None else None,
                 platform_execution_id=str(execution_id) if execution_id is not None else None,
-                platform_evidence_ids=platform_evidence,
-                audit_event_ids=audit_ids,
-                postcondition_evidence_ids=postcondition_ids,
+                platform_evidence_ids=clean_platform_evidence,
+                audit_event_ids=clean_audit_ids,
+                postcondition_evidence_ids=clean_postcondition_ids,
                 result_metadata=safe_metadata,
             )
             await session.commit()
