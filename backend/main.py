@@ -1,12 +1,14 @@
 """Aurontra — FastAPI application entry point."""
 import logging
 import asyncio
+import time
 from fastapi import Request
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from core.config import settings
+from observability.metrics import metrics
 from core.database import init_db
 from core.auth import verify_bearer_token, AuthenticationProviderUnavailable, AuthorizationDenied, authorize_claims
 from urllib.parse import urlparse
@@ -55,7 +57,7 @@ async def enforce_auth_and_data_plane(request: Request, call_next):
                 return JSONResponse(status_code=400, content={"detail": "Invalid Content-Length.", "code": "INVALID_CONTENT_LENGTH"})
             if body_length > settings.MAX_REQUEST_BODY_BYTES:
                 return JSONResponse(status_code=413, content={"detail": "Request body exceeds the configured limit.", "code": "REQUEST_BODY_TOO_LARGE"})
-    if path == "/health/live" or request.method == "OPTIONS":
+    if path in {"/health/live", "/health/ready"} or request.method == "OPTIONS":
         return await call_next(request)
     if settings.ENVIRONMENT.lower() == "production" and settings.TEST_MODE:
         return JSONResponse(status_code=503, content={"detail": "Test mode is forbidden in production.", "code": "PRODUCTION_TEST_MODE_FORBIDDEN"})
@@ -110,6 +112,23 @@ async def enforce_auth_and_data_plane(request: Request, call_next):
     if not settings.DATA_PLANE_ENABLED or (not TENANT_ISOLATION_IMPLEMENTED and not settings.TEST_MODE):
         return JSONResponse(status_code=503, content={"detail": "Business API is disabled until durable tenant isolation is enabled.", "code": "TENANT_DATA_PLANE_NOT_READY"})
     return await call_next(request)
+
+
+@app.middleware("http")
+async def observe_http_requests(request: Request, call_next):
+    """Capture bounded-cardinality request metrics, including auth rejections."""
+    started = time.perf_counter()
+    try:
+        response = await call_next(request)
+    except Exception:
+        route = request.scope.get("route")
+        route_template = getattr(route, "path", "unmatched")
+        metrics.record(request.method, route_template, 500, time.perf_counter() - started)
+        raise
+    route = request.scope.get("route")
+    route_template = getattr(route, "path", "unmatched")
+    metrics.record(request.method, route_template, response.status_code, time.perf_counter() - started)
+    return response
 
 
 app.add_middleware(

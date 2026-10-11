@@ -1,0 +1,21 @@
+global:
+  scrape_interval: 30s
+  evaluation_interval: 30s
+
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+scrape_configs:
+  - job_name: aurontra
+    scheme: https
+    metrics_path: /health/metrics
+    scrape_interval: 30s
+    scrape_timeout: 5s
+    static_configs:
+      # Replace with the deployment's private metrics endpoint; do not expose publicly.
+      - targets: ["aurontra.example.invalid"]
+    authorization:
+      type: Bearer
+      credentials_file: /etc/prometheus/secrets/aurontra_metrics_token
+    tls_config:
+      min_version: TLS12
