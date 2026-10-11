@@ -14,18 +14,33 @@ def upgrade():
     if "threat_findings" not in tables:
         raise RuntimeError("0009_threat_findings must be applied before this migration.")
 
+    telemetry_unique = {item["name"] for item in sa.inspect(bind).get_unique_constraints("telemetry_records")}
+    if "uq_telemetry_org_id_id" not in telemetry_unique:
+        with op.batch_alter_table("telemetry_records") as batch:
+            batch.create_unique_constraint("uq_telemetry_org_id_id", ["org_id", "id"])
+
     columns = {column["name"] for column in sa.inspect(bind).get_columns("threat_findings")}
-    if "device_id" not in columns:
+    if "device_id" not in columns or "telemetry_record_id" not in columns:
         with op.batch_alter_table("threat_findings") as batch:
-            batch.add_column(sa.Column("device_id", sa.String(128), nullable=True))
-            batch.create_unique_constraint("uq_threat_findings_org_id_id", ["org_id", "id"])
-            batch.create_foreign_key(
-                "fk_threat_findings_org_device",
-                "devices",
-                ["org_id", "device_id"],
-                ["org_id", "id"],
-                ondelete="RESTRICT",
-            )
+            if "device_id" not in columns:
+                batch.add_column(sa.Column("device_id", sa.String(128), nullable=True))
+                batch.create_unique_constraint("uq_threat_findings_org_id_id", ["org_id", "id"])
+                batch.create_foreign_key(
+                    "fk_threat_findings_org_device",
+                    "devices",
+                    ["org_id", "device_id"],
+                    ["org_id", "id"],
+                    ondelete="RESTRICT",
+                )
+            if "telemetry_record_id" not in columns:
+                batch.add_column(sa.Column("telemetry_record_id", sa.String(36), nullable=True))
+                batch.create_foreign_key(
+                    "fk_threat_findings_org_telemetry",
+                    "telemetry_records",
+                    ["org_id", "telemetry_record_id"],
+                    ["org_id", "id"],
+                    ondelete="RESTRICT",
+                )
 
     if "threat_containment_attempts" not in tables:
         op.create_table(
