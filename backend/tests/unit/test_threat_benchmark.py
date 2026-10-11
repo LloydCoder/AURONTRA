@@ -59,7 +59,7 @@ def test_threat_benchmark_rejects_duplicate_ids_and_missing_classes():
     for record in missing_class["records"]:
         if record["split"] == "holdout":
             record["label"] = "benign"
-    with pytest.raises(ValueError, match="both contain"):
+    with pytest.raises(ValueError, match="Both splits"):
         evaluate_threat_dataset(missing_class)
 
 
