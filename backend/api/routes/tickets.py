@@ -60,6 +60,12 @@ def _serialize(ticket: Ticket) -> dict:
         "status": ticket.status.value if hasattr(ticket.status, "value") else ticket.status,
         "ai_resolved": ticket.ai_resolved,
         "ai_response": ticket.ai_response,
+        "ai_model_used": ticket.ai_model_used,
+        "ai_confidence": ticket.ai_confidence,
+        "ai_triage_category": ticket.ai_triage_category,
+        "ai_triage_tier": ticket.ai_triage_tier,
+        "ai_confidence_semantics": ticket.ai_confidence_semantics,
+        "ai_escalation_reason": ticket.ai_escalation_reason,
         "ai_prompt_version": ticket.ai_prompt_version,
         "ai_prompt_sha256": ticket.ai_prompt_sha256,
         "ai_response_sha256": ticket.ai_response_sha256,
@@ -196,6 +202,10 @@ async def resolve_ticket_endpoint(ticket_id: str, request: Request, db: AsyncSes
     ticket.ai_model_used = result.get("model_used")
     confidence = result.get("confidence")
     ticket.ai_confidence = str(confidence) if confidence is not None else None
+    ticket.ai_triage_category = result.get("category")
+    ticket.ai_triage_tier = result.get("tier")
+    ticket.ai_confidence_semantics = result.get("confidence_semantics")
+    ticket.ai_escalation_reason = result.get("escalation_reason") if result.get("escalated") else None
     ticket.ai_prompt_version = result.get("prompt_version")
     ticket.ai_prompt_sha256 = result.get("prompt_sha256")
     ticket.ai_response_sha256 = result.get("response_sha256")
