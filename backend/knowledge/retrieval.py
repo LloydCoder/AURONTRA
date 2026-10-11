@@ -13,7 +13,7 @@ from models.knowledge_article import KnowledgeArticle
 
 
 _TOKEN_RE = re.compile(r"[\w-]{2,}", re.UNICODE)
-_MAX_CANDIDATES = 500
+_MAX_CANDIDATES = 100
 _MAX_EXCERPT_CHARS = 4000
 
 
