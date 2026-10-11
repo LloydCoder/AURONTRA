@@ -1,0 +1,187 @@
+"""Fail-closed HTTP client for versioned Tinlance ecosystem integrations.
+
+Only preconfigured service origins are accepted. Production calls require HTTPS
+and a per-service bearer credential. Retries are limited to safe methods or
+requests carrying an explicit idempotency key.
+"""
+from __future__ import annotations
+
+import asyncio
+import json
+import logging
+import time
+from dataclasses import dataclass
+from typing import Any
+from urllib.parse import urlsplit
+
+import httpx
+
+from core.config import settings
+
+logger = logging.getLogger(__name__)
+CONTRACT_VERSION = "1"
+MAX_RESPONSE_BYTES = 1_048_576
+RETRYABLE_STATUS = frozenset({408, 425, 429, 500, 502, 503, 504})
+
+
+class EcosystemIntegrationError(RuntimeError):
+    """Sanitized integration failure; never embeds URLs, credentials, or bodies."""
+
+    def __init__(self, code: str, status_code: int = 503) -> None:
+        super().__init__(code)
+        self.code = code
+        self.status_code = status_code
+
+
+@dataclass
+class _Circuit:
+    failures: int = 0
+    opened_at: float | None = None
+    lock: asyncio.Lock | None = None
+
+
+_CIRCUITS: dict[str, _Circuit] = {}
+
+
+def reset_circuits_for_tests() -> None:
+    """Reset process-local circuit state. Intended for deterministic tests only."""
+    _CIRCUITS.clear()
+
+
+def _config() -> dict[str, str]:
+    try:
+        raw = json.loads(settings.BRIDGE_AUTH_TOKENS_JSON or "{}")
+    except (TypeError, ValueError):
+        raise EcosystemIntegrationError("bridge_credentials_configuration_invalid", 503) from None
+    if not isinstance(raw, dict) or any(
+        not isinstance(k, str) or not isinstance(v, str) for k, v in raw.items()
+    ):
+        raise EcosystemIntegrationError("bridge_credentials_configuration_invalid", 503)
+    return raw
+
+
+def _validate_origin(service: str, base_url: str) -> str:
+    if not isinstance(service, str) or not service or len(service) > 64:
+        raise EcosystemIntegrationError("bridge_service_invalid", 503)
+    if not isinstance(base_url, str) or not base_url:
+        raise EcosystemIntegrationError("bridge_not_configured", 503)
+    parsed = urlsplit(base_url)
+    if (
+        parsed.scheme not in {"https", "http"}
+        or not parsed.hostname
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise EcosystemIntegrationError("bridge_origin_invalid", 503)
+    if parsed.scheme != "https" and (
+        settings.ENVIRONMENT.lower() == "production" or not settings.BRIDGE_ALLOW_INSECURE_HTTP
+    ):
+        raise EcosystemIntegrationError("bridge_https_required", 503)
+    if parsed.path not in {"", "/"}:
+        raise EcosystemIntegrationError("bridge_origin_must_not_include_path", 503)
+    return f"{parsed.scheme}://{parsed.netloc}"
+
+
+def _circuit(service: str) -> _Circuit:
+    circuit = _CIRCUITS.get(service)
+    if circuit is None:
+        circuit = _Circuit(lock=asyncio.Lock())
+        _CIRCUITS[service] = circuit
+    return circuit
+
+
+async def request_json(
+    *,
+    service: str,
+    base_url: str,
+    method: str,
+    path: str,
+    payload: dict[str, Any] | None = None,
+    params: dict[str, Any] | None = None,
+    idempotency_key: str | None = None,
+    timeout_seconds: float | None = None,
+    transport: httpx.AsyncBaseTransport | None = None,
+) -> Any:
+    """Call a configured service with auth, bounded retry, and a circuit breaker."""
+    method = method.upper()
+    if method not in {"GET", "POST", "PUT", "PATCH", "DELETE"}:
+        raise EcosystemIntegrationError("bridge_method_not_allowed", 405)
+    if not isinstance(path, str) or not path.startswith("/") or path.startswith("//") or ".." in path.split("/"):
+        raise EcosystemIntegrationError("bridge_path_invalid", 400)
+
+    origin = _validate_origin(service, base_url)
+    tokens = _config()
+    token = tokens.get(service, "")
+    if not token or len(token) < 24:
+        raise EcosystemIntegrationError("bridge_credentials_missing", 503)
+    retry_safe = method in {"GET", "PUT", "DELETE"} or (
+        method in {"POST", "PATCH"} and isinstance(idempotency_key, str)
+        and 1 <= len(idempotency_key) <= 128
+    )
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/json",
+        "X-Tinlance-Contract-Version": CONTRACT_VERSION,
+        "X-Request-ID": __import__("uuid").uuid4().hex,
+    }
+    if idempotency_key and retry_safe:
+        headers["Idempotency-Key"] = idempotency_key
+
+    circuit = _circuit(service)
+    async with circuit.lock:
+        if circuit.opened_at is not None:
+            if time.monotonic() - circuit.opened_at < 30:
+                raise EcosystemIntegrationError("bridge_circuit_open", 503)
+            # One request is allowed as a half-open probe; concurrent callers
+            # remain blocked while the probe executes under this lock.
+            circuit.opened_at = None
+            circuit.failures = 0
+
+        attempts = 3 if retry_safe else 1
+        timeout = max(0.1, min(float(timeout_seconds or settings.BRIDGE_TIMEOUT), 30.0))
+        for attempt in range(attempts):
+            try:
+                async with httpx.AsyncClient(
+                    timeout=httpx.Timeout(timeout), transport=transport, follow_redirects=False,
+                    limits=httpx.Limits(max_connections=20, max_keepalive_connections=10),
+                ) as client:
+                    response = await client.request(
+                        method, f"{origin}{path}", json=payload, params=params, headers=headers,
+                    )
+                if len(response.content) > MAX_RESPONSE_BYTES:
+                    raise EcosystemIntegrationError("bridge_response_too_large", 502)
+                if response.status_code in RETRYABLE_STATUS:
+                    raise EcosystemIntegrationError("bridge_upstream_retryable", 503)
+                if response.status_code < 200 or response.status_code >= 300:
+                    raise EcosystemIntegrationError("bridge_upstream_rejected", 502)
+                try:
+                    result = response.json()
+                except (ValueError, json.JSONDecodeError):
+                    raise EcosystemIntegrationError("bridge_response_invalid_json", 502) from None
+                circuit.failures = 0
+                circuit.opened_at = None
+                return result
+            except EcosystemIntegrationError as exc:
+                if exc.code == "bridge_upstream_rejected" or exc.code in {
+                    "bridge_response_too_large", "bridge_response_invalid_json",
+                }:
+                    circuit.failures += 1
+                    if circuit.failures >= 5:
+                        circuit.opened_at = time.monotonic()
+                    raise
+                circuit.failures += 1
+                if circuit.failures >= 5:
+                    circuit.opened_at = time.monotonic()
+                if attempt + 1 >= attempts:
+                    raise
+            except (httpx.TimeoutException, httpx.TransportError):
+                circuit.failures += 1
+                if circuit.failures >= 5:
+                    circuit.opened_at = time.monotonic()
+                if attempt + 1 >= attempts:
+                    raise EcosystemIntegrationError("bridge_transport_failure", 503) from None
+            # Small deterministic backoff avoids synchronized immediate retries.
+            await asyncio.sleep(0.05 * (attempt + 1))
+    raise EcosystemIntegrationError("bridge_transport_failure", 503)
