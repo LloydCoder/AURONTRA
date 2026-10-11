@@ -34,11 +34,11 @@ def upgrade():
             'WITH CHECK ("org_id"::text = current_setting(\'app.current_org_id\', true))'
         ))
         op.execute(sa.text("""
-            CREATE FUNCTION reject_report_artifact_mutation() RETURNS trigger AS $
+            CREATE FUNCTION reject_report_artifact_mutation() RETURNS trigger AS $$
             BEGIN
                 RAISE EXCEPTION 'report artifacts are append-only';
             END;
-            $ LANGUAGE plpgsql
+            $$ LANGUAGE plpgsql
         """))
         op.execute(sa.text("""
             CREATE TRIGGER report_artifacts_no_update
