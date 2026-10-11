@@ -260,7 +260,7 @@ class ThreatContainmentService:
             db.add(attempt)
             try:
                 await db.flush()
-                await db.commit()  # Persist before crossing the external side-effect boundary.
+                await _commit_with_tenant_context(db, tenant_id)  # Persist before crossing the external side-effect boundary.
             except Exception:
                 await db.rollback()
                 raise ThreatContainmentError("containment_attempt_persistence_failed", 503) from None
@@ -288,7 +288,7 @@ class ThreatContainmentService:
             attempt.last_error_code = exc.code if _SAFE_CODE.fullmatch(exc.code) else "platform_submission_failed"
             attempt.reason_code = attempt.last_error_code
             attempt.version += 1
-            await db.commit()
+            await _commit_with_tenant_context(db, tenant_id)
             return attempt, False
         except Exception:
             logger.warning("Threat containment submission failed finding_id=%s", finding.id)
@@ -296,7 +296,7 @@ class ThreatContainmentService:
             attempt.last_error_code = "platform_submission_unknown"
             attempt.reason_code = "platform_submission_unknown"
             attempt.version += 1
-            await db.commit()
+            await _commit_with_tenant_context(db, tenant_id)
             return attempt, False
 
         attempt.platform_state = result.platform_state
@@ -308,7 +308,7 @@ class ThreatContainmentService:
         if result.execution_id is None or result.platform_state not in {"completed", "succeeded"}:
             attempt.status = "approval_pending" if result.platform_state in _ALLOWED_PENDING_STATES else "platform_pending"
             attempt.reason_code = attempt.status
-            await db.commit()
+            await _commit_with_tenant_context(db, tenant_id)
             return attempt, False
 
         try:
@@ -323,7 +323,7 @@ class ThreatContainmentService:
             attempt.reason_code = "independent_verification_failed"
             attempt.last_error_code = "independent_verification_failed"
             attempt.completed_at = datetime.now(timezone.utc)
-            await db.commit()
+            await _commit_with_tenant_context(db, tenant_id)
             return attempt, False
 
         observed_at = verification.observed_at.astimezone(timezone.utc)
@@ -362,5 +362,5 @@ class ThreatContainmentService:
             attempt.status = "verification_failed"
             attempt.last_error_code = "containment_postcondition_not_verified"
             attempt.completed_at = datetime.now(timezone.utc)
-        await db.commit()
+        await _commit_with_tenant_context(db, tenant_id)
         return attempt, False
