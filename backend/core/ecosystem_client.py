@@ -38,6 +38,7 @@ class _Circuit:
     failures: int = 0
     opened_at: float | None = None
     lock: asyncio.Lock | None = None
+    probe_in_flight: bool = False
 
 
 _CIRCUITS: dict[str, _Circuit] = {}
@@ -134,13 +135,14 @@ async def request_json(
         if circuit.opened_at is not None:
             if time.monotonic() - circuit.opened_at < 30:
                 raise EcosystemIntegrationError("bridge_circuit_open", 503)
-            # One request is allowed as a half-open probe; concurrent callers
-            # remain blocked while the probe executes under this lock.
-            circuit.opened_at = None
-            circuit.failures = 0
+            if circuit.probe_in_flight:
+                raise EcosystemIntegrationError("bridge_circuit_half_open", 503)
+            circuit.probe_in_flight = True
+        # When closed, requests remain concurrent. Only state transitions are locked.
 
-        attempts = 3 if retry_safe else 1
-        timeout = max(0.1, min(float(timeout_seconds or settings.BRIDGE_TIMEOUT), 30.0))
+    attempts = 3 if retry_safe else 1
+    timeout = max(0.1, min(float(timeout_seconds or settings.BRIDGE_TIMEOUT), 30.0))
+    try:
         for attempt in range(attempts):
             try:
                 async with httpx.AsyncClient(
@@ -155,33 +157,46 @@ async def request_json(
                 if response.status_code in RETRYABLE_STATUS:
                     raise EcosystemIntegrationError("bridge_upstream_retryable", 503)
                 if response.status_code < 200 or response.status_code >= 300:
+                    # A valid 4xx is a contract/auth/business rejection, not evidence
+                    # that the service is unhealthy; don't trip the circuit breaker.
                     raise EcosystemIntegrationError("bridge_upstream_rejected", 502)
                 try:
                     result = response.json()
                 except (ValueError, json.JSONDecodeError):
                     raise EcosystemIntegrationError("bridge_response_invalid_json", 502) from None
-                circuit.failures = 0
-                circuit.opened_at = None
+                async with circuit.lock:
+                    circuit.failures = 0
+                    circuit.opened_at = None
+                    circuit.probe_in_flight = False
                 return result
             except EcosystemIntegrationError as exc:
-                if exc.code == "bridge_upstream_rejected" or exc.code in {
-                    "bridge_response_too_large", "bridge_response_invalid_json",
-                }:
-                    circuit.failures += 1
-                    if circuit.failures >= 5:
-                        circuit.opened_at = time.monotonic()
+                if exc.code == "bridge_upstream_rejected":
+                    async with circuit.lock:
+                        circuit.probe_in_flight = False
                     raise
-                circuit.failures += 1
-                if circuit.failures >= 5:
-                    circuit.opened_at = time.monotonic()
+                if exc.code not in {"bridge_upstream_retryable", "bridge_response_too_large", "bridge_response_invalid_json"}:
+                    async with circuit.lock:
+                        circuit.probe_in_flight = False
+                    raise
                 if attempt + 1 >= attempts:
+                    async with circuit.lock:
+                        circuit.failures += 1
+                        circuit.probe_in_flight = False
+                        if circuit.failures >= 5:
+                            circuit.opened_at = time.monotonic()
                     raise
             except (httpx.TimeoutException, httpx.TransportError):
-                circuit.failures += 1
-                if circuit.failures >= 5:
-                    circuit.opened_at = time.monotonic()
                 if attempt + 1 >= attempts:
+                    async with circuit.lock:
+                        circuit.failures += 1
+                        circuit.probe_in_flight = False
+                        if circuit.failures >= 5:
+                            circuit.opened_at = time.monotonic()
                     raise EcosystemIntegrationError("bridge_transport_failure", 503) from None
-            # Small deterministic backoff avoids synchronized immediate retries.
             await asyncio.sleep(0.05 * (attempt + 1))
+    finally:
+        async with circuit.lock:
+            # If an exception escaped without a recorded terminal failure, release
+            # a half-open probe so the circuit cannot become permanently wedged.
+            circuit.probe_in_flight = False
     raise EcosystemIntegrationError("bridge_transport_failure", 503)
