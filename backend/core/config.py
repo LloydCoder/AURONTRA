@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     # Secure-by-default: the business data plane stays closed until auth and tenant-scoped persistence are ready.
     AUTH_MODE: str = "required"
     DATA_PLANE_ENABLED: bool = False
-    DB_SCHEMA_REVISION: str = "0009_threat_findings"
+    DB_SCHEMA_REVISION: str = "0010_threat_containment"
     TEST_MODE: bool = False
     JWT_JWKS_URL: str = ""
     JWT_ISSUER: str = ""
@@ -56,6 +56,8 @@ class Settings(BaseSettings):
     # Internal remediation submission is disabled until the Platform operator
     # registers the exact code-owned tools and a tenant-scoped verifier is wired.
     REMEDIATION_SUBMISSION_ENABLED: bool = False
+    # Threat containment remains disabled until a registered Platform tool and independent verifier exist.
+    THREAT_CONTAINMENT_ENABLED: bool = False
 
     # Local development default; production must explicitly configure PostgreSQL.
     DATABASE_URL: str = "sqlite+aiosqlite:///./aurontra_dev.db"
