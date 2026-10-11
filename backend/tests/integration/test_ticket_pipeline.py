@@ -154,4 +154,4 @@ async def test_ticket_ingestion_commits_a_tenant_scoped_outbox_event():
         )
         assert event is not None
         assert event.status == "pending"
-        assert event.payload == {"ticket_id": ticket_id, "source": "MANUAL"}
+        assert event.payload == {"ticket_id": ticket_id, "source": "manual"}
