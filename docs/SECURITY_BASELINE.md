@@ -46,11 +46,19 @@ Production release remains blocked until all of the following have evidence:
 - Existing database schema is reviewed against the bootstrap migration before migration adoption.
 - Backup/restore, rollback, SLOs, alerting, incident response and recovery drills have evidence.
 
+## Phase 05 evidence (commit `0ddf2fd96fde49ca9466b6861a562b2b44402f3c`)
+
+- CI run [38097323960](https://github.com/LloydCoder/AURONTRA/actions/runs/38097323960) completed successfully; the backend suite reported 273 passed, 1 skipped, 83.52% total coverage. The PostgreSQL RLS and backup/restore job passed, and the archive/secret scan passed.
+- Ticket and device list/detail/ingestion operations now use durable SQLAlchemy persistence and explicit tenant predicates. The shared tenant session rejects missing, suspended, or otherwise non-active organizations.
+- SQLite test connections enforce foreign keys. Tests cover cross-tenant ticket reads, cross-tenant device references, telemetry ownership, inactive-tenant rejection, FK enforcement, and explicit rollback.
+- PostgreSQL tests use a non-owner, non-BYPASSRLS role to verify isolation for organizations, devices, and tickets, including cross-tenant write denial. A backup/restore smoke test verifies restored data and RLS policies.
+- Deployment was skipped because `vars.DEPLOY_ENABLED` is not enabled. CI success is not production deployment or runtime verification; no production host or database was changed by this CI run.
+
 ## Known limitations
 
 - The Alembic bootstrap creates missing tables but does not alter pre-existing tables. Migration 0002 adds tenant foreign keys and PostgreSQL RLS policies. Both migrations are intentionally irreversible; use a reviewed backup-and-restore process for rollback.
-- Tenant/API-key/audit/webhook models and tenant foreign keys are schema foundations; PostgreSQL RLS is now covered by a dedicated CI job, but route repositories still need tenant-scoped queries and the data plane remains closed.
-- JWT middleware and role policy are perimeter controls, not object-level authorization or a completed cross-tenant isolation implementation.
+- Ticket/device route repositories are durable and tenant-scoped; PostgreSQL RLS and backup/restore are covered by CI. Threat history, SLA/reporting, knowledge-base, billing/subscription, audit writes and other legacy modules are not yet fully durable or tenant-scoped. The code-level data-plane gate remains closed.
+- JWT middleware and role policy are perimeter controls. Resource-level isolation is tested for ticket/device operations and PostgreSQL RLS for organizations/devices/tickets, but this is not a complete cross-tenant certification for every route.
 - Content-Length checking does not by itself stop oversized chunked requests.
 - The old deployment archive is removed from the working tree. Its historical blob remains in Git history; the workflow scans history for matching secrets but does not execute historical artifacts.
 - This document is not a substitute for independent penetration testing, production environment verification, or external compliance assessment.

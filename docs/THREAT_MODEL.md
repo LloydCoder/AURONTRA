@@ -63,7 +63,7 @@ Ratings are qualitative and reflect the current repository and default-closed pr
 
 | ID | Threat / STRIDE | Risk | Current mitigation/evidence | Residual blocker |
 |---|---|---:|---|---|
-| T-01 | Cross-tenant disclosure or mutation: information disclosure, tampering, elevation | Critical | Production data plane returns 503 until a code-level tenant-isolation gate is removed after review; JWT organization/role checks exist | Business handlers still use process-local stores; no complete tenant-scoped repository, RLS, or cross-tenant suite |
+| T-01 | Cross-tenant disclosure or mutation: information disclosure, tampering, elevation | Critical | Production data plane returns 503 until a code-level tenant-isolation gate is removed after review; JWT organization/role checks exist | Ticket/device handlers now use tenant-scoped SQLAlchemy repositories; PostgreSQL RLS covers organizations/devices/tickets and negative tests pass. Remaining business handlers still use legacy in-memory/caller-supplied state, so the data plane stays closed |
 | T-02 | Forged, expired, wrong-issuer, or wrong-audience JWT: spoofing | High | PyJWT verifies RS256/ES256 signature, issuer, audience, expiry, iat and subject; tests cover valid and invalid signatures; production identity endpoints must use HTTPS | No deployed identity-provider configuration, key-rotation drill, token revocation/session policy, or production integration test |
 | T-03 | Low-privilege user invokes privileged operation: elevation | High | Conservative role policy distinguishes viewer/member/admin; privileged automation, threat block, checkout, onboarding and deletes require admin | No fine-grained scopes or resource ownership checks |
 | T-04 | API-host filesystem/service/process mutation: tampering/elevation | Critical | Public playbook trigger returns 503; playbooks are recommendation-only; no local cleanup, Certbot, systemctl, or process reprioritization | Authenticated endpoint agent and Platform-governed action adapter are not implemented |
@@ -88,9 +88,9 @@ Ratings are qualitative and reflect the current repository and default-closed pr
 
 **Attack path:** authenticate as a member of organization A, submit an organization B resource ID or alter an organization field in a body/query, then exploit a handler that looks up a shared in-memory record without a tenant predicate.
 
-**Current outcome:** production business API remains closed. JWT role policy does not prove resource isolation.
+**Current outcome:** production business API remains closed. JWT role policy alone does not prove resource isolation. Ticket/device APIs now filter by verified tenant context and active organization; negative API tests and non-owner PostgreSQL RLS tests pass for organizations, devices and tickets.
 
-**Required before opening the data plane:** derive tenant identity from verified request context, never a caller-controlled body field; scope every query/update/delete by tenant; enable and force PostgreSQL RLS for all tenant-owned tables; set transaction-local tenant context; test API predicates and database isolation with two organizations and adversarial IDs.
+**Required before opening the data plane:** derive tenant identity from verified request context, never a caller-controlled body field; scope every query/update/delete by tenant; enable and force PostgreSQL RLS for every tenant-owned table; set transaction-local tenant context; test API predicates and database isolation with two organizations and adversarial IDs. Phase 05 evidence covers organizations, devices and tickets; the remaining subsystems must be brought under the same controls.
 
 ### B. Unauthorized or incorrectly targeted remediation
 
@@ -148,7 +148,7 @@ Ratings are qualitative and reflect the current repository and default-closed pr
 |---|---|---|
 | JWT signature, issuer, audience, expiry | Valid, wrong-key, expired, wrong-issuer/audience tests | Partial: valid/wrong-signature and perimeter tests exist |
 | Role policy | Viewer/member/admin positive and negative tests | Partial: basic role policy tests exist |
-| Tenant isolation | Two-tenant CRUD, guessed IDs, altered org claims, raw SQL/RLS bypass tests | Open; data plane closed |
+| Tenant isolation | Two-tenant CRUD, guessed IDs, altered org claims, raw SQL/RLS bypass tests | Partial: ticket/device API negatives and PostgreSQL RLS tests pass for organizations/devices/tickets; remaining business routes are gated |
 | Database migrations | Clean upgrade, existing-schema reconciliation, wrong-revision startup test | Partial: clean SQLite upgrade; existing DB reconciliation open |
 | Webhook authenticity/idempotency | Raw-body HMAC, duplicate event, replay, out-of-order and provider outage | Partial: HMAC tests; durable idempotency open |
 | Remediation safety | Target identity, policy/approval, bounded execution, timeout, cancellation, postcondition | Open; public execution disabled |
@@ -156,7 +156,7 @@ Ratings are qualitative and reflect the current repository and default-closed pr
 | LLM safety | Prompt injection, cross-tenant retrieval, PII redaction, output schema and timeout | Open |
 | Bridge safety | TLS, service auth, schema/size limits, timeout, circuit breaker, failure injection | Open |
 | Supply chain | Full-SHA action pins, dependency/SAST scan, SBOM, provenance, archive rejection | Partial: full-SHA pins and Gitleaks; dependency/SAST/SBOM open |
-| Recovery | Backup restore, RPO/RTO, job recovery, rollback | Open |
+| Recovery | Backup restore, RPO/RTO, job recovery, rollback | Partial: PostgreSQL custom-format dump/restore smoke test passes and verifies data/RLS; RPO/RTO, queue recovery and production restore drill remain open |
 | Production deployment | Configured SSH trust, actual deployment, health and end-to-end checks | Open; deployment credentials/environment not verified |
 
 ## 8. External references
@@ -164,6 +164,9 @@ Ratings are qualitative and reflect the current repository and default-closed pr
 - NIST SP 800-207, Zero Trust Architecture: https://csrc.nist.gov/pubs/sp/800/207/final
 - OWASP API Security Top 10 (2023): https://owasp.org/www-project-api-security/
 - PostgreSQL Row Security Policies: https://www.postgresql.org/docs/current/ddl-rowsecurity.html
+- OWASP API1:2023 Broken Object Level Authorization: https://owasp.org/API-Security/editions/2023/en/0xa1-broken-object-level-authorization/
+- PostgreSQL `SELECT ... FOR UPDATE ... SKIP LOCKED` queue-claiming semantics: https://www.postgresql.org/docs/16/sql-select.html
+- AWS Prescriptive Guidance, transactional outbox pattern: https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/transactional-outbox.html
 - GitHub Actions secure use and full-SHA pinning: https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions
 - Alembic migration cookbook: https://alembic.sqlalchemy.org/en/latest/cookbook.html
 - Lemon Squeezy webhook signing and raw-body HMAC: https://docs.lemonsqueezy.com/help/webhooks/signing-requests

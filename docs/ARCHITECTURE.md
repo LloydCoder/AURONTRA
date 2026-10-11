@@ -46,7 +46,7 @@ The Tinlance Agent Developer conformance suite is a release gate for the four-re
 
 ## Authentication rollout gate
 
-Aurontra's production default requires a configured JWT verifier and keeps the business data plane closed. A valid bearer token alone is insufficient to enable the API: current handlers use in-memory state and cannot yet guarantee organization-level data separation. The data plane must remain disabled until durable tenant-scoped repositories, migrations, object-level authorization, and cross-tenant isolation tests are complete. CI's explicit test-mode override exists only to keep unit tests deterministic.
+Aurontra's production default requires a configured JWT verifier and keeps the business data plane closed. Ticket and device routes now use durable tenant-scoped repositories, require an active organization, and have cross-tenant regression tests; PostgreSQL RLS covers tenant-owned tables and is exercised with a non-owner role. Several other modules (including threat history, SLA/reporting, knowledge-base and billing state) still have legacy in-memory or caller-supplied behavior. The data plane must remain disabled until those subsystems are migrated or explicitly disabled, resource-level authorization is complete across every route, and end-to-end isolation is independently verified. CI's explicit test-mode override exists only to keep tests deterministic.
 
 
 ## Resource consumption
@@ -56,4 +56,4 @@ The application rejects oversized declared request bodies before routing. The pr
 
 ## Database migration status
 
-The repository now has an Alembic environment and a versioned bootstrap migration for the current schema plus tenant/API-key/audit/webhook foundations. The migration is intentionally non-destructive for tables that already exist; it does not claim to reconcile an existing production database automatically. Before production adoption, back up the database, compare actual schema to the migration/model definitions, and run a reviewed forward migration. Production startup must not use `create_all` as a substitute for migrations.
+The repository has Alembic migrations for the base schema and tenant foreign keys/RLS. Ticket and device route persistence is exercised in SQLite tests with foreign-key enforcement enabled; PostgreSQL CI validates tenant isolation for organizations, devices and tickets using a non-owner/non-bypass role, then performs a custom-format dump/restore smoke test that verifies restored tenant data and RLS policies. These are CI proofs, not evidence of a production database migration or managed-backup configuration. The migrations are intentionally non-destructive for pre-existing tables; before production adoption, back up the actual database, compare schema to models, and run a reviewed forward migration. Production startup must not use `create_all` as a substitute for migrations.
