@@ -27,7 +27,7 @@ Those results validate the recorded repository checks. They do not prove product
 
 The roadmap and README state that AURONTRA is not yet registered in the TSIC ecosystem manifest and that cross-repository contracts remain Phase 17 gates. Phase 09's pinned SDK and adapter baseline do not prove current TSIC registration or live end-to-end integration.
 
-A reference-registration candidate is being prepared in [TSIC PR #53](https://github.com/LloydCoder/tinlance-system-integration/pull/53). It remains a candidate until merged and validated. Runtime contract conformance is a separate requirement.
+TSIC PR #53 merged as `f12105f5a64fc365eae1bd151d01eed509f3108d` after TSIC CI and associated certification workflows passed on candidate `ae961f1cf6ea26ac0d468283b03159f016613caf`. The manifest, capability authority registry, canonical architecture, dependency graph, service registry, and reference adapter now include Aurontra. Runtime contract conformance is a separate requirement and remains open.
 
 ### F-03 — Production capabilities are correctly fail-closed but not operationally proven
 
