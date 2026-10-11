@@ -125,6 +125,28 @@ async def request_json(
     token = tokens.get(service, "")
     if not token or len(token) < 24:
         raise EcosystemIntegrationError("bridge_credentials_missing", 503)
+
+    verified_context: TSICIdentityContext | None = None
+    if identity_context is not None:
+        try:
+            verified_context = (
+                identity_context if isinstance(identity_context, TSICIdentityContext)
+                else TSICIdentityContext.model_validate(identity_context)
+            )
+        except (ValidationError, TypeError, ValueError):
+            raise EcosystemIntegrationError("bridge_identity_context_invalid", 400) from None
+    elif path not in {"/health", "/health/live"}:
+        raise EcosystemIntegrationError("bridge_identity_context_missing", 503)
+
+    if path.rstrip("/").endswith("/events") and payload is not None:
+        if verified_context is None:
+            raise EcosystemIntegrationError("bridge_identity_context_missing", 503)
+        try:
+            validate_event_envelope(payload, verified_context)
+        except ValidationError:
+            raise EcosystemIntegrationError("bridge_event_envelope_invalid", 400) from None
+        except ValueError:
+            raise EcosystemIntegrationError("bridge_event_context_mismatch", 403) from None
     retry_safe = method in {"GET", "PUT", "DELETE"} or (
         method in {"POST", "PATCH"} and isinstance(idempotency_key, str)
         and 1 <= len(idempotency_key) <= 128
