@@ -270,11 +270,15 @@ class TestResilienceAPIEndpoints:
 
     @pytest.mark.asyncio
     async def test_devices_telemetry_updates_resilience(self, client):
+        from datetime import datetime, timezone
         from core.database import AsyncSessionLocal
         from models.device import Device
         async with AsyncSessionLocal() as db:
             if await db.get(Device, "srv-002") is None:
-                db.add(Device(id="srv-002", org_id="test-tenant", name="srv-002"))
+                db.add(Device(
+                    id="srv-002", org_id="test-tenant", name="srv-002",
+                    is_active=True, enrolled_at=datetime.now(timezone.utc),
+                ))
                 await db.commit()
         r = await client.post("/devices/telemetry", json={
             "device_id": "srv-002",
