@@ -269,7 +269,7 @@ def _new_platform_client(
     if (
         isinstance(settings.AGENT_PLATFORM_TIMEOUT_SECONDS, bool)
         or not math.isfinite(settings.AGENT_PLATFORM_TIMEOUT_SECONDS)
-        or settings.AGENT_PLATFORM_TIMEOUT_SECONDS <= 0
+        or not 0 < settings.AGENT_PLATFORM_TIMEOUT_SECONDS <= 60
     ):
         raise GovernedActionError("platform_timeout_invalid")
     if settings.ENVIRONMENT.lower() == "production":
