@@ -8,7 +8,8 @@ async def detect_scenario(scenario: str, *, identity_context: TSICIdentityContex
     """Submit a detection scenario; non-idempotent POST is never automatically retried."""
     return await request_json(
         service="threatfade", base_url=settings.THREATFADE_URL,
-        method="POST", path="/detect/scenario", payload={"scenario": scenario},\n        identity_context=identity_context,
+        method="POST", path="/detect/scenario", payload={"scenario": scenario},
+        identity_context=identity_context,
     )
 
 
@@ -16,7 +17,8 @@ async def detect_json(signals: dict, *, identity_context: TSICIdentityContext) -
     """Submit raw signal data for threat analysis."""
     return await request_json(
         service="threatfade", base_url=settings.THREATFADE_URL,
-        method="POST", path="/detect/json", payload=signals,\n        identity_context=identity_context,
+        method="POST", path="/detect/json", payload=signals,
+        identity_context=identity_context,
     )
 
 
@@ -26,7 +28,8 @@ async def get_events(limit: int = 100, *, identity_context: TSICIdentityContext)
         raise ValueError("limit must be between 1 and 500")
     result = await request_json(
         service="threatfade", base_url=settings.THREATFADE_URL,
-        method="GET", path="/events", params={"limit": limit},\n        identity_context=identity_context,
+        method="GET", path="/events", params={"limit": limit},
+        identity_context=identity_context,
     )
     if not isinstance(result, list):
         raise EcosystemIntegrationError("bridge_response_contract_invalid", 502)
