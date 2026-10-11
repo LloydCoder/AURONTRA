@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     # Secure-by-default: the business data plane stays closed until auth and tenant-scoped persistence are ready.
     AUTH_MODE: str = "required"
     DATA_PLANE_ENABLED: bool = False
-    DB_SCHEMA_REVISION: str = "0007_telemetry_evidence"
+    DB_SCHEMA_REVISION: str = "0008_ticket_ai_knowledge"
     TEST_MODE: bool = False
     JWT_JWKS_URL: str = ""
     JWT_ISSUER: str = ""
@@ -69,6 +69,9 @@ class Settings(BaseSettings):
     GROQ_API_KEY: str = ""
     LLM_PRIMARY: str = "claude-sonnet-4-6"
     LLM_FALLBACK: str = "llama3-70b-8192"
+    LLM_REQUEST_TIMEOUT_SECONDS: float = 20.0
+    LLM_MAX_INPUT_CHARS: int = 6000
+    LLM_MAX_OUTPUT_CHARS: int = 2000
 
     # Integration endpoints are intentionally unset by default. Configure TLS
     # endpoints and service credentials per environment; never fall back to
