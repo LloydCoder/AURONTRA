@@ -60,6 +60,8 @@ async def retrieve_knowledge_articles(
 
     statement = select(KnowledgeArticle).where(
         KnowledgeArticle.status == "published",
+        KnowledgeArticle.approved_by.is_not(None),
+        KnowledgeArticle.approved_at.is_not(None),
         or_(
             KnowledgeArticle.org_id == tenant_id,
             KnowledgeArticle.org_id.is_(None),
