@@ -47,3 +47,5 @@ The repository does not yet provide a fully verified end-to-end product tutorial
 - [Phase 14 — AI service desk](PHASE_14_AI_SERVICE_DESK.md)
 - [Phase 15 — threat evidence](PHASE_15_THREAT_EVIDENCE.md)
 - [Phase 16 — verified containment](PHASE_16_VERIFIED_CONTAINMENT.md)
+
+- [Repository metadata and release maintenance checklist](MAINTENANCE.md)
