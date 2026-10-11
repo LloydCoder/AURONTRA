@@ -76,6 +76,14 @@ class TSICEventEnvelope(BaseModel):
     execution_id: StrictStr = Field(min_length=1, max_length=128)
     trace_id: StrictStr = Field(min_length=32, max_length=32)
     correlation_id: StrictStr = Field(min_length=1, max_length=128)
+    organization_id: StrictStr | None = Field(default=None, max_length=128)
+    workspace_id: StrictStr | None = Field(default=None, max_length=128)
+    actor_id: StrictStr | None = Field(default=None, max_length=128)
+    agent_id: StrictStr | None = Field(default=None, max_length=128)
+    service_id: StrictStr | None = Field(default=None, max_length=128)
+    causation_id: StrictStr | None = Field(default=None, max_length=128)
+    schema_uri: StrictStr | None = Field(default=None, max_length=2048)
+    data_classification: StrictStr | None = Field(default=None, max_length=64)
 
     @field_validator("time")
     @classmethod
@@ -91,10 +99,13 @@ class TSICEventEnvelope(BaseModel):
             raise ValueError("event trace_id must be 32 lowercase hex characters and non-zero")
         return value
 
-    @field_validator("correlation_id", "execution_id", "tenant_id")
+    @field_validator(
+        "correlation_id", "execution_id", "tenant_id", "organization_id",
+        "workspace_id", "actor_id", "agent_id", "service_id", "causation_id",
+    )
     @classmethod
-    def event_identifiers_must_be_safe(cls, value: str) -> str:
-        if not _SAFE_ID_RE.fullmatch(value):
+    def event_identifiers_must_be_safe(cls, value: str | None) -> str | None:
+        if value is not None and not _SAFE_ID_RE.fullmatch(value):
             raise ValueError("event context identifier is invalid")
         return value
 
@@ -111,6 +122,14 @@ def validate_event_envelope(
         "trace_id": identity_context.trace_id,
         "correlation_id": identity_context.correlation_id,
     }
+    optional_context_fields = (
+        "organization_id", "workspace_id", "actor_id",
+        "agent_id", "service_id", "causation_id",
+    )
+    for field in optional_context_fields:
+        event_value = getattr(event, field)
+        if event_value is not None:
+            expected[field] = getattr(identity_context, field)
     for field, value in expected.items():
         if getattr(event, field) != value:
             raise ValueError("event identity context mismatch")
