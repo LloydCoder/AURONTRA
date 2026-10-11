@@ -19,6 +19,7 @@ def upgrade():
             ("ai_prompt_version", sa.String(length=64)),
             ("ai_prompt_sha256", sa.String(length=64)),
             ("ai_response_sha256", sa.String(length=64)),
+            ("ai_knowledge_refs", sa.JSON()),
             ("ai_generated_at", sa.DateTime(timezone=True)),
         ]
         for name, column_type in additions:
@@ -61,21 +62,21 @@ def upgrade():
         op.execute(
             "CREATE POLICY knowledge_articles_read ON knowledge_articles FOR SELECT USING ("
             "NULLIF(current_setting('app.current_org_id', true), '') IS NOT NULL "
-            "AND status = 'published' "
+            "AND status = 'published' AND approved_by IS NOT NULL AND approved_at IS NOT NULL "
             "AND (org_id = NULLIF(current_setting('app.current_org_id', true), '') OR org_id IS NULL))"
         )
         op.execute(
             "CREATE POLICY knowledge_articles_insert ON knowledge_articles FOR INSERT "
-            "WITH CHECK (org_id = NULLIF(current_setting('app.current_org_id', true), ''))"
+            "WITH CHECK (org_id = NULLIF(current_setting('app.current_org_id', true), '') AND status = 'draft' AND approved_by IS NULL AND approved_at IS NULL)"
         )
         op.execute(
             "CREATE POLICY knowledge_articles_update ON knowledge_articles FOR UPDATE "
-            "USING (org_id = NULLIF(current_setting('app.current_org_id', true), '')) "
-            "WITH CHECK (org_id = NULLIF(current_setting('app.current_org_id', true), ''))"
+            "USING (org_id = NULLIF(current_setting('app.current_org_id', true), '') AND status = 'draft') "
+            "WITH CHECK (org_id = NULLIF(current_setting('app.current_org_id', true), '') AND status = 'draft' AND approved_by IS NULL AND approved_at IS NULL)"
         )
         op.execute(
             "CREATE POLICY knowledge_articles_delete ON knowledge_articles FOR DELETE "
-            "USING (org_id = NULLIF(current_setting('app.current_org_id', true), ''))"
+            "USING (org_id = NULLIF(current_setting('app.current_org_id', true), '') AND status = 'draft')"
         )
 
 
@@ -91,6 +92,6 @@ def downgrade():
         op.drop_table("knowledge_articles")
     if "tickets" in set(inspector.get_table_names()):
         columns = {column["name"] for column in inspector.get_columns("tickets")}
-        for name in ("ai_generated_at", "ai_response_sha256", "ai_prompt_sha256", "ai_prompt_version"):
+        for name in ("ai_generated_at", "ai_knowledge_refs", "ai_response_sha256", "ai_prompt_sha256", "ai_prompt_version"):
             if name in columns:
                 op.drop_column("tickets", name)
