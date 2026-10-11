@@ -1,6 +1,6 @@
 # Phase 08 — Platform-Bound Endpoint Agent Identity
 
-**Status:** implementation on branch `phase-08-agent-identity`; acceptance requires backend CI, PostgreSQL RLS/backup-restore, and secret/history scan to be green before merge.
+**Status:** Complete at code-and-CI level. Merged to `main` as `830047fa11b75c97f2b7b67847cd28f727b3b4a8` (PR #3). Backend CI: 300 passed, 1 skipped, 83.06% line coverage; PostgreSQL RLS and backup/restore job passed; secret/history/archive scan passed. The production data plane and agent authentication remain disabled until the Platform-approved issuer contract and production TLS/origin configuration are validated. See `docs/audits/PHASE_08_FORENSIC_AUDIT.md`.
 
 ## Authority boundary
 
