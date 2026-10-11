@@ -14,7 +14,8 @@ class ServiceRestartPlaybook(BasePlaybook):
         approved_name = service_name in _SAFE_RESTARTABLE
         result = self._base_result(
             context,
-            status="simulated" if approved_name else "approval_required",
+            status="simulated",
+            recommendation_state="candidate" if service_is_allowlisted else "blocked",
             service_name=service_name,
             service_name_source="caller_supplied_unverified" if service_name is not None else "not_provided",
             actions_taken=[],
@@ -24,7 +25,7 @@ class ServiceRestartPlaybook(BasePlaybook):
             ],
             restart_successful=False,
             enforcement_verified=False,
-            action_required="request_scoped_service_restart_approval" if approved_name else "review_unapproved_service_name",
+            action_required="request_scoped_service_restart_approval" if service_is_allowlisted else "review_unapproved_service_name",
         )
         await self.audit(context.get("device_id", "unknown"), result)
         return result
