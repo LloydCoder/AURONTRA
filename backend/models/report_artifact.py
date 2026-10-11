@@ -10,6 +10,7 @@ class ReportArtifact(Base):
     __tablename__ = "report_artifacts"
     __table_args__ = (
         CheckConstraint("report_type IN ('roi','compliance','executive_summary')", name="ck_report_artifacts_type"),
+        CheckConstraint("period_start <= period_end", name="ck_report_artifacts_period_order"),
         Index("ix_report_artifacts_org_created", "org_id", "created_at"),
         UniqueConstraint("org_id", "id", name="uq_report_artifacts_org_id"),
     )
