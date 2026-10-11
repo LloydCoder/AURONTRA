@@ -21,7 +21,7 @@ from core.threat_evidence import DETECTOR_VERSION, sha256_json, validate_signal
 from models.threat_finding import ThreatFinding
 from models.device import Device
 from core.governed_actions import TrustedPlatformContext
-from core.threat_containment import ThreatContainmentError, ThreatContainmentService, serialize_attempt
+from core.threat_containment import DatabaseContainmentVerifier, ThreatContainmentError, ThreatContainmentService, serialize_attempt
 
 router = APIRouter()
 
@@ -227,7 +227,7 @@ async def threat_finding_detail(
 
 def get_threat_containment_service() -> ThreatContainmentService:
     """Default has no verifier; production containment stays disabled until one is registered."""
-    return ThreatContainmentService(verifier=None)
+    return ThreatContainmentService(verifier=DatabaseContainmentVerifier())
 
 
 @router.post("/findings/{finding_id}/contain")
