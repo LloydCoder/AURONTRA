@@ -3,6 +3,7 @@ import hashlib
 from datetime import datetime, timezone
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 
 from core.database import AsyncSessionLocal
 from models.knowledge_article import KnowledgeArticle
@@ -37,7 +38,6 @@ async def test_retrieval_returns_only_published_global_and_current_tenant_articl
             _article(article_id="own-vpn", org_id="test-tenant", title="VPN troubleshooting", content="Reconnect to the approved VPN client."),
             _article(article_id="global-vpn", org_id=None, title="VPN basics", content="Check network access and reconnect."),
             _article(article_id="other-vpn", org_id="other-tenant", title="VPN secret", content="Tenant-private VPN details."),
-            _article(article_id="unapproved-vpn", org_id="test-tenant", title="Unapproved VPN", content="Unreviewed steps.", approved=False),
             _article(article_id="draft-vpn", org_id="test-tenant", title="Draft VPN", content="Unapproved steps.", status="draft"),
         ])
         await db.commit()
@@ -49,7 +49,6 @@ async def test_retrieval_returns_only_published_global_and_current_tenant_articl
     assert "global-vpn" in ids
     assert "other-vpn" not in ids
     assert "draft-vpn" not in ids
-    assert "unapproved-vpn" not in ids
 
 
 @pytest.mark.asyncio
@@ -95,3 +94,18 @@ async def test_retrieval_does_not_return_plaintext_http_source_urls():
             db, tenant_id="test-tenant", query="VPN", category="connectivity"
         )
     assert results[0]["source_url"] is None
+
+
+@pytest.mark.asyncio
+async def test_database_rejects_published_article_without_approval_metadata():
+    async with AsyncSessionLocal() as db:
+        db.add(_article(
+            article_id="unapproved-vpn",
+            org_id="test-tenant",
+            title="Unapproved VPN",
+            content="Unreviewed steps.",
+            approved=False,
+        ))
+        with pytest.raises(IntegrityError):
+            await db.commit()
+        await db.rollback()
