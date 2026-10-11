@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     # Secure-by-default: the business data plane stays closed until auth and tenant-scoped persistence are ready.
     AUTH_MODE: str = "required"
     DATA_PLANE_ENABLED: bool = False
-    DB_SCHEMA_REVISION: str = "0010_threat_containment"
+    DB_SCHEMA_REVISION: str = "0011_containment_verification_evidence"
     TEST_MODE: bool = False
     JWT_JWKS_URL: str = ""
     JWT_ISSUER: str = ""
@@ -58,6 +58,9 @@ class Settings(BaseSettings):
     REMEDIATION_SUBMISSION_ENABLED: bool = False
     # Threat containment remains disabled until a registered Platform tool and independent verifier exist.
     THREAT_CONTAINMENT_ENABLED: bool = False
+    # Per-source HMAC keys are injected by the deployment secret manager as a JSON map.
+    THREAT_VERIFIER_HMAC_KEYS_JSON: str = ""
+    THREAT_VERIFIER_MAX_SKEW_SECONDS: int = 60
 
     # Local development default; production must explicitly configure PostgreSQL.
     DATABASE_URL: str = "sqlite+aiosqlite:///./aurontra_dev.db"
