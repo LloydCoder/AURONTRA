@@ -12,6 +12,11 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StrictStr, field_validator
 
+IDENTITY_CONTEXT_CONTRACT_VERSION = "1.0.0"
+EVENT_ENVELOPE_CONTRACT_VERSION = "1.0.0"
+TRACE_CONTEXT_CONTRACT_VERSION = "1.1.0"
+TSIC_REGISTRY_REVISION = "619db9e264cdc71369de621c981bfc2ba1615a1d"
+
 _TRACE_ID_RE = re.compile(r"^[0-9a-f]{32}$")
 _SAFE_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
 
