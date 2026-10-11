@@ -105,15 +105,20 @@ class TestTicketIngestionAPI:
 
     @pytest.mark.asyncio
     async def test_telemetry_ingest_triggers_score(self, client):
-        # Device enrollment is a separate, authenticated lifecycle operation.
+        # Seed an already-enrolled device as if the Phase 08 handshake succeeded.
+        from datetime import datetime, timezone
         from core.database import AsyncSessionLocal
         from models.device import Device
         from models.organization import Organization
         async with AsyncSessionLocal() as db:
             if await db.get(Organization, "test-tenant") is None:
                 db.add(Organization(id="test-tenant", name="Test Tenant", status="active"))
+                await db.flush()
             if await db.get(Device, "test-server-01") is None:
-                db.add(Device(id="test-server-01", org_id="test-tenant", name="test-server-01"))
+                db.add(Device(
+                    id="test-server-01", org_id="test-tenant", name="test-server-01",
+                    is_active=True, enrolled_at=datetime.now(timezone.utc),
+                ))
             await db.commit()
         r = await client.post("/devices/telemetry", json={
             "device_id": "test-server-01",
