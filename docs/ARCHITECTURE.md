@@ -61,7 +61,7 @@ The repository has Alembic migrations for the base schema and tenant foreign key
 
 ## Durable jobs and event delivery (Phase 06)
 
-Aurontra now has tenant-scoped `durable_jobs` and `outbox_events` tables, introduced by Alembic revision `0003_durable_jobs_and_outbox`. Both tables have tenant foreign keys, idempotency uniqueness, queue-oriented indexes, and PostgreSQL forced row-level security. The production schema gate now expects this migration head.
+Aurontra now has tenant-scoped `durable_jobs` and `outbox_events` tables, introduced by Alembic revision `0003_durable_jobs_and_outbox`. Both tables have tenant foreign keys, idempotency uniqueness, queue-oriented indexes, and PostgreSQL forced row-level security. Revision `0004_device_lifecycle` extends the expected production migration head.
 
 - Jobs are claimed in bounded batches with row locks and PostgreSQL `SKIP LOCKED`; leases expire and can be recovered. Attempt counts, bounded exponential backoff, cooperative cancellation, lease-owner checks and terminal dead-letter states are persisted.
 - A transactional outbox avoids a dual-write gap: ticket creation writes the ticket and a `ticket.created` event in the same database transaction. Event payloads contain the ticket identifier and source only; consumers must refetch data through tenant-scoped access.
