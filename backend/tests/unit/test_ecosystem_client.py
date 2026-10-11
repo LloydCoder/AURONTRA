@@ -41,8 +41,59 @@ async def test_client_sends_bearer_and_versioned_contract_headers():
     )
     assert result == {"status": "ok"}
     assert seen["authorization"] == "Bearer " + "t" * 48
-    assert seen["x-tinlance-contract-version"] == "1"
+    assert seen["x-tinlance-contract-version"] == "1.0.0"
+    assert seen["traceparent"].startswith("00-")
+    assert seen["x-trace-id"]
+    assert seen["x-span-id"]
+    assert seen["x-correlation-id"]
     assert seen["x-request-id"]
+
+
+@pytest.mark.asyncio
+async def test_client_preserves_valid_trace_context_and_correlation_id():
+    seen = {}
+    traceparent = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
+
+    async def handler(request):
+        seen.update(dict(request.headers))
+        return httpx.Response(200, json={"status": "ok"})
+
+    await request_json(
+        service="test-service",
+        base_url="https://integration.example",
+        method="GET",
+        path="/health",
+        traceparent=traceparent,
+        correlation_id="ticket-123",
+        transport=httpx.MockTransport(handler),
+    )
+    assert seen["traceparent"] == traceparent
+    assert seen["x-trace-id"] == "4bf92f3577b34da6a3ce929d0e0e4736"
+    assert seen["x-span-id"] == "00f067aa0ba902b7"
+    assert seen["x-correlation-id"] == "ticket-123"
+
+
+@pytest.mark.asyncio
+async def test_client_rejects_invalid_trace_context_and_correlation_id():
+    with pytest.raises(EcosystemIntegrationError) as trace_error:
+        await request_json(
+            service="test-service",
+            base_url="https://integration.example",
+            method="GET",
+            path="/health",
+            traceparent="00-" + "0" * 32 + "-" + "0" * 16 + "-01",
+        )
+    assert trace_error.value.code == "bridge_trace_context_invalid"
+
+    with pytest.raises(EcosystemIntegrationError) as correlation_error:
+        await request_json(
+            service="test-service",
+            base_url="https://integration.example",
+            method="GET",
+            path="/health",
+            correlation_id="bad\r\nX-Injected: yes",
+        )
+    assert correlation_error.value.code == "bridge_correlation_id_invalid"
 
 
 @pytest.mark.asyncio
