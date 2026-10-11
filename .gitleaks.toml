@@ -1,0 +1,20 @@
+title = "Aurontra Gitleaks configuration"
+[extend]
+useDefault = true
+
+# Narrow exception for a historical false positive: the generic-api-key rule
+# matched the literal test/source enum "api_signal". This is constrained to
+# that exact line token, those four source paths, and only that rule. Do not
+# use this exception for credentials or other secret findings.
+[[allowlists]]
+description = "Historical generic-api-key false positive on the api_signal enum"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+regexes = ['''api_signal''']
+paths = [
+  '''backend/tests/integration/test_tenant_rls\.py''',
+  '''backend/alembic/versions/0009_threat_findings\.py''',
+  '''backend/models/threat_finding\.py''',
+  '''backend/api/routes/threats\.py''',
+]
