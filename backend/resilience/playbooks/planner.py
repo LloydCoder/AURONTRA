@@ -532,7 +532,8 @@ def _proposal_contract_problem(proposal: PlaybookActionProposal, now: datetime) 
             return "proposal_arguments_invalid"
         service = args["service_name"]
         if (
-            service not in {"application", "api", "worker"}
+            not isinstance(service, str)
+            or service not in {"application", "api", "worker"}
             or type(args["grace_period_seconds"]) is not int
             or not 0 <= args["grace_period_seconds"] <= 60
             or type(args["health_check_timeout_seconds"]) is not int
@@ -596,6 +597,8 @@ class PlaybookActionDispatcher:
         now: datetime | None = None,
     ) -> PlaybookDispatchResult:
         now = _utc_now(now)
+        if not isinstance(context, TrustedPlatformContext):
+            return self._not_dispatched(proposal, "trusted_platform_context_required")
         if proposal.expires_at <= now:
             return self._not_dispatched(proposal, "proposal_expired")
         if proposal.tenant_id != context.tenant_id:
