@@ -527,3 +527,42 @@ async def test_partial_telemetry_is_evidence_only_and_cannot_overwrite_resilienc
         assert record.computed_score is None
         assert record.score_status == "insufficient_data"
         assert set(record.missing_metrics) == {"memory_percent", "disk_percent"}
+
+
+@pytest.mark.asyncio
+async def test_telemetry_rate_limit_bounds_device_ingestion_and_consumes_rejected_proof(monkeypatch):
+    device_id = "telemetry-rate-limited"
+    key = ec.generate_private_key(ec.SECP256R1())
+    thumbprint = agent_auth.jwk_thumbprint(_jwk(key))
+    monkeypatch.setattr(settings, "TELEMETRY_MAX_EVENTS_PER_MINUTE", 1)
+    async with AsyncSessionLocal() as db:
+        db.add(Device(
+            id=device_id, org_id="test-tenant", name="rate-limited endpoint",
+            is_active=True, enrolled_at=datetime.now(timezone.utc),
+            agent_key_thumbprint=thumbprint,
+        ))
+        await db.commit()
+
+    body1 = _body(_telemetry_payload(cpu_percent=20.0, memory_percent=30.0, disk_percent=40.0))
+    body2 = _body(_telemetry_payload(cpu_percent=21.0, memory_percent=31.0, disk_percent=41.0))
+    headers1, _ = _headers(monkeypatch, device_id=device_id, tenant_id="test-tenant",
+        scope="aurontra:telemetry:write", path="/agent/v1/telemetry", body=body1, device_key=key)
+    headers2, _ = _headers(monkeypatch, device_id=device_id, tenant_id="test-tenant",
+        scope="aurontra:telemetry:write", path="/agent/v1/telemetry", body=body2, device_key=key)
+    async with await _client() as client:
+        first = await client.post("/agent/v1/telemetry", content=body1, headers=headers1)
+        limited = await client.post("/agent/v1/telemetry", content=body2, headers=headers2)
+
+    assert first.status_code == 200, first.text
+    assert limited.status_code == 429
+    assert limited.headers["retry-after"] == "60"
+    assert limited.json()["code"] == "TELEMETRY_RATE_LIMITED"
+    async with AsyncSessionLocal() as db:
+        rows = list((await db.scalars(select(TelemetryRecord).where(
+            TelemetryRecord.device_id == device_id
+        ))).all())
+        proofs = list((await db.scalars(select(AgentRequestReplay).where(
+            AgentRequestReplay.device_id == device_id
+        ))).all())
+    assert len(rows) == 1
+    assert len(proofs) == 2
