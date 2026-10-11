@@ -266,14 +266,19 @@ async def request_json(
                 return result
             except EcosystemIntegrationError as exc:
                 if exc.code == "bridge_upstream_rejected":
+                    # An upstream HTTP response proves reachability, even when it
+                    # rejects the business request. Close a half-open circuit.
                     async with circuit.lock:
+                        circuit.failures = 0
+                        circuit.opened_at = None
                         circuit.probe_in_flight = False
                     raise
                 if exc.code == "bridge_response_too_large":
                     async with circuit.lock:
+                        was_probe = circuit.probe_in_flight
                         circuit.failures += 1
                         circuit.probe_in_flight = False
-                        if circuit.failures >= 5:
+                        if was_probe or circuit.failures >= 5:
                             circuit.opened_at = time.monotonic()
                     raise
                 if exc.code not in {"bridge_upstream_retryable", "bridge_response_invalid_json"}:
@@ -282,17 +287,19 @@ async def request_json(
                     raise
                 if attempt + 1 >= attempts:
                     async with circuit.lock:
+                        was_probe = circuit.probe_in_flight
                         circuit.failures += 1
                         circuit.probe_in_flight = False
-                        if circuit.failures >= 5:
+                        if was_probe or circuit.failures >= 5:
                             circuit.opened_at = time.monotonic()
                     raise
             except (httpx.TimeoutException, httpx.TransportError):
                 if attempt + 1 >= attempts:
                     async with circuit.lock:
+                        was_probe = circuit.probe_in_flight
                         circuit.failures += 1
                         circuit.probe_in_flight = False
-                        if circuit.failures >= 5:
+                        if was_probe or circuit.failures >= 5:
                             circuit.opened_at = time.monotonic()
                     raise EcosystemIntegrationError("bridge_transport_failure", 503) from None
             await asyncio.sleep(0.05 * (attempt + 1))
