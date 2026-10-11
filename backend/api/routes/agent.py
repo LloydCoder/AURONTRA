@@ -249,6 +249,17 @@ async def ingest_agent_telemetry(
         quality_flags.append("out_of_order")
 
     score_result = await score_device(device.id, metrics)
+    # A partial sample may be useful evidence, but must not be converted into a
+    # healthy-looking composite score or overwrite the device's current score.
+    complete_metrics = not missing_metrics
+    if not complete_metrics:
+        score_result = {
+            "device_id": device.id,
+            "score": None,
+            "status": "insufficient_data",
+            "components": score_result.get("components", {}),
+            "missing_metrics": missing_metrics,
+        }
     request_id = request.headers.get("X-Request-ID", "")
     if not re.fullmatch(r"[A-Za-z0-9._:-]{1,128}", request_id):
         request_id = uuid4().hex
@@ -270,14 +281,18 @@ async def ingest_agent_telemetry(
         metrics=telemetry_values,
         missing_metrics=missing_metrics,
         quality_flags=quality_flags,
-        computed_score=int(max(0, min(100, score_result["score"]))),
+        computed_score=(
+            int(max(0, min(100, score_result["score"])))
+            if complete_metrics and score_result.get("score") is not None else None
+        ),
         score_components=score_result.get("components", {}),
         score_status=score_result.get("status", "unknown"),
         retention_expires_at=now + timedelta(days=settings.TELEMETRY_RETENTION_DAYS),
     )
     db.add(record)
     device.last_seen_at = now
-    if not out_of_order:
+    current_state_updated = not out_of_order and complete_metrics
+    if current_state_updated and record.computed_score is not None:
         device.resilience_score = record.computed_score
     await db.flush()
     await enqueue_outbox_event(
@@ -297,7 +312,7 @@ async def ingest_agent_telemetry(
             "payload_hash": record.payload_hash,
             "quality_flags": quality_flags,
             "computed_score": record.computed_score,
-            "current_state_updated": not out_of_order,
+            "current_state_updated": current_state_updated,
         },
     )
     return {
