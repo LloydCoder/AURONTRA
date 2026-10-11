@@ -2,6 +2,7 @@
 import json
 
 import httpx
+import core.ecosystem_client as ecosystem_client
 import pytest
 from pydantic import ValidationError
 
@@ -343,6 +344,49 @@ async def test_client_does_not_follow_redirects():
         )
     assert error.value.code == "bridge_upstream_rejected"
     assert calls == 1
+
+
+@pytest.mark.asyncio
+async def test_failed_half_open_probe_reopens_circuit_for_full_cooldown(monkeypatch):
+    calls = 0
+
+    async def handler(request):
+        nonlocal calls
+        calls += 1
+        return httpx.Response(503, json={"detail": "upstream unavailable"})
+
+    transport = httpx.MockTransport(handler)
+    for _ in range(5):
+        with pytest.raises(EcosystemIntegrationError):
+            await request_json(
+                service="threatfade", base_url="https://integration.example",
+                method="GET", path="/health", transport=transport,
+            )
+
+    circuit = ecosystem_client._CIRCUITS["threatfade"]
+    circuit.opened_at = 0.0
+
+    class FixedClock:
+        @staticmethod
+        def monotonic():
+            return 31.0
+
+    monkeypatch.setattr(ecosystem_client, "time", FixedClock)
+    with pytest.raises(EcosystemIntegrationError) as probe_error:
+        await request_json(
+            service="threatfade", base_url="https://integration.example",
+            method="GET", path="/health", transport=transport,
+        )
+    assert probe_error.value.code == "bridge_upstream_retryable"
+    calls_after_probe = calls
+
+    with pytest.raises(EcosystemIntegrationError) as open_error:
+        await request_json(
+            service="threatfade", base_url="https://integration.example",
+            method="GET", path="/health", transport=transport,
+        )
+    assert open_error.value.code == "bridge_circuit_open"
+    assert calls == calls_after_probe
 
 
 @pytest.mark.asyncio
