@@ -1,6 +1,6 @@
 # Phase 17 — Tinlance Ecosystem Integration
 
-**Status:** Code-level implementation and CI acceptance are green on candidate `a125f77fd12d623207698faac427d2fdce554ca7`; live cross-system verification and operational acceptance remain open.  
+**Status:** Code-level implementation and CI acceptance are green on candidate `b813d4bc45fc9a641c44b1ef4a83ca52fab1127f`; live cross-system verification and operational acceptance remain open.  
 **Aurontra baseline:** `c804dc7d72da163c0fe3db928b753d5cc826544c`  
 **TSIC registration PR:** [LloydCoder/tinlance-system-integration#53](https://github.com/LloydCoder/tinlance-system-integration/pull/53)  
 **TSIC candidate commit:** `ae961f1cf6ea26ac0d468283b03159f016613caf`  
@@ -76,10 +76,10 @@ Phase 17 is complete only when:
 
 ## Exact-SHA validation evidence
 
-- AURONTRA CI and Deployment: [run 38126903577](https://github.com/LloydCoder/AURONTRA/actions/runs/38126903577) — success; 515 passed, 1 skipped, 85.28% coverage; PostgreSQL tenant-isolation/RLS and restore checks passed.
-- Python dependency audit: [run 38126903568](https://github.com/LloydCoder/AURONTRA/actions/runs/38126903568) — success.
-- Secret/history/archive scan: [run 38126903534](https://github.com/LloydCoder/AURONTRA/actions/runs/38126903534) — success.
-- Candidate SHA: `a125f77fd12d623207698faac427d2fdce554ca7`.
+- AURONTRA CI and Deployment: [run 38127115662](https://github.com/LloydCoder/AURONTRA/actions/runs/38127115662) — success; 515 passed, 1 skipped, 85.28% coverage; PostgreSQL tenant-isolation/RLS and restore checks passed.
+- Python dependency audit: [run 38127115603](https://github.com/LloydCoder/AURONTRA/actions/runs/38127115603) — success.
+- Secret/history/archive scan: [run 38127115609](https://github.com/LloydCoder/AURONTRA/actions/runs/38127115609) — success.
+- Candidate SHA: `b813d4bc45fc9a641c44b1ef4a83ca52fab1127f`.
 
 ## Current non-claims
 
