@@ -18,8 +18,8 @@ Phases are sequential release gates. A phase is complete only after implementati
 | 10 | Safe remediation playbooks | Allowlist, least privilege, bounded Platform submission, postcondition verification contract and adversarial tests | **Complete at code/CI level — PR #6; 371 passed, 1 skipped, 84.79% coverage; PostgreSQL RLS/restore and secret/history/archive scans green. Public execution remains disabled pending exact Platform tool registration and a concrete tenant-scoped verifier.** |
 | 11 | Orchestration recovery | Durable action intents, crash/retry/duplicate/partial-failure recovery, leases, reconciliation and outbox integration | **Complete at code/CI level — PR #7; 382 passed, 1 skipped, 84.93% coverage; PostgreSQL RLS/backup-restore and secret/history/archive scans green. No production worker or live action is claimed.** |
 | 12 | Telemetry pipeline | Provenance, freshness, schema, missing-data and retention tests | **Complete at code/CI level — 392 passed, 1 skipped; 85.04% coverage; SQLite migration, PostgreSQL RLS/backup-restore, and secret/history/archive scans green. Production ingestion and retention scheduler remain disabled/release-gated.** |
-| 13 | Predictive resilience evaluation | Reproducible labeled benchmark and model-quality report | **Implementation under CI validation — strict model/series validation, trusted model-artifact digest, holdout metrics and time-aware forecasts; real-world predictive validation remains blocked on labeled representative data** |
-| 14 | AI service desk and retrieval | Prompt-injection, privacy, escalation, timeout and output validation tests | Not started |
+| 13 | Predictive resilience evaluation | Reproducible labeled benchmark and model-quality report | **Complete at code/CI level — 409 passed, 1 skipped; 85.14% coverage; SQLite migration, PostgreSQL RLS/backup-restore and secret/history/archive scans green. Production predictive validity remains unproven pending representative labeled data.** |
+| 14 | AI service desk and retrieval | Prompt-injection, privacy, escalation, timeout and output validation tests | **Next — Phase 13 implementation and forensic audit complete; no autonomous ticket closure without verified outcomes** |
 | 15 | Threat detection evidence pipeline | Reproducible dataset, calibrated metrics and finding provenance | Not started |
 | 16 | Verified threat containment | Enforcement acknowledgements, state verification and failure tests | Not started |
 | 17 | Tinlance ecosystem integrations | Versioned contracts, auth, timeout/retry/circuit-breaker tests | Not started |
@@ -40,12 +40,12 @@ Phases are sequential release gates. A phase is complete only after implementati
 
 ## Phase 13 implementation evidence
 
-- The predictor now rejects missing, non-finite, non-numeric and out-of-range CPU/memory/disk inputs; it no longer silently imputes absent metrics as zero.
-- Model artifact loading requires an externally trusted SHA-256 digest before pickle deserialization. The digest must come from a trusted/signed registry or deployment manifest.
-- Temporal slopes use elapsed time from timezone-aware timestamps; invalid, missing, non-monotonic timestamps and incomplete metric sets fail closed.
-- Offline benchmark helpers report precision/recall/F1, confusion matrix, FPR with Wilson 95% interval, FNR, average precision, ROC-AUC, and temporal MAE/RMSE/bias/within-10-points, with dataset hashes and label/split provenance.
-- All forecast outputs label the method as heuristic, uncalibrated, and not production-validated. No synthetic fixture is treated as proof of real-world performance.
-- Design and acceptance gates: [Phase 13 predictive evaluation](PHASE_13_PREDICTIVE_EVALUATION.md).
+- Phase 13 audited at code commit `504c8ea5b9352463dfddce2c90f10f708149ee65`.
+- CI: [run 38104883651](https://github.com/LloydCoder/AURONTRA/actions/runs/38104883651) — **409 passed, 1 skipped, 85.14% coverage**; clean SQLite migration, compile, PostgreSQL tenant RLS and backup/restore passed.
+- Secret/history/archive scan: [run 38104883653](https://github.com/LloydCoder/AURONTRA/actions/runs/38104883653) passed. Deployment was skipped.
+- Predictor input validation, trusted artifact-digest checks, time-aware temporal analysis, and offline holdout evaluation/reporting are implemented and tested.
+- Synthetic fixtures prove calculation contracts only; no representative labeled production dataset was evaluated. Confidence remains uncalibrated and forecasts remain heuristic.
+- Design and forensic review: [Phase 13 design](PHASE_13_PREDICTIVE_EVALUATION.md) and [Phase 13 forensic audit](audits/PHASE_13_FORENSIC_AUDIT.md).
 
 ## Phase 12 implementation evidence
 
