@@ -1,6 +1,6 @@
 """Durable tenant-scoped threat assessment evidence (not proof of containment)."""
 from sqlalchemy import (
-    CheckConstraint, Column, DateTime, ForeignKey, Index, Integer, JSON,
+    Boolean, CheckConstraint, Column, DateTime, ForeignKey, Index, Integer, JSON,
     String, UniqueConstraint, func,
 )
 from core.database import Base
@@ -38,7 +38,7 @@ class ThreatFinding(Base):
     threat_level = Column(String(16), nullable=False)
     mitre_ttp = Column(String(32), nullable=False)
     decision_status = Column(String(32), nullable=False, default="assessed", server_default="assessed")
-    containment_verified = Column(Integer, nullable=False, default=0, server_default="0")
+    containment_verified = Column(Boolean, nullable=False, default=False, server_default="false")
 
     def __repr__(self) -> str:
         return f"<ThreatFinding {self.id} org={self.org_id} level={self.threat_level}>"
