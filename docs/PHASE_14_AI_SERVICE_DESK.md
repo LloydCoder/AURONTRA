@@ -18,7 +18,7 @@ Turn the legacy ticket resolver into a risk-based drafting assistant backed by a
 6. **Output constraints.** Model output is type-checked, bounded, stripped of markup/control characters and never treated as executable HTML, code or an instruction to an action runner.
 7. **Approved retrieval only.** Retrieval returns only published articles with approval metadata, restricted to the authenticated tenant or explicitly global content. Candidate count, result count and excerpt length are bounded. Content SHA-256 is verified before use; a mismatch fails closed.
 8. **Knowledge publication boundary.** Tenant RLS permits tenant users to insert/update/delete drafts only. Published content is read-only to the tenant role; self-publication and spoofed approval metadata are denied. Global article publication belongs to a separately controlled administrative process.
-9. **Provenance.** Persist prompt version, prompt digest, response digest, generation time and retrieved article IDs/versions/digests on the ticket. Hashes provide integrity references, not proof that model content is correct.
+9. **Provenance.** Persist prompt version/digest, response digest, generation time, retrieved article IDs/versions/digests, triage category/tier/confidence semantics, and explicit escalation reason on the ticket. A timeout or triage escalation must not be misreported as a model invocation. Hashes provide integrity references, not proof that model content is correct.
 10. **Tenant isolation.** Retrieval always requires a verified tenant ID and uses explicit organization predicates in addition to PostgreSQL RLS. No cross-tenant article content may enter a prompt.
 
 ## Implementation
@@ -26,7 +26,7 @@ Turn the legacy ticket resolver into a risk-based drafting assistant backed by a
 - `backend/agents/ticket_resolver.py`: deterministic risk triage, bounded/redacted prompt construction, safe response validation, timeout/fallback handling and draft-only result contract.
 - `backend/knowledge/retrieval.py`: tenant/global published-article retrieval, deterministic lexical ranking, content-digest validation and safe source URL filtering.
 - `backend/models/knowledge_article.py`: versioned knowledge article record with approval metadata, status, tenant scope and content digest.
-- `backend/models/ticket.py` and Alembic revision `0008_ticket_ai_knowledge`: durable suggestion and knowledge-reference provenance.
+- `backend/models/ticket.py` and Alembic revision `0008_ticket_ai_knowledge`: durable suggestion, triage, escalation and knowledge-reference provenance.
 - `backend/api/routes/tickets.py`: retrieves approved references, refuses model invocation on knowledge-integrity failure, and persists suggestion provenance without resolving the ticket.
 - CI adds tenant-RLS assertions for published knowledge visibility, cross-tenant denial, tenant self-publication denial and backup/restore preservation of the table's RLS policies.
 
