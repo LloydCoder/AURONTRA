@@ -7,6 +7,7 @@ execution state as proof that the business postcondition was achieved.
 from __future__ import annotations
 
 import json
+import math
 import logging
 import re
 from dataclasses import dataclass
@@ -25,6 +26,36 @@ _MAX_ARGUMENT_BYTES = 256 * 1024
 _MAX_ARGUMENTS = 128
 _MAX_TEXT_LENGTH = 2048
 _ALLOWED_RUN_STATES_FOR_EXECUTION = frozenset({"created", "running"})
+
+
+def _is_json_value(value: Any, *, depth: int = 0) -> bool:
+    """Accept only bounded JSON-native values; reject coercion and non-finite numbers."""
+    if depth > 16:
+        return False
+    if value is None or isinstance(value, (str, bool, int)):
+        return True
+    if isinstance(value, float):
+        return math.isfinite(value)
+    if isinstance(value, list):
+        return len(value) <= 1024 and all(
+            _is_json_value(item, depth=depth + 1) for item in value
+        )
+    if isinstance(value, dict):
+        return len(value) <= _MAX_ARGUMENTS and all(
+            isinstance(key, str) and _is_json_value(item, depth=depth + 1)
+            for key, item in value.items()
+        )
+    return False
+
+
+def _bounded_text(value: Any, *, maximum: int) -> bool:
+    return (
+        isinstance(value, str)
+        and bool(value.strip())
+        and value == value.strip()
+        and len(value) <= maximum
+        and not any(ord(character) < 0x20 or ord(character) == 0x7F for character in value)
+    )
 
 
 class GovernedActionError(RuntimeError):
@@ -95,6 +126,8 @@ class GovernedActionRegistry:
         self._items = items
 
     def get(self, key: str) -> GovernedActionDefinition:
+        if not isinstance(key, str) or not key or len(key) > 128:
+            raise GovernedActionError("action_not_allowlisted")
         try:
             return self._items[key]
         except KeyError as exc:
@@ -197,15 +230,17 @@ class PlatformGovernedActionExecutor:
         intent: str,
         arguments: dict[str, Any],
     ) -> GovernedActionResult:
-        definition = self._registry.get(action_key)
         if not isinstance(action_id, UUID):
             raise GovernedActionError("action_id_must_be_uuid")
-        if not isinstance(resource, str) or not resource.strip() or len(resource) > _MAX_TEXT_LENGTH:
+        definition = self._registry.get(action_key)
+        if not _bounded_text(resource, maximum=_MAX_TEXT_LENGTH):
             raise GovernedActionError("resource_invalid")
-        if not isinstance(intent, str) or not intent.strip() or len(intent) > _MAX_TEXT_LENGTH:
+        if not _bounded_text(intent, maximum=_MAX_TEXT_LENGTH):
             raise GovernedActionError("intent_invalid")
         if not isinstance(arguments, dict) or len(arguments) > _MAX_ARGUMENTS:
             raise GovernedActionError("action_arguments_invalid")
+        if not _is_json_value(arguments):
+            raise GovernedActionError("action_arguments_not_json")
         if any(not isinstance(key, str) or key not in definition.allowed_arguments for key in arguments):
             raise GovernedActionError("action_argument_not_allowlisted")
         if not definition.required_arguments.issubset(arguments):
