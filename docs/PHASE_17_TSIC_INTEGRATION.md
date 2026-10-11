@@ -13,10 +13,11 @@ Register Aurontra in the canonical TSIC ecosystem and prove versioned, tenant-sa
 ## Work completed
 
 - [x] Inspected TSIC's live ecosystem manifest schema, capability authority registry, canonical architecture map, dependency graph, service registry, and adapter registry.
-- [x] Submitted TSIC PR #53 to register Aurontra as a domain product, add a reference adapter, declare the Agent Platform dependency, and bind identity-context, event-envelope, delivery-semantics, trace-context, and agent-registration contracts.
+- [x] Merged TSIC PR #53 as `f12105f5a64fc365eae1bd151d01eed509f3108d` after the TSIC CI and associated certification workflows passed on candidate `ae961f1cf6ea26ac0d468283b03159f016613caf`.
+- [x] Registered Aurontra as a domain product, added its reference adapter, declared the Agent Platform dependency, and bound identity-context, event-envelope, delivery-semantics, trace-context, and agent-registration contracts.
 - [x] Kept Aurontra's authority narrowly scoped to `it_resilience_product`; no execution authority was added.
 - [x] Preserved the rule that reference registration does not enable production flags or certify runtime integration.
-- [ ] Merge only after TSIC CI and required review are green.
+- [ ] Complete live end-to-end contracts, independent verification, and operational release gates.
 
 ## Required implementation gates
 
