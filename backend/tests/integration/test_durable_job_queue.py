@@ -246,7 +246,7 @@ async def test_worker_processes_only_explicitly_registered_handlers():
         by_type = {row.job_type: row for row in rows}
         assert by_type["test.echo"].status == "succeeded"
         assert by_type["test.echo"].result_metadata == {"echo": "ok"}
-        assert by_type["test.not_registered"].status == "retry_wait"
+        assert by_type["test.not_registered"].status == "dead_letter"
 
 
 @pytest.mark.asyncio
