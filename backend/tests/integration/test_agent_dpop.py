@@ -307,3 +307,28 @@ async def test_agent_endpoints_fail_closed_when_agent_auth_is_disabled(monkeypat
         response = await client.post("/agent/v1/telemetry", content=b"{}", headers={"Content-Type": "application/json"})
     assert response.status_code == 503
     assert response.json()["code"] == "AGENT_AUTH_DISABLED"
+
+
+@pytest.mark.asyncio
+async def test_revoked_agent_cannot_send_telemetry(monkeypatch):
+    device_id = "agent-revoked"
+    key = ec.generate_private_key(ec.SECP256R1())
+    thumbprint = agent_auth.jwk_thumbprint(_jwk(key))
+    async with AsyncSessionLocal() as db:
+        db.add(Device(
+            id=device_id, org_id="test-tenant", name="revoked endpoint",
+            is_active=False, enrolled_at=__import__("datetime").datetime.now(__import__("datetime").timezone.utc),
+            revoked_at=__import__("datetime").datetime.now(__import__("datetime").timezone.utc),
+            agent_key_thumbprint=thumbprint,
+        ))
+        await db.commit()
+
+    body = _body({"cpu_percent": 14.0})
+    headers, _ = _headers(
+        monkeypatch, device_id=device_id, tenant_id="test-tenant",
+        scope="aurontra:telemetry:write", path="/agent/v1/telemetry", body=body, device_key=key,
+    )
+    async with await _client() as client:
+        response = await client.post("/agent/v1/telemetry", content=body, headers=headers)
+
+    assert response.status_code == 404
