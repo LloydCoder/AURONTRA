@@ -103,3 +103,38 @@ async def get_tenant_db(request: Request):
             raise
         finally:
             await session.close()
+
+
+
+async def get_tenant_db_lifecycle(request: Request):
+    """Tenant-scoped session for read-only lifecycle inspection and irreversible offboarding.
+
+    Unlike normal business access, this permits an already-offboarded organization
+    to inspect its status and repeat the offboarding request idempotently. It does
+    not authorize ordinary business operations or reactivation.
+    """
+    tenant_id = getattr(request.state, "tenant_id", None)
+    if settings.TEST_MODE and not tenant_id:
+        tenant_id = "test-tenant"
+    if not isinstance(tenant_id, str) or not tenant_id:
+        raise HTTPException(status_code=401, detail="Verified tenant context is required.")
+
+    async with AsyncSessionLocal() as session:
+        try:
+            session.info["tenant_id"] = tenant_id
+            if session.get_bind().dialect.name == "postgresql":
+                await session.execute(
+                    text("SELECT set_config('app.current_org_id', :tenant_id, true)"),
+                    {"tenant_id": tenant_id},
+                )
+            from models.organization import Organization
+            organization = await session.get(Organization, tenant_id)
+            if organization is None:
+                raise HTTPException(status_code=404, detail="Organization not found")
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
+        finally:
+            await session.close()
