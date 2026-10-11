@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import logging
+import re
 from typing import Protocol
 from uuid import UUID
 
@@ -20,9 +21,15 @@ from core.governed_actions import (
     PlatformGovernedActionExecutor,
     TrustedPlatformContext,
 )
-from resilience.playbooks.planner import RemediationPlan, TrustedRemediationTarget
+from resilience.playbooks.planner import (
+    RemediationPlan,
+    TrustedRemediationTarget,
+    build_remediation_plan,
+)
 
 logger = logging.getLogger(__name__)
+_SAFE_EVIDENCE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
+_SAFE_REASON_CODE = re.compile(r"^[a-z][a-z0-9_]{0,79}$")
 
 
 class RemediationSubmissionError(RuntimeError):
@@ -38,6 +45,19 @@ class PostconditionVerification:
     verified: bool
     reason_code: str
     evidence_ids: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if type(self.verified) is not bool:
+            raise ValueError("postcondition verified must be a boolean")
+        if not isinstance(self.reason_code, str) or not _SAFE_REASON_CODE.fullmatch(self.reason_code):
+            raise ValueError("postcondition reason code is invalid")
+        if not isinstance(self.evidence_ids, tuple) or len(self.evidence_ids) > 32:
+            raise ValueError("postcondition evidence references are invalid")
+        if any(
+            not isinstance(item, str) or not _SAFE_EVIDENCE_ID.fullmatch(item)
+            for item in self.evidence_ids
+        ):
+            raise ValueError("postcondition evidence reference is invalid")
 
 
 @dataclass(frozen=True, slots=True)
@@ -214,6 +234,17 @@ class RemediationService:
             or plan.source_evidence_id != target.source_evidence_id
         ):
             raise RemediationSubmissionError("plan_target_context_mismatch")
+        # Rebuild the recommendation from its allowlisted parameters and current
+        # evidence freshness. A caller cannot construct/alter a dataclass to
+        # escalate risk, change the action, or replay a stale proposal.
+        try:
+            rebuilt_plan = build_remediation_plan(
+                plan.playbook, target, dict(plan.parameters)
+            )
+        except (TypeError, ValueError):
+            raise RemediationSubmissionError("remediation_plan_integrity_failed") from None
+        if rebuilt_plan != plan:
+            raise RemediationSubmissionError("remediation_plan_integrity_failed")
         if (
             platform_context.tenant_id != target.tenant_id
             or platform_context.subject_id != target.actor_subject

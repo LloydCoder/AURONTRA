@@ -20,7 +20,7 @@ DEVICE = "device-01"
 EVIDENCE = "evidence-01"
 AGENT_ID = UUID("d78f76e7-09b5-4a80-aabb-5e45c59ef1bb")
 TASK_ID = UUID("e8a80e54-fd5e-44f4-8dd9-2b2d5c0a61d4")
-NOW = datetime(2026, 10, 11, 0, 0, tzinfo=timezone.utc)
+NOW = datetime.now(timezone.utc)
 
 
 def _target():
@@ -190,6 +190,26 @@ async def test_submission_uses_stable_plan_id_for_idempotent_platform_action(ena
         plan=_plan(), target=_target(), platform_context=_context(), verifier=FakeVerifier()
     )
     assert executor.calls[0]["action_id"] == UUID(_plan().plan_id)
+
+
+@pytest.mark.asyncio
+async def test_modified_plan_action_is_rejected_before_platform_call(enable_submission):
+    from dataclasses import replace
+    original = _plan()
+    forged = replace(original, recommended_action="execute_arbitrary_command", risk="low", requires_approval=False)
+    executor = FakeExecutor()
+    with pytest.raises(RemediationSubmissionError, match="plan_integrity_failed"):
+        await RemediationService(executor).submit(
+            plan=forged, target=_target(), platform_context=_context(), verifier=FakeVerifier()
+        )
+    assert executor.calls == []
+
+
+def test_postcondition_reason_and_evidence_are_strictly_validated():
+    with pytest.raises(ValueError, match="reason code"):
+        PostconditionVerification(False, "secret token must not be returned")
+    with pytest.raises(ValueError, match="evidence reference"):
+        PostconditionVerification(True, "verified", ("private data\nsecret",))
 
 
 @pytest.mark.asyncio
