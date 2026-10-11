@@ -10,6 +10,7 @@ class TelemetryRecord(Base):
     __tablename__ = "telemetry_records"
     __table_args__ = (
         UniqueConstraint("org_id", "device_id", "event_id", name="uq_telemetry_org_device_event"),
+        UniqueConstraint("org_id", "id", name="uq_telemetry_org_id_id"),
         ForeignKeyConstraint(
             ["org_id", "device_id"],
             ["devices.org_id", "devices.id"],
