@@ -33,6 +33,18 @@ jobs:
           cache-dependency-path: frontend/package.json
       - name: Install dependencies
         run: npm install --no-audit --no-fund
+      - name: Capture generated lockfile for review
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: generated-package-lock-${{ github.sha }}
+          path: frontend/package-lock.json
+          if-no-files-found: warn
+          retention-days: 1
+
+      - name: Audit frontend dependency tree
+        run: npm audit --audit-level=high
+
       - name: Lint
         run: npm run lint
       - name: Type check
