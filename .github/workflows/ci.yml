@@ -10,11 +10,9 @@ on:
 permissions:
   contents: read
 
-# Isolate each immutable commit's validation run. This repository's release
-# workflow is executed serially by the maintainer; per-ref cancellation can leave
-# a newer run pending behind an orphaned in-progress run with no active steps.
+# Keep only the newest validation run for a branch; release phases are serial.
 concurrency:
-  group: aurontra-${{ github.workflow }}-${{ github.ref }}-${{ github.sha }}
+  group: aurontra-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
