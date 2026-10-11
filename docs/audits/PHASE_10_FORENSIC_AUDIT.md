@@ -1,10 +1,14 @@
 # Phase 10 — Forensic Audit
 
-**Result:** Repository/CI phase accepted; production remediation remains disabled.  
+**Result:** Original Phase 10 implementation passed its historical repository/CI gate; current safety-envelope follow-up requires fresh CI. Production remediation remains disabled.  
 **PR:** [#6 — Phase 10: add safe deterministic remediation planner](https://github.com/LloydCoder/AURONTRA/pull/6)  
 **Audited head:** `aa40ac0cc7779fe4522ace7a9bc2979c7aa7ef49`  
 **CI:** [Run 38101939727](https://github.com/LloydCoder/AURONTRA/actions/runs/38101939727)  
 **Secret/history/archive scan:** [Run 38101939719](https://github.com/LloydCoder/AURONTRA/actions/runs/38101939719)
+
+## Follow-up forensic finding (2026-10-11)
+
+The open PR #8 was compared against current main. Its branch predates Phases 11–16, proposes an alternate incompatible planner API, adds no tests for that 688-line planner/dispatcher, and contains an undefined `service_is_allowlisted` reference in `service_restart.py`. The alternate planner is not safe to merge as-is. The useful response-envelope hardening was ported to main: actions are empty, recommendations are separate, caller-supplied signals are marked unverified, missing service targets fail closed, and timestamps explicitly mean recommendation creation. Regression tests cover these invariants. PR #8 is to be closed as superseded after the current CI and security workflows pass; no production execution is enabled.
 
 ## CI evidence
 
