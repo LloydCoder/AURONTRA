@@ -138,6 +138,7 @@ async def request_json(
             if circuit.probe_in_flight:
                 raise EcosystemIntegrationError("bridge_circuit_half_open", 503)
             circuit.probe_in_flight = True
+            circuit.failures = 0
         # When closed, requests remain concurrent. Only state transitions are locked.
 
     attempts = 3 if retry_safe else 1
