@@ -40,8 +40,8 @@ Configure the following only through deployment secrets/configuration after the 
 - `AGENT_PLATFORM_ENABLED=true`
 - `AGENT_PLATFORM_BASE_URL=https://...`
 - `AGENT_PLATFORM_BEARER_TOKEN` from the approved secret manager
-- `AGENT_PLATFORM_TENANT_ID` and `AGENT_PLATFORM_SUBJECT_ID` as trusted server configuration
-- `AGENT_PLATFORM_AGENT_ID` and `AGENT_PLATFORM_TASK_ID` as Platform-provisioned UUIDs
+- `AGENT_PLATFORM_TENANT_ID` and `AGENT_PLATFORM_SUBJECT_ID` as trusted server configuration for single-tenant mode
+- `AGENT_PLATFORM_AGENT_ID` and `AGENT_PLATFORM_TASK_ID` as Platform-provisioned UUIDs for single-tenant mode; multi-tenant mode supplies the tenant-specific UUIDs through verified context
 - `AGENT_PLATFORM_API_VERSION=1.1`
 
 Production must not enable insecure HTTP. These settings do not open Aurontra's product-wide business data plane; `DATA_PLANE_ENABLED` remains separately gated.
