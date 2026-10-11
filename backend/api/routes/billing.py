@@ -88,7 +88,7 @@ async def create_checkout(payload: CheckoutRequest):
     ))
 
 
-@router.post("/webhook", status_code=202)
+@router.post("/webhook", status_code=200)
 async def lemonsqueezy_webhook(request: Request, response: Response, db: AsyncSession = Depends(get_db)):
     """Authenticate and durably de-duplicate provider deliveries; never grant entitlements here."""
     content_length = request.headers.get("content-length")
@@ -114,6 +114,9 @@ async def lemonsqueezy_webhook(request: Request, response: Response, db: AsyncSe
     if not isinstance(meta, dict) or not isinstance(data, dict):
         raise HTTPException(status_code=400, detail="Webhook envelope is invalid")
     event_name, object_id = meta.get("event_name"), data.get("id")
+    header_event_name = request.headers.get("X-Event-Name")
+    if header_event_name is not None and header_event_name != event_name:
+        raise HTTPException(status_code=400, detail="Webhook event header mismatch")
     if not isinstance(event_name, str) or not event_name or len(event_name) > 100:
         raise HTTPException(status_code=400, detail="Webhook event name is invalid")
     if not isinstance(object_id, (str, int)) or not str(object_id) or len(str(object_id)) > 255:
