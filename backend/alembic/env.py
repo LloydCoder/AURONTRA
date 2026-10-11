@@ -15,16 +15,13 @@ target_metadata = Base.metadata
 
 
 def run_migrations_offline() -> None:
-    # Keep generated offline SQL compatible with descriptive revision IDs.
-    context.configure(
-        url=settings.DATABASE_URL,
-        target_metadata=target_metadata,
-        literal_binds=True,
-        dialect_opts={"paramstyle": "named"},
-        compare_type=True,
+    # This chain performs live-schema inspection and reflection-based batch
+    # migrations. Emitting a static SQL script would be incomplete/misleading.
+    # Fail explicitly rather than handing operators SQL that cannot be applied.
+    raise RuntimeError(
+        "Offline SQL generation is unsupported for this migration chain; "
+        "run Alembic online against the reviewed target database."
     )
-    with context.begin_transaction():
-        context.run_migrations()
 
 
 def do_run_migrations(connection) -> None:
