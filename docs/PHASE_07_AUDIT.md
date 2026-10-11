@@ -17,9 +17,9 @@
 - [x] Negative tests cover cross-tenant revocation, inactive provisioning, offboarding, denied post-offboarding business access, and telemetry without enrollment proof.
 - [x] Architecture and roadmap documents state that Phase 08 must provide cryptographic endpoint-agent enrollment and that provisioning is not enrollment.
 - [x] Production data plane remains closed; no deployment or production readiness is claimed.
-- [ ] Full backend CI (unit/integration/SQLite migration/PostgreSQL RLS and backup/restore) green on this candidate SHA.
-- [ ] Secret/archive scan green on this candidate SHA.
-- [ ] Final diff review confirms no unrelated changes.
+- [x] Full backend CI (unit/integration/SQLite migration/PostgreSQL RLS and backup/restore) green on tested candidate `aa03237b07e9b4eb0a5f4fb4a733153f25f43753` — [workflow run](https://github.com/LloydCoder/AURONTRA/actions/runs/38098658403).
+- [x] Secret/archive scan green on tested candidate `aa03237b07e9b4eb0a5f4fb4a733153f25f43753` — [workflow run](https://github.com/LloydCoder/AURONTRA/actions/runs/38098658401).
+- [x] Final diff review: this PR contains the Phase 07 audit record and two test-fixture corrections discovered by CI; no unrelated application changes.
 
 ## Files reviewed
 
@@ -46,3 +46,15 @@ Phase 07 does not implement cryptographic agent identity, signed request verific
 - NIST SP 800-207, Zero Trust Architecture: authenticate and authorize subject and device independently; network location and ownership are not implicit trust.
 - RFC 9421, HTTP Message Signatures: Phase 08 should bind request signatures to the relevant HTTP components and apply explicit freshness/nonce policy; signatures do not replace TLS.
 - OWASP API Security Top 10 (2023): test object-level authorization for every identifier-bearing route.
+
+
+## Validation record
+
+- Tested candidate: `aa03237b07e9b4eb0a5f4fb4a733153f25f43753`
+- Backend suite: **292 passed, 1 skipped**, 83.56% coverage.
+- SQLite Alembic upgrade and Python compilation: passed.
+- PostgreSQL tenant RLS negative tests using a non-owner role: passed.
+- PostgreSQL custom-format backup/restore and RLS policy preservation: passed.
+- Secret scan: working tree, nested archives, and reachable Git history passed.
+- Deployment: not attempted by the pull-request workflow; production data plane remains closed.
+- This audit document was updated after the above successful candidate run. The final documentation-only commit must itself pass the same CI and secret/history gates before merge.
