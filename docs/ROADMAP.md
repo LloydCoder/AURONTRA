@@ -2,7 +2,7 @@
 
 Aurontra is a Tinlance ecosystem product and a consumer of the four-repository Tinlance Agent System. It must not duplicate the Agent Platform's authoritative identity, authorization, policy, approval, sandbox, secrets, execution, or evidence controls.
 
-Phases are sequential release gates. A phase is complete only after implementation, tests, documentation reconciliation, security review, and CI evidence. Passing CI does not certify production readiness. Phase 04's threat model is reviewed. Phase 05's foundational ticket/device tenant persistence and RLS acceptance checks are complete. Phase 06 durable jobs/outbox implementation and Phase 07 organization/device lifecycle implementation and forensic audit are complete; merged candidate CI and secret/history scan are green. Phase 08 is next. The production data plane remains closed because several other business subsystems are not yet migrated.
+Phases are sequential release gates. A phase is complete only after implementation, tests, documentation reconciliation, security review, and CI evidence. Passing CI does not certify production readiness. Phase 04's threat model is reviewed. Phase 05's foundational ticket/device tenant persistence and RLS acceptance checks are complete. Phases 06–07 are complete with green CI and forensic audits. Phase 08 DPoP agent identity is under implementation and CI; production remains closed until the Platform-approved issuer contract is configured and all release gates pass. The production data plane remains closed because several other business subsystems are not yet migrated.
 
 | Phase | Scope | Acceptance evidence | Status |
 |---|---|---|---|
@@ -13,7 +13,7 @@ Phases are sequential release gates. A phase is complete only after implementati
 | 05 | Durable tenant persistence and resource-level authorization | Migrations, tenant-scoped ticket/device repositories, PostgreSQL RLS, cross-tenant tests, transaction/backup tests | Complete — core ticket/device repositories, active-tenant gate, FK enforcement, RLS, rollback and restore smoke tests pass; other subsystems remain gated |
 | 06 | Durable jobs and event processing | Retry, idempotency, replay, cancellation, lease recovery, dead-letter, outbox atomicity, PostgreSQL RLS and CI evidence | Complete — 285 passed, 1 skipped; PostgreSQL RLS/restore and history scan green; deployment remains intentionally skipped |
 | 07 | Organization/device lifecycle | Tenant-scoped provisioning, inactive-by-default devices, idempotent revocation, offboarding, retention, negative isolation tests | **Complete — PR #2 merged; 292 passed, PostgreSQL RLS/restore green; secret/history scan green** |
-| 08 | Authenticated endpoint agent | Device identity, signed requests, replay protection, versioning tests | **Next — blocked on a reviewed Platform-owned agent identity/credential contract; no duplicate identity authority** |
+| 08 | Authenticated endpoint agent | Platform-bound DPoP tokens, per-request proof, body binding, replay table/RLS, enrollment, scoped key rotation, telemetry, versioning tests | **Implementation in progress — CI and forensic gate pending** |
 | 09 | Governed action engine | Tinlance Agent Platform contract tests, policy/approval evidence | Not started |
 | 10 | Safe remediation playbooks | Allowlist, least privilege, bounded execution and postcondition tests | Not started |
 | 11 | Orchestration recovery | Crash, retry, duplicate, partial failure and reconciliation tests | Not started |

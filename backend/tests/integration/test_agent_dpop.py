@@ -1,0 +1,334 @@
+"""Cryptographic endpoint-agent protocol integration tests."""
+import base64
+import json
+import time
+import uuid
+from types import SimpleNamespace
+
+import jwt
+import pytest
+from cryptography.hazmat.primitives.asymmetric import ec
+from httpx import ASGITransport, AsyncClient
+
+from core import agent_auth
+from core.config import settings
+from core.database import AsyncSessionLocal
+from models.device import Device
+from models.durable_job import OutboxEvent
+from models.organization import Organization
+
+
+def _b64(raw: bytes) -> str:
+    return base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
+
+
+def _jwk(private_key):
+    numbers = private_key.public_key().public_numbers()
+    return {
+        "kty": "EC",
+        "crv": "P-256",
+        "x": _b64(numbers.x.to_bytes(32, "big")),
+        "y": _b64(numbers.y.to_bytes(32, "big")),
+    }
+
+
+def _headers(monkeypatch, *, device_id, tenant_id, scope, path, body, device_key=None):
+    issuer_key = ec.generate_private_key(ec.SECP256R1())
+    client_key = device_key or ec.generate_private_key(ec.SECP256R1())
+    jwk = _jwk(client_key)
+    thumbprint = agent_auth.jwk_thumbprint(jwk)
+    monkeypatch.setattr(settings, "AGENT_AUTH_ENABLED", True)
+    monkeypatch.setattr(settings, "AGENT_JWKS_URL", "https://identity.example.invalid/jwks")
+    monkeypatch.setattr(settings, "AGENT_JWT_ISSUER", "https://identity.example.invalid/")
+    monkeypatch.setattr(settings, "AGENT_JWT_AUDIENCE", "aurontra-agent")
+    monkeypatch.setattr(settings, "AGENT_PUBLIC_ORIGIN", "")
+    monkeypatch.setattr(settings, "AGENT_DPOP_MAX_AGE_SECONDS", 60)
+    monkeypatch.setattr(settings, "AGENT_CLOCK_SKEW_SECONDS", 30)
+    monkeypatch.setattr(settings, "AGENT_ACCESS_TOKEN_MAX_TTL_SECONDS", 600)
+    monkeypatch.setattr(settings, "AGENT_REPLAY_RETENTION_SECONDS", 300)
+    monkeypatch.setattr(settings, "AUTH_MODE", "disabled")
+    monkeypatch.setattr(settings, "DATA_PLANE_ENABLED", True)
+    monkeypatch.setattr(settings, "ENVIRONMENT", "test")
+    monkeypatch.setattr(
+        agent_auth,
+        "_agent_jwks_client",
+        lambda: SimpleNamespace(
+            get_signing_key_from_jwt=lambda _token: SimpleNamespace(key=issuer_key.public_key())
+        ),
+    )
+    now = int(time.time())
+    token = jwt.encode(
+        {
+            "iss": "https://identity.example.invalid/",
+            "aud": "aurontra-agent",
+            "sub": device_id,
+            "tenant_id": tenant_id,
+            "scope": scope,
+            "jti": str(uuid.uuid4()),
+            "iat": now,
+            "exp": now + 300,
+            "cnf": {"jkt": thumbprint},
+        },
+        issuer_key,
+        algorithm="ES256",
+        headers={"kid": "issuer-test"},
+    )
+    proof = jwt.encode(
+        {
+            "htm": "POST",
+            "htu": "https://test" + path,
+            "iat": now,
+            "jti": str(uuid.uuid4()),
+            "ath": _b64(__import__("hashlib").sha256(token.encode("ascii")).digest()),
+            "bht": _b64(__import__("hashlib").sha256(body).digest()),
+        },
+        client_key,
+        algorithm="ES256",
+        headers={"typ": "dpop+jwt", "jwk": jwk},
+    )
+    return {
+        "Authorization": f"DPoP {token}",
+        "DPoP": proof,
+        "Content-Type": "application/json",
+    }, thumbprint
+
+
+def _body(payload: dict) -> bytes:
+    return json.dumps(payload, separators=(",", ":")).encode("utf-8")
+
+
+async def _client():
+    from main import app
+    return AsyncClient(transport=ASGITransport(app=app), base_url="https://test")
+
+
+@pytest.mark.asyncio
+async def test_platform_bound_agent_enrollment_activates_only_provisioned_device(monkeypatch):
+    device_id = "agent-enroll-01"
+    async with AsyncSessionLocal() as db:
+        db.add(Device(id=device_id, org_id="test-tenant", name="endpoint agent", is_active=False))
+        await db.commit()
+
+    payload = {"agent_version": "1.2.3"}
+    body = _body(payload)
+    headers, thumbprint = _headers(
+        monkeypatch,
+        device_id=device_id,
+        tenant_id="test-tenant",
+        scope="aurontra:agent:enroll",
+        path="/agent/v1/enroll",
+        body=body,
+    )
+    async with await _client() as client:
+        response = await client.post("/agent/v1/enroll", content=body, headers=headers)
+
+    assert response.status_code == 200
+    assert response.json()["lifecycle_state"] == "enrolled"
+    async with AsyncSessionLocal() as db:
+        device = await db.get(Device, device_id)
+        assert device.is_active is True
+        assert device.enrolled_at is not None
+        assert device.agent_key_thumbprint == thumbprint
+        assert device.agent_version == "1.2.3"
+        events = (await db.scalars(__import__("sqlalchemy").select(OutboxEvent).where(OutboxEvent.aggregate_id == device_id))).all()
+        assert [event.event_type for event in events] == ["agent.enrolled"]
+
+
+@pytest.mark.asyncio
+async def test_dpop_telemetry_accepts_enrolled_device_and_rejects_replayed_proof(monkeypatch):
+    device_id = "agent-telemetry-01"
+    key = ec.generate_private_key(ec.SECP256R1())
+    jwk = _jwk(key)
+    thumbprint = agent_auth.jwk_thumbprint(jwk)
+    async with AsyncSessionLocal() as db:
+        db.add(Device(
+            id=device_id, org_id="test-tenant", name="telemetry endpoint",
+            is_active=True, enrolled_at=__import__("datetime").datetime.now(__import__("datetime").timezone.utc),
+            agent_key_thumbprint=thumbprint, agent_version="2.0.0",
+        ))
+        await db.commit()
+
+    payload = {"cpu_percent": 24.0, "memory_percent": 48.0, "disk_percent": 55.0}
+    body = _body(payload)
+    headers, _ = _headers(
+        monkeypatch,
+        device_id=device_id,
+        tenant_id="test-tenant",
+        scope="aurontra:telemetry:write",
+        path="/agent/v1/telemetry",
+        body=body,
+        device_key=key,
+    )
+    async with await _client() as client:
+        first = await client.post("/agent/v1/telemetry", content=body, headers=headers)
+        replay = await client.post("/agent/v1/telemetry", content=body, headers=headers)
+
+    assert first.status_code == 200
+    assert first.json()["stored"] is True
+    assert replay.status_code == 401
+    assert "already been used" in replay.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_dpop_proof_is_bound_to_exact_body(monkeypatch):
+    device_id = "agent-body-binding"
+    async with AsyncSessionLocal() as db:
+        db.add(Device(
+            id=device_id, org_id="test-tenant", name="body binding endpoint",
+            is_active=True, enrolled_at=__import__("datetime").datetime.now(__import__("datetime").timezone.utc),
+        ))
+        await db.commit()
+
+    signed_body = _body({"cpu_percent": 20.0})
+    headers, thumbprint = _headers(
+        monkeypatch,
+        device_id=device_id,
+        tenant_id="test-tenant",
+        scope="aurontra:telemetry:write",
+        path="/agent/v1/telemetry",
+        body=signed_body,
+    )
+    async with AsyncSessionLocal() as db:
+        device = await db.get(Device, device_id)
+        device.agent_key_thumbprint = thumbprint
+        await db.commit()
+
+    async with await _client() as client:
+        response = await client.post(
+            "/agent/v1/telemetry",
+            content=_body({"cpu_percent": 99.0}),
+            headers=headers,
+        )
+
+    assert response.status_code == 401
+    assert "DPoP" in response.json()["detail"] or "Invalid agent identity" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_agent_scope_and_tenant_binding_are_enforced(monkeypatch):
+    key = ec.generate_private_key(ec.SECP256R1())
+    jwk = _jwk(key)
+    thumbprint = agent_auth.jwk_thumbprint(jwk)
+    async with AsyncSessionLocal() as db:
+        db.add(Organization(id="other-tenant", name="Other Tenant", status="active"))
+        await db.flush()
+        db.add(Device(
+            id="other-tenant-device", org_id="other-tenant", name="foreign device",
+            is_active=True, enrolled_at=__import__("datetime").datetime.now(__import__("datetime").timezone.utc),
+            agent_key_thumbprint=thumbprint,
+        ))
+        await db.commit()
+
+    payload = {"cpu_percent": 12.0}
+    body = _body(payload)
+    headers, _ = _headers(
+        monkeypatch, device_id="other-tenant-device", tenant_id="test-tenant",
+        scope="aurontra:telemetry:write", path="/agent/v1/telemetry", body=body, device_key=key,
+    )
+    async with await _client() as client:
+        cross_tenant = await client.post("/agent/v1/telemetry", content=body, headers=headers)
+
+    assert cross_tenant.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_agent_scope_is_required_for_telemetry(monkeypatch):
+    device_id = "agent-wrong-scope"
+    key = ec.generate_private_key(ec.SECP256R1())
+    thumbprint = agent_auth.jwk_thumbprint(_jwk(key))
+    async with AsyncSessionLocal() as db:
+        db.add(Device(
+            id=device_id, org_id="test-tenant", name="scope test device",
+            is_active=True, enrolled_at=__import__("datetime").datetime.now(__import__("datetime").timezone.utc),
+            agent_key_thumbprint=thumbprint,
+        ))
+        await db.commit()
+
+    body = _body({"cpu_percent": 18.0})
+    headers, _ = _headers(
+        monkeypatch, device_id=device_id, tenant_id="test-tenant",
+        scope="aurontra:agent:enroll", path="/agent/v1/telemetry", body=body, device_key=key,
+    )
+    async with await _client() as client:
+        response = await client.post("/agent/v1/telemetry", content=body, headers=headers)
+
+    assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_platform_scoped_key_rotation_rebinds_device_and_rejects_old_key(monkeypatch):
+    device_id = "agent-key-rotation"
+    old_key = ec.generate_private_key(ec.SECP256R1())
+    old_thumbprint = agent_auth.jwk_thumbprint(_jwk(old_key))
+    async with AsyncSessionLocal() as db:
+        db.add(Device(
+            id=device_id, org_id="test-tenant", name="rotation device",
+            is_active=True, enrolled_at=__import__("datetime").datetime.now(__import__("datetime").timezone.utc),
+            agent_key_thumbprint=old_thumbprint, agent_version="1.0.0",
+        ))
+        await db.commit()
+
+    new_key = ec.generate_private_key(ec.SECP256R1())
+    rotation_body = _body({"agent_version": "1.1.0"})
+    rotation_headers, new_thumbprint = _headers(
+        monkeypatch, device_id=device_id, tenant_id="test-tenant",
+        scope="aurontra:agent:key:rotate", path="/agent/v1/rotate-key",
+        body=rotation_body, device_key=new_key,
+    )
+    async with await _client() as client:
+        rotated = await client.post("/agent/v1/rotate-key", content=rotation_body, headers=rotation_headers)
+
+    assert rotated.status_code == 200
+    assert rotated.json()["lifecycle_state"] == "key_rotated"
+    assert new_thumbprint != old_thumbprint
+    async with AsyncSessionLocal() as db:
+        device = await db.get(Device, device_id)
+        assert device.agent_key_thumbprint == new_thumbprint
+        assert device.agent_key_rotated_at is not None
+        assert device.agent_version == "1.1.0"
+
+    telemetry_body = _body({"cpu_percent": 10.0})
+    old_headers, _ = _headers(
+        monkeypatch, device_id=device_id, tenant_id="test-tenant",
+        scope="aurontra:telemetry:write", path="/agent/v1/telemetry",
+        body=telemetry_body, device_key=old_key,
+    )
+    async with await _client() as client:
+        old_key_response = await client.post("/agent/v1/telemetry", content=telemetry_body, headers=old_headers)
+
+    assert old_key_response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_agent_endpoints_fail_closed_when_agent_auth_is_disabled(monkeypatch):
+    monkeypatch.setattr(settings, "AGENT_AUTH_ENABLED", False)
+    monkeypatch.setattr(settings, "DATA_PLANE_ENABLED", True)
+    async with await _client() as client:
+        response = await client.post("/agent/v1/telemetry", content=b"{}", headers={"Content-Type": "application/json"})
+    assert response.status_code == 503
+    assert response.json()["code"] == "AGENT_AUTH_DISABLED"
+
+
+@pytest.mark.asyncio
+async def test_revoked_agent_cannot_send_telemetry(monkeypatch):
+    device_id = "agent-revoked"
+    key = ec.generate_private_key(ec.SECP256R1())
+    thumbprint = agent_auth.jwk_thumbprint(_jwk(key))
+    async with AsyncSessionLocal() as db:
+        db.add(Device(
+            id=device_id, org_id="test-tenant", name="revoked endpoint",
+            is_active=False, enrolled_at=__import__("datetime").datetime.now(__import__("datetime").timezone.utc),
+            revoked_at=__import__("datetime").datetime.now(__import__("datetime").timezone.utc),
+            agent_key_thumbprint=thumbprint,
+        ))
+        await db.commit()
+
+    body = _body({"cpu_percent": 14.0})
+    headers, _ = _headers(
+        monkeypatch, device_id=device_id, tenant_id="test-tenant",
+        scope="aurontra:telemetry:write", path="/agent/v1/telemetry", body=body, device_key=key,
+    )
+    async with await _client() as client:
+        response = await client.post("/agent/v1/telemetry", content=body, headers=headers)
+
+    assert response.status_code == 404
