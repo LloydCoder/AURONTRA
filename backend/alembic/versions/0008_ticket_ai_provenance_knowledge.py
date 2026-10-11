@@ -52,6 +52,7 @@ def upgrade():
             sa.CheckConstraint("status != 'published' OR (approved_by IS NOT NULL AND length(trim(approved_by)) > 0 AND approved_at IS NOT NULL)", name="ck_knowledge_article_published_approval"),
             sa.CheckConstraint("version >= 1", name="ck_knowledge_article_version"),
             sa.CheckConstraint("length(content_sha256) = 64", name="ck_knowledge_article_content_hash_length"),
+            sa.CheckConstraint("length(content) <= 100000", name="ck_knowledge_article_content_size"),
             sa.UniqueConstraint("org_id", "slug", "version", name="uq_knowledge_article_tenant_slug_version"),
         )
         op.create_index(
