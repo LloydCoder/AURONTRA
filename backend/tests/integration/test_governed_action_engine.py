@@ -491,3 +491,22 @@ async def test_untrusted_sdk_error_code_is_replaced_with_generic_code(monkeypatc
         )
     assert caught.value.code == "platform_sdk_error"
     assert suspicious not in str(caught.value)
+
+
+@pytest.mark.asyncio
+async def test_feature_flag_cannot_be_bypassed_by_custom_client_factory(monkeypatch):
+    monkeypatch.setattr(settings, "AGENT_PLATFORM_ENABLED", False)
+    factory_calls = []
+    executor = PlatformGovernedActionExecutor(
+        GovernedActionRegistry((_definition(),)),
+        client_factory=lambda *_: factory_calls.append("called"),
+    )
+    with pytest.raises(GovernedActionError, match="platform_integration_disabled"):
+        await executor.submit(
+            action_id=uuid4(),
+            action_key="diagnostic.read",
+            resource="device:device-123",
+            intent="Read diagnostic metrics",
+            arguments={"metric": "cpu"},
+        )
+    assert factory_calls == []
