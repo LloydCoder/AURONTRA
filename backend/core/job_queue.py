@@ -227,6 +227,8 @@ async def fail_job(
     error_code: str = "worker_error",
     retry_after_seconds: int | None = None,
 ) -> DurableJob:
+    if retry_after_seconds is not None and not 1 <= retry_after_seconds <= 86400:
+        raise ValueError("retry_after_seconds must be between 1 and 86400")
     now = _now()
     job = await session.scalar(
         select(DurableJob).where(DurableJob.id == job_id, DurableJob.org_id == org_id).with_for_update()
@@ -425,6 +427,10 @@ async def mark_outbox_published(
     org_id: str,
     worker_id: str,
 ) -> OutboxEvent:
+    if not 1 <= max_attempts <= 100:
+        raise ValueError("max_attempts must be between 1 and 100")
+    if retry_after_seconds is not None and not 1 <= retry_after_seconds <= 86400:
+        raise ValueError("retry_after_seconds must be between 1 and 86400")
     now = _now()
     event = await session.scalar(
         select(OutboxEvent).where(
