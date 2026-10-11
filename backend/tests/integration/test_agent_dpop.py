@@ -297,3 +297,13 @@ async def test_platform_scoped_key_rotation_rebinds_device_and_rejects_old_key(m
         old_key_response = await client.post("/agent/v1/telemetry", content=telemetry_body, headers=old_headers)
 
     assert old_key_response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_agent_endpoints_fail_closed_when_agent_auth_is_disabled(monkeypatch):
+    monkeypatch.setattr(settings, "AGENT_AUTH_ENABLED", False)
+    monkeypatch.setattr(settings, "DATA_PLANE_ENABLED", True)
+    async with await _client() as client:
+        response = await client.post("/agent/v1/telemetry", content=b"{}", headers={"Content-Type": "application/json"})
+    assert response.status_code == 503
+    assert response.json()["code"] == "AGENT_AUTH_DISABLED"
