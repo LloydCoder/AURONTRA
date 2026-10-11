@@ -314,3 +314,54 @@ class TestMITREMapper:
         from agents.threat_blocker import map_mitre_ttp
         ttp = map_mitre_ttp(protocol="HTTPS", entropy=6.5, z_score=9.0)
         assert "T1071" in ttp or "T1095" in ttp
+
+
+
+class TestThreatEvidenceSemantics:
+    def test_score_components_are_explicit_and_sum_to_raw_score(self):
+        from agents.threat_blocker import analyse_signal
+        result = analyse_signal({
+            "src_ip": "185.220.101.47",
+            "protocol": "QUIC",
+            "entropy": 7.82,
+            "z_score": 14.76,
+            "beacon_interval": 60,
+            "jitter": 0.1,
+        })
+        assert sum(result["score_components"].values()) == result["score"]
+        assert result["score_components"] == {
+            "z_score_points": 40,
+            "entropy_points": 35,
+            "protocol_risk_points": 15,
+            "periodicity_points": 10,
+        }
+        assert result["score_semantics"] == "heuristic_0_to_100_not_probability"
+        assert result["detector_version"] == "heuristic-threat-score.v2"
+        assert result["auto_block"] is False
+
+    def test_analyse_does_not_mutate_caller_evidence(self):
+        from agents.threat_blocker import analyse_signal
+        signal = {
+            "src_ip": "192.0.2.44",
+            "protocol": "HTTPS",
+            "entropy": 6.9,
+            "z_score": 7.01,
+            "beacon_interval": 60,
+            "jitter": 0.1,
+        }
+        before = dict(signal)
+        analyse_signal(signal)
+        assert signal == before
+        assert "_periodic_pattern" not in signal
+
+    @pytest.mark.parametrize("signal", [
+        {"entropy": 8.1},
+        {"z_score": float("nan")},
+        {"src_ip": "host.invalid"},
+        {"unknown_field": "must reject"},
+        {"jitter": 1.1},
+    ])
+    def test_analyse_rejects_invalid_signal_values(self, signal):
+        from agents.threat_blocker import analyse_signal
+        with pytest.raises(ValueError):
+            analyse_signal(signal)
