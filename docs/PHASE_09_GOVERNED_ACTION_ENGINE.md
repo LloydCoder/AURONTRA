@@ -17,7 +17,7 @@ Replace any product-side assumption that a playbook can authorize or execute an 
 - Pin the SDK to the reviewed full commit SHA, not a branch or floating version.
 - Platform API version is exactly `1.1`; contract is `governed-execution.v1`.
 - Use the SDK's `POST /v1/agent-platform` transport with bearer credential, `X-Tinlance-API-Version`, request ID, idempotency key for consequential operations, and W3C trace context.
-- Tenant and subject metadata are deployment-configured and immutable from caller input. Platform authentication remains authoritative.
+- Tenant and subject metadata are supplied through a frozen `TrustedPlatformContext` created from verified server-side identity state, never request JSON. The environment-token mode is explicitly single-tenant and rejects mismatched context; multi-tenant deployments require an injected tenant-scoped credential provider. Platform authentication remains authoritative.
 - Consequential operations use stable action-derived request/idempotency identifiers so retries preserve intent. Reusing an idempotency key with changed input must remain a Platform conflict.
 - Tool/capability names and versions come from a code-owned allowlist; callers cannot select arbitrary tool names or actions.
 - Requests are bounded JSON, bounded in size, and reject unknown argument names, missing required arguments, non-finite numbers and control characters in resource/intent identifiers.
@@ -35,7 +35,7 @@ Replace any product-side assumption that a playbook can authorize or execute an 
 
 ## Required production configuration
 
-Configure the following only through deployment secrets/configuration after the Platform operator provisions the service principal, task, agent and allowed capability/tool registrations:
+Configure the following only through deployment secrets/configuration after the Platform operator provisions the service principal, task, agent and allowed capability/tool registrations. The static environment credential is single-tenant by design; do not reuse it across customer tenants. A multi-tenant deployment must inject an approved credential provider that returns a Platform-authorized token for the verified tenant/subject context.
 
 - `AGENT_PLATFORM_ENABLED=true`
 - `AGENT_PLATFORM_BASE_URL=https://...`
@@ -53,9 +53,10 @@ Production must not enable insecure HTTP. These settings do not open Aurontra's 
 3. Tests prove the SDK receives stable idempotency identifiers and the correct tenant/subject/agent/task metadata.
 4. Tests prove waiting-approval/terminal run states never trigger `tools.execute`.
 5. Tests prove Platform evidence/audit references are preserved and `business_outcome_verified` remains false.
-6. A forensic audit confirms there is no local `subprocess`, `systemctl`, Certbot, shell, or filesystem side-effect fallback.
-7. Documentation clearly separates repository CI evidence from live Platform connectivity and production deployment.
-8. PR CI, PostgreSQL RLS/restore checks, and secret/history/archive scan are green before merge.
+6. Tests prove a static tenant credential cannot be used for a different tenant and an injected credential provider receives the trusted context.
+7. A forensic audit confirms there is no local `subprocess`, `systemctl`, Certbot, shell, or filesystem side-effect fallback.
+8. Documentation clearly separates repository CI evidence from live Platform connectivity and production deployment.
+9. PR CI, PostgreSQL RLS/restore checks, and secret/history/archive scan are green before merge.
 
 ## Explicit exclusions
 
