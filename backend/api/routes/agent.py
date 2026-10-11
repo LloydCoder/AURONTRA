@@ -7,9 +7,8 @@ from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.agent_auth import AgentIdentity, get_agent_identity
+from core.agent_auth import AgentIdentity, get_agent_identity, get_agent_tenant_db
 from core.config import settings
-from core.database import get_tenant_db
 from models.agent_request_replay import AgentRequestReplay
 from models.device import Device
 from resilience.scorer import score_device
@@ -55,7 +54,7 @@ async def enroll_agent(
     payload: AgentEnrollmentPayload,
     request: Request,
     identity: AgentIdentity = Depends(get_agent_identity),
-    db: AsyncSession = Depends(get_tenant_db),
+    db: AsyncSession = Depends(get_agent_tenant_db),
 ):
     if "aurontra:agent:enroll" not in identity.scopes:
         raise HTTPException(status_code=403, detail="Agent enrollment scope is required.")
