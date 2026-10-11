@@ -299,14 +299,23 @@ class ThreatContainmentService:
             await _commit_with_tenant_context(db, tenant_id)
             return attempt, False
 
-        attempt.platform_state = result.platform_state
+        if not isinstance(result, GovernedActionResult):
+            attempt.status = "unknown_outcome"
+            attempt.last_error_code = "platform_result_invalid"
+            attempt.reason_code = "platform_result_invalid"
+            attempt.version += 1
+            await _commit_with_tenant_context(db, tenant_id)
+            return attempt, False
+
+        platform_state = result.platform_state if isinstance(result.platform_state, str) and _SAFE_CODE.fullmatch(result.platform_state) else "unknown"
+        attempt.platform_state = platform_state
         attempt.platform_run_id = str(result.run_id)
         attempt.platform_execution_id = str(result.execution_id) if result.execution_id else None
         attempt.platform_evidence_ids = [str(item) for item in result.evidence_ids]
         attempt.audit_event_ids = [str(item) for item in result.audit_event_ids]
         attempt.version += 1
-        if result.execution_id is None or result.platform_state not in {"completed", "succeeded"}:
-            attempt.status = "approval_pending" if result.platform_state in _ALLOWED_PENDING_STATES else "platform_pending"
+        if result.execution_id is None or platform_state not in {"completed", "succeeded"}:
+            attempt.status = "approval_pending" if platform_state in _ALLOWED_PENDING_STATES else "platform_pending"
             attempt.reason_code = attempt.status
             await _commit_with_tenant_context(db, tenant_id)
             return attempt, False
@@ -339,6 +348,8 @@ class ThreatContainmentService:
             verification.verified is True
             and verification.isolation_active is True
             and bool(verification.evidence_ids)
+            and bool(result.evidence_ids)
+            and bool(result.audit_event_ids)
             and identity_matches
             and fresh
         )
