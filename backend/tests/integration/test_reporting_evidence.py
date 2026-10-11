@@ -1,6 +1,7 @@
 """Evidence-backed reporting, tenant scope, and immutable artifact tests."""
 import hashlib
 import json
+from datetime import timezone
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
@@ -28,9 +29,14 @@ async def test_roi_report_uses_verified_tenant_and_persists_digest():
     assert artifact.org_id == "test-tenant"
     assert artifact.report_type == "roi"
     assert artifact.payload_sha256 == payload["evidence_sha256"]
+    def canonical_utc(value):
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc).isoformat()
+
     digest_material = {
         "org_id": artifact.org_id, "report_type": artifact.report_type,
-        "period_start": artifact.period_start.isoformat(), "period_end": artifact.period_end.isoformat(),
+        "period_start": canonical_utc(artifact.period_start), "period_end": canonical_utc(artifact.period_end),
         "created_by": artifact.created_by, "input_provenance": artifact.input_provenance,
         "report_payload": artifact.report_payload,
     }
