@@ -52,7 +52,8 @@ async def execute_playbook(playbook_name: str, context: dict) -> dict:
 
     # Compatibility API: enforce the non-execution contract even if a future
     # playbook implementation returns contradictory legacy fields.
-    created_at = result.get("created_at") or datetime.now(timezone.utc).isoformat()
+    # Never trust a playbook-provided timestamp for this response envelope.
+    created_at = datetime.now(timezone.utc).isoformat()
     device_id, device_id_source = normalize_device_id(context)
     result["playbook"] = playbook_name
     result["device_id"] = device_id
