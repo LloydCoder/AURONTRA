@@ -308,8 +308,12 @@ async def test_client_rejects_unknown_service_even_with_valid_https_origin():
 
 
 @pytest.mark.asyncio
-async def test_client_rejects_oversized_success_body(identity_context):
+async def test_client_rejects_oversized_success_body_without_retry(identity_context):
+    calls = 0
+
     async def handler(request):
+        nonlocal calls
+        calls += 1
         return httpx.Response(200, content=b"x" * (MAX_RESPONSE_BYTES + 1))
 
     with pytest.raises(EcosystemIntegrationError) as error:
@@ -319,6 +323,7 @@ async def test_client_rejects_oversized_success_body(identity_context):
             transport=httpx.MockTransport(handler),
         )
     assert error.value.code == "bridge_response_too_large"
+    assert calls == 1
 
 
 @pytest.mark.asyncio
