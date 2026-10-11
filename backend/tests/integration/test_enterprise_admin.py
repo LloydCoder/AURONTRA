@@ -93,3 +93,16 @@ async def test_admin_api_key_listing_never_exposes_another_tenant_key():
         response = await client.get("/admin/api-keys")
     assert response.status_code == 200
     assert all(item["id"] != "other-tenant-key" for item in response.json()["api_keys"])
+
+
+def test_admin_helper_rejects_viewer_role():
+    from types import SimpleNamespace
+    from fastapi import HTTPException
+    from api.routes.admin import _require_admin
+
+    request = SimpleNamespace(state=SimpleNamespace(
+        tenant_id="test-tenant", subject="viewer-subject", role="org:viewer"
+    ))
+    with pytest.raises(HTTPException) as error:
+        _require_admin(request)
+    assert error.value.status_code == 403
