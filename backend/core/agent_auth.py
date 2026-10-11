@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
+from contextlib import aclosing
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from functools import lru_cache
@@ -252,3 +253,14 @@ async def get_agent_identity(request: Request) -> AgentIdentity:
     request.state.role = "agent"
     request.state.agent_identity = identity
     return identity
+
+
+
+async def get_agent_tenant_db(request: Request, identity: AgentIdentity = __import__("fastapi").Depends(get_agent_identity)):
+    """Resolve agent identity first, then open a tenant-scoped business session."""
+    from core.database import get_tenant_db
+
+    dependency = get_tenant_db(request)
+    async with aclosing(dependency) as generator:
+        async for session in generator:
+            yield session
