@@ -33,6 +33,28 @@ def _evidence_digest(signal: dict) -> str:
     return hashlib.sha256(_canonical_json(signal).encode("utf-8")).hexdigest()
 
 
+def _response_from_finding(finding: ThreatFinding, *, idempotent_replay: bool) -> dict:
+    evidence = finding.evidence or {}
+    return {
+        "threat_level": finding.threat_level,
+        "score": finding.score,
+        "score_components": finding.score_components,
+        "detector_version": finding.detector_version,
+        "score_semantics": finding.score_semantics,
+        "periodic_pattern": (
+            "beacon_interval" in evidence
+            and "jitter" in evidence
+            and float(evidence.get("jitter", 1.0)) < 0.2
+        ),
+        "mitre_ttp": finding.mitre_ttp,
+        "auto_block": False,
+        "containment_recommended": finding.containment_recommended,
+        "reason": finding.reason,
+        "finding": _serialize_finding(finding),
+        "idempotent_replay": idempotent_replay,
+    }
+
+
 def _serialize_finding(finding: ThreatFinding) -> dict:
     return {
         "id": finding.id,
@@ -182,7 +204,7 @@ async def analyse_threat(
         if existing is not None:
             if existing.evidence_sha256 != evidence_sha256:
                 raise HTTPException(status_code=409, detail="source_event_id was already used with different evidence.")
-            return {**assessment, "finding": _serialize_finding(existing), "idempotent_replay": True}
+            return _response_from_finding(existing, idempotent_replay=True)
 
     status_value = "review_required" if assessment["containment_recommended"] else "assessed"
     finding = ThreatFinding(
