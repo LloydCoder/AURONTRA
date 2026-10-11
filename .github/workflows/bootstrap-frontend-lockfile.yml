@@ -5,9 +5,9 @@ on:
     paths:
       - ".github/workflows/bootstrap-frontend-lockfile.yml"
       - "frontend/package.json"
-  permissions:
-    contents: write
-    pull-requests: write
+permissions:
+  contents: write
+  pull-requests: write
 concurrency:
   group: frontend-lockfile-bootstrap
   cancel-in-progress: false
