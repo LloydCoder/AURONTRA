@@ -119,3 +119,51 @@ def test_strict_release_cli_fails_while_required_gates_are_blocked():
     assert result.returncode == 1
     payload = json.loads(result.stdout)
     assert payload["production_release_ready"] is False
+
+
+
+def test_release_gate_rejects_non_object_manifest_without_crashing(monkeypatch, tmp_path):
+    manifest_path = tmp_path / "acceptance-manifest.json"
+    manifest_path.write_text('["not", "an", "object"]', encoding="utf-8")
+    monkeypatch.setattr(release_readiness, "MANIFEST_PATH", manifest_path)
+
+    result = release_readiness.evaluate()
+
+    assert result["production_release_ready"] is False
+    assert any(item["id"] == "manifest_schema" for item in result["blockers"])
+
+
+def test_release_gate_rejects_unhashable_gate_status_without_crashing(monkeypatch, tmp_path):
+    root = tmp_path
+    (root / "backend/core").mkdir(parents=True)
+    (root / "backend/alembic/versions").mkdir(parents=True)
+    (root / "frontend").mkdir()
+    evidence_dir = root / "release/evidence"
+    evidence_dir.mkdir(parents=True)
+    (root / "backend/core/config.py").write_text(
+        'DB_SCHEMA_REVISION: str = "0014_test"\\n'
+        "DATA_PLANE_ENABLED: bool = False\\n"
+        "AGENT_PLATFORM_ENABLED: bool = False\\n"
+        "REMEDIATION_SUBMISSION_ENABLED: bool = False\\n"
+        "THREAT_CONTAINMENT_ENABLED: bool = False\\n",
+        encoding="utf-8",
+    )
+    (root / "backend/alembic/versions/0014_test.py").write_text(
+        'revision = "0014_test"\\n', encoding="utf-8"
+    )
+    (root / "frontend/package-lock.json").write_text('{"lockfileVersion":3}', encoding="utf-8")
+    manifest_path = root / "release/acceptance-manifest.json"
+    manifest_path.write_text(json.dumps({
+        "schema_version": 1,
+        "product": "Aurontra",
+        "release_status": "not_ready",
+        "gates": [{"id": "malformed", "status": [], "owner": "operator", "evidence": None}],
+    }), encoding="utf-8")
+    monkeypatch.setattr(release_readiness, "ROOT", root)
+    monkeypatch.setattr(release_readiness, "MANIFEST_PATH", manifest_path)
+    monkeypatch.setattr(release_readiness, "EVIDENCE_ROOT", evidence_dir.resolve())
+
+    result = release_readiness.evaluate()
+
+    assert result["production_release_ready"] is False
+    assert any("status must be accepted or blocked" in item["reason"] for item in result["blockers"])
