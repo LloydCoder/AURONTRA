@@ -7,8 +7,7 @@ provisioned devices remain inactive until that protocol is completed.
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel, Field
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.database import get_tenant_db_lifecycle
@@ -17,11 +16,6 @@ from models.organization import Organization
 
 router = APIRouter()
 
-
-class OrganizationView(BaseModel):
-    id: str
-    name: str
-    status: str
 
 
 @router.get("/me")
@@ -56,7 +50,7 @@ async def offboard_organization(
     await db.execute(
         update(Device)
         .where(Device.org_id == org.id)
-        .values(is_active=False, revoked_at=now)
+        .values(is_active=False, revoked_at=func.coalesce(Device.revoked_at, now))
     )
     await db.flush()
     return {
