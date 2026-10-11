@@ -443,3 +443,47 @@ async def test_unexpected_programming_error_is_not_advertised_as_retryable(monke
     assert caught.value.code == "platform_unavailable"
     assert caught.value.retryable is False
     assert "secret internal detail" not in str(caught.value)
+
+
+@pytest.mark.asyncio
+async def test_untrusted_execution_error_text_is_not_returned_as_machine_code(monkeypatch):
+    suspicious = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzZWNyZXQifQ.signature"
+    execution = SimpleNamespace(
+        execution_id=EXECUTION_ID,
+        state="failed",
+        evidence_ids=(),
+        audit_event_ids=(AUDIT_ID,),
+        error_code=suspicious,
+        retryable=False,
+        output=suspicious,
+    )
+    executor, _, _ = _executor(monkeypatch, execution=execution)
+    result = await executor.submit(
+        action_id=uuid4(),
+        action_key="diagnostic.read",
+        resource="device:device-123",
+        intent="Read diagnostic metrics",
+        arguments={"metric": "cpu"},
+    )
+    assert result.error_code == "execution_error"
+    assert suspicious not in repr(result)
+
+
+@pytest.mark.asyncio
+async def test_untrusted_sdk_error_code_is_replaced_with_generic_code(monkeypatch):
+    from tinlance_agent_platform_sdk.errors import PlatformError
+
+    suspicious = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzZWNyZXQifQ.signature"
+    executor, _, _ = _executor(monkeypatch, execute_error=PlatformError(
+        "opaque platform failure", error_code=suspicious, retryable=False
+    ))
+    with pytest.raises(GovernedActionError) as caught:
+        await executor.submit(
+            action_id=uuid4(),
+            action_key="diagnostic.read",
+            resource="device:device-123",
+            intent="Read diagnostic metrics",
+            arguments={"metric": "cpu"},
+        )
+    assert caught.value.code == "platform_sdk_error"
+    assert suspicious not in str(caught.value)
