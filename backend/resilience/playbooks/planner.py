@@ -12,7 +12,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Literal
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, field_validator, model_validator
 
 from core.config import settings
 from core.governed_actions import (
@@ -89,8 +89,8 @@ class VerifiedTelemetry(BaseModel):
     source: Literal["authenticated_endpoint_agent"]
     observed_at: datetime
     evidence_id: UUID
-    cpu_percent: float | None = Field(default=None, ge=0, le=100)
-    disk_percent: float | None = Field(default=None, ge=0, le=100)
+    cpu_percent: float | None = Field(default=None, ge=0, le=100, allow_inf_nan=False)
+    disk_percent: float | None = Field(default=None, ge=0, le=100, allow_inf_nan=False)
     process_instance_id: UUID | None = None
     unhealthy_services: tuple[ServiceName, ...] = ()
 
@@ -118,10 +118,10 @@ class VerifiedCertificateInventory(BaseModel):
     device_id: str = Field(min_length=1, max_length=64)
     certificate_id: UUID
     domain: str = Field(min_length=3, max_length=253)
-    ownership_verified: bool
+    ownership_verified: StrictBool
     observed_at: datetime
     evidence_id: UUID
-    days_until_expiry: int = Field(ge=-36_500, le=36_500)
+    days_until_expiry: int = Field(strict=True, ge=-36_500, le=36_500)
 
     @field_validator("tenant_id", "device_id")
     @classmethod
@@ -154,8 +154,8 @@ class PlaybookPlanningContext(BaseModel):
 
     tenant_id: str = Field(min_length=1, max_length=128)
     device_id: str = Field(min_length=1, max_length=64)
-    device_active: bool
-    device_enrolled: bool
+    device_active: StrictBool
+    device_enrolled: StrictBool
     telemetry: VerifiedTelemetry | None = None
     certificate: VerifiedCertificateInventory | None = None
 
