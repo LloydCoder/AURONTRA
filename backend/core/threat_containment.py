@@ -33,7 +33,7 @@ from models.telemetry_record import TelemetryRecord
 logger = logging.getLogger(__name__)
 _SAFE_CODE = re.compile(r"^[a-z][a-z0-9_]{0,79}$")
 _SAFE_EVIDENCE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
-_ALLOWED_PENDING_STATES = frozenset({"waiting_approval", "approval_required", "pending_approval"})
+_ALLOWED_PENDING_STATES = frozenset({"waiting_approval", "approval_required", "pending_approval", "approval_pending"})
 
 
 class ThreatContainmentError(RuntimeError):
