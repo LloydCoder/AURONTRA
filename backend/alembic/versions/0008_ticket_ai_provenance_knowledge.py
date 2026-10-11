@@ -45,6 +45,7 @@ def upgrade():
             sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
             sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
             sa.CheckConstraint("status IN ('draft', 'published', 'archived')", name="ck_knowledge_article_status"),
+            sa.CheckConstraint("status != 'published' OR (approved_by IS NOT NULL AND length(trim(approved_by)) > 0 AND approved_at IS NOT NULL)", name="ck_knowledge_article_published_approval"),
             sa.CheckConstraint("version >= 1", name="ck_knowledge_article_version"),
             sa.CheckConstraint("length(content_sha256) = 64", name="ck_knowledge_article_content_hash_length"),
             sa.UniqueConstraint("org_id", "slug", "version", name="uq_knowledge_article_tenant_slug_version"),
