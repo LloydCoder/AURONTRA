@@ -250,3 +250,47 @@ async def test_agent_scope_is_required_for_telemetry(monkeypatch):
         response = await client.post("/agent/v1/telemetry", content=body, headers=headers)
 
     assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_platform_scoped_key_rotation_rebinds_device_and_rejects_old_key(monkeypatch):
+    device_id = "agent-key-rotation"
+    old_key = ec.generate_private_key(ec.SECP256R1())
+    old_thumbprint = agent_auth.jwk_thumbprint(_jwk(old_key))
+    async with AsyncSessionLocal() as db:
+        db.add(Device(
+            id=device_id, org_id="test-tenant", name="rotation device",
+            is_active=True, enrolled_at=__import__("datetime").datetime.now(__import__("datetime").timezone.utc),
+            agent_key_thumbprint=old_thumbprint, agent_version="1.0.0",
+        ))
+        await db.commit()
+
+    new_key = ec.generate_private_key(ec.SECP256R1())
+    rotation_body = _body({"agent_version": "1.1.0"})
+    rotation_headers, new_thumbprint = _headers(
+        monkeypatch, device_id=device_id, tenant_id="test-tenant",
+        scope="aurontra:agent:key:rotate", path="/agent/v1/rotate-key",
+        body=rotation_body, device_key=new_key,
+    )
+    async with await _client() as client:
+        rotated = await client.post("/agent/v1/rotate-key", content=rotation_body, headers=rotation_headers)
+
+    assert rotated.status_code == 200
+    assert rotated.json()["lifecycle_state"] == "key_rotated"
+    assert new_thumbprint != old_thumbprint
+    async with AsyncSessionLocal() as db:
+        device = await db.get(Device, device_id)
+        assert device.agent_key_thumbprint == new_thumbprint
+        assert device.agent_key_rotated_at is not None
+        assert device.agent_version == "1.1.0"
+
+    telemetry_body = _body({"cpu_percent": 10.0})
+    old_headers, _ = _headers(
+        monkeypatch, device_id=device_id, tenant_id="test-tenant",
+        scope="aurontra:telemetry:write", path="/agent/v1/telemetry",
+        body=telemetry_body, device_key=old_key,
+    )
+    async with await _client() as client:
+        old_key_response = await client.post("/agent/v1/telemetry", content=telemetry_body, headers=old_headers)
+
+    assert old_key_response.status_code == 404
