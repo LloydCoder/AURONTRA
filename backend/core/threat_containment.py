@@ -28,6 +28,7 @@ from core.governed_actions import (
 from models.device import Device
 from models.threat_containment_attempt import ThreatContainmentAttempt
 from models.threat_finding import ThreatFinding
+from models.telemetry_record import TelemetryRecord
 
 logger = logging.getLogger(__name__)
 _SAFE_CODE = re.compile(r"^[a-z][a-z0-9_]{0,79}$")
@@ -197,6 +198,30 @@ class ThreatContainmentService:
             raise ThreatContainmentError("finding_not_found", 404)
         if finding.device_id is None:
             raise ThreatContainmentError("finding_not_bound_to_device", 409)
+        # A user-submitted analysis request is not trusted evidence for an endpoint
+        # isolation action. Require a server-verified endpoint-agent telemetry record.
+        if finding.source != "endpoint_agent" or finding.telemetry_record_id is None:
+            raise ThreatContainmentError("finding_not_backed_by_trusted_telemetry", 409)
+        telemetry = await db.scalar(select(TelemetryRecord).where(
+            TelemetryRecord.id == finding.telemetry_record_id,
+            TelemetryRecord.org_id == tenant_id,
+            TelemetryRecord.device_id == finding.device_id,
+            TelemetryRecord.source == "endpoint_agent",
+            TelemetryRecord.score_status == "ok",
+        ))
+        if telemetry is None:
+            raise ThreatContainmentError("trusted_telemetry_not_found", 409)
+        telemetry_observed_at = telemetry.observed_at
+        if telemetry_observed_at.tzinfo is None or telemetry_observed_at.utcoffset() is None:
+            telemetry_observed_at = telemetry_observed_at.replace(tzinfo=timezone.utc)
+        telemetry_age = (datetime.now(timezone.utc) - telemetry_observed_at.astimezone(timezone.utc)).total_seconds()
+        retention_expiry = telemetry.retention_expires_at
+        if retention_expiry.tzinfo is None or retention_expiry.utcoffset() is None:
+            retention_expiry = retention_expiry.replace(tzinfo=timezone.utc)
+        if telemetry_age < -settings.TELEMETRY_FUTURE_SKEW_SECONDS or telemetry_age > settings.TELEMETRY_MAX_AGE_SECONDS:
+            raise ThreatContainmentError("trusted_telemetry_stale", 409)
+        if retention_expiry.astimezone(timezone.utc) <= datetime.now(timezone.utc):
+            raise ThreatContainmentError("trusted_telemetry_expired", 409)
         if finding.threat_level not in {"high", "critical"} or finding.score < 70:
             raise ThreatContainmentError("finding_below_containment_threshold", 409)
         if not isinstance(finding.assessment, dict) or finding.assessment.get("containment_recommended") is not True:
