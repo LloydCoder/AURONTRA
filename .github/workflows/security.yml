@@ -71,4 +71,24 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          "$RUNNER_TEMP/gitleaks/gitleaks" git --redact --max-archive-depth=3 --timeout=300 --log-opts="--all" .
+          report="$RUNNER_TEMP/gitleaks-git-report.json"
+          set +e
+          "$RUNNER_TEMP/gitleaks/gitleaks" git --config .gitleaks.toml --redact --report-format json --report-path "$report" --max-archive-depth=3 --timeout=300 --log-opts="--all" .
+          scan_status=$?
+          set -e
+          if [[ -s "$report" ]]; then
+            python - "$report" <<'PY'
+          import json, sys
+          with open(sys.argv[1], encoding="utf-8") as stream:
+              findings = json.load(stream)
+          for finding in findings:
+              print("Gitleaks history finding: rule={rule} file={file} line={line} commit={commit} description={description}".format(
+                  rule=finding.get("RuleID", "unknown"),
+                  file=finding.get("File", "unknown"),
+                  line=finding.get("StartLine", "unknown"),
+                  commit=finding.get("Commit", "unknown"),
+                  description=finding.get("Description", "redacted"),
+              ))
+          PY
+          fi
+          exit "$scan_status"
