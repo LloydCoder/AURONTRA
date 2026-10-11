@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "gate_id": "phase23_frontend_reproducible_dependencies",
+  "status": "accepted",
+  "repository": "LloydCoder/AURONTRA",
+  "commit": "90428644155ce36eeae729f3b8ee578c178bbd19",
+  "pull_request": "https://github.com/LloydCoder/AURONTRA/pull/29",
+  "validated_at": "2026-10-11",
+  "checks": [
+    {
+      "name": "Frontend lint, typecheck, and production build",
+      "result": "success",
+      "url": "https://github.com/LloydCoder/AURONTRA/actions/runs/38156265630"
+    },
+    {
+      "name": "Backend tests and static sanity",
+      "result": "success",
+      "url": "https://github.com/LloydCoder/AURONTRA/actions/runs/38156265647"
+    },
+    {
+      "name": "PostgreSQL tenant isolation, RLS, and backup/restore",
+      "result": "success",
+      "url": "https://github.com/LloydCoder/AURONTRA/actions/runs/38156265647"
+    },
+    {
+      "name": "CodeQL Python and JavaScript/TypeScript",
+      "result": "success",
+      "url": "https://github.com/LloydCoder/AURONTRA/actions/runs/38156265651"
+    },
+    {
+      "name": "Python dependency audit",
+      "result": "success",
+      "url": "https://github.com/LloydCoder/AURONTRA/actions/runs/38156265717"
+    },
+    {
+      "name": "Secret, Git history, and nested archive scan",
+      "result": "success",
+      "url": "https://github.com/LloydCoder/AURONTRA/actions/runs/38156265617"
+    },
+    {
+      "name": "SPDX SBOM and source provenance",
+      "result": "success",
+      "url": "https://github.com/LloydCoder/AURONTRA/actions/runs/38156265607"
+    },
+    {
+      "name": "GitHub Actions workflow syntax validation",
+      "result": "success",
+      "url": "https://github.com/LloydCoder/AURONTRA/actions/runs/38156265640"
+    }
+  ],
+  "scope": "Repository/CI acceptance for committed frontend lockfile and npm ci reproducibility only.",
+  "limitations": [
+    "Production deployment was skipped.",
+    "This evidence does not accept Phases 17, 18, 19, 20, 21, 22, or 24.",
+    "No production readiness or customer runtime correctness is claimed."
+  ]
+}

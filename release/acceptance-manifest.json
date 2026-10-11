@@ -47,10 +47,12 @@
     },
     {
       "id": "phase23_frontend_reproducible_dependencies",
-      "status": "blocked",
+      "status": "accepted",
       "owner": "Frontend engineering",
-      "evidence": null,
-      "reason": "A reviewed frontend package-lock.json is not committed; frontend CI currently resolves transitive dependencies during each run."
+      "evidence": {
+        "path": "release/evidence/phase23-frontend-reproducible-dependencies.json",
+        "sha256": "075051496aab358b411e58d2a025a991c690b29ee2e66f9de190e43130ca38c2"
+      }
     },
     {
       "id": "phase24_production_deployment_and_rollback",
