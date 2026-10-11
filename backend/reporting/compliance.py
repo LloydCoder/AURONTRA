@@ -26,10 +26,10 @@ def _nis2_controls(params: dict) -> list[dict]:
     return [
         {
             "control": "Art.21(2)(a) — Policies on risk analysis",
-            "status": "pass" if avg_score >= 70 else "partial",
-            "evidence": f"Resilience score {avg_score}/100 across all devices. Automated risk scoring active.",
+            "status": "partial",
+            "evidence": f"Observed resilience score {avg_score}/100; risk-analysis policies and governance artifacts were not independently supplied.",
             "weight": 15,
-            "score": 15 if avg_score >= 70 else 8,
+            "score": 10 if avg_score >= 70 else 6,
         },
         {
             "control": "Art.21(2)(b) — Incident handling",
@@ -48,16 +48,16 @@ def _nis2_controls(params: dict) -> list[dict]:
         {
             "control": "Art.21(2)(d) — Supply chain security",
             "status": "partial",
-            "evidence": "Third-party bridge monitoring active (ThreatFade, FusionOps). Full vendor risk scoring in roadmap.",
+            "evidence": "Tenant-specific supplier assessments, contracts, and supply-chain risk evidence were not independently supplied.",
             "weight": 10,
-            "score": 6,
+            "score": 4,
         },
         {
             "control": "Art.21(2)(e) — Network security (detection)",
-            "status": "pass" if threats_blocked > 0 or siem_active else "fail",
-            "evidence": f"ThreatFade C2 detection active. {threats_blocked} threats blocked. SIEM export: {'active' if siem_active else 'inactive'}.",
+            "status": "partial" if threats_blocked > 0 or siem_active else "fail",
+            "evidence": f"Verified containment attempts observed: {threats_blocked}. SIEM export verified: {'active' if siem_active else 'not verified'}. Containment counts alone do not prove monitoring coverage.",
             "weight": 20,
-            "score": 20 if (threats_blocked > 0 or siem_active) else 0,
+            "score": 10 if (threats_blocked > 0 or siem_active) else 0,
         },
         {
             "control": "Art.21(2)(g) — Cryptography policies",
@@ -69,7 +69,7 @@ def _nis2_controls(params: dict) -> list[dict]:
         {
             "control": "Art.21(2)(i) — Multi-factor authentication",
             "status": "pass" if mfa_enabled else "fail",
-            "evidence": f"MFA: {'enabled via Clerk auth' if mfa_enabled else 'not yet configured — action required'}.",
+            "evidence": f"Verified identity token indicates MFA: {'yes' if mfa_enabled else 'not proven; configuration evidence required'}.",
             "weight": 15,
             "score": 15 if mfa_enabled else 0,
         },
@@ -94,7 +94,7 @@ def _dora_controls(params: dict) -> list[dict]:
         {
             "control": "Art.10 — ICT-related incident detection",
             "status": "pass" if siem_active else "partial",
-            "evidence": f"ThreatFade C2 detection. {threats_blocked} threats blocked. SIEM: {'active' if siem_active else 'inactive'}.",
+            "evidence": f"Verified containment attempts observed: {threats_blocked}. SIEM state: {'active' if siem_active else 'not tenant-verified'}.",
             "weight": 25,
             "score": 25 if siem_active else 12,
         },
@@ -108,7 +108,7 @@ def _dora_controls(params: dict) -> list[dict]:
         {
             "control": "Art.9(4)(e) — Strong authentication",
             "status": "pass" if mfa_enabled else "fail",
-            "evidence": f"MFA: {'Clerk JWT + MFA active' if mfa_enabled else 'not configured — remediation required'}.",
+            "evidence": f"Verified identity token indicates MFA: {'yes' if mfa_enabled else 'not proven; configuration evidence required'}.",
             "weight": 25,
             "score": 25 if mfa_enabled else 0,
         },
