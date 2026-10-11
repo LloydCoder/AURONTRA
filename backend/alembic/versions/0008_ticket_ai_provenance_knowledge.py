@@ -21,6 +21,10 @@ def upgrade():
             ("ai_response_sha256", sa.String(length=64)),
             ("ai_knowledge_refs", sa.JSON()),
             ("ai_generated_at", sa.DateTime(timezone=True)),
+            ("ai_triage_category", sa.String(length=64)),
+            ("ai_triage_tier", sa.Integer()),
+            ("ai_confidence_semantics", sa.String(length=64)),
+            ("ai_escalation_reason", sa.String(length=128)),
         ]
         for name, column_type in additions:
             if name not in columns:
@@ -95,6 +99,6 @@ def downgrade():
         op.drop_table("knowledge_articles")
     if "tickets" in set(inspector.get_table_names()):
         columns = {column["name"] for column in inspector.get_columns("tickets")}
-        for name in ("ai_generated_at", "ai_knowledge_refs", "ai_response_sha256", "ai_prompt_sha256", "ai_prompt_version"):
+        for name in ("ai_escalation_reason", "ai_confidence_semantics", "ai_triage_tier", "ai_triage_category", "ai_generated_at", "ai_knowledge_refs", "ai_response_sha256", "ai_prompt_sha256", "ai_prompt_version"):
             if name in columns:
                 op.drop_column("tickets", name)
