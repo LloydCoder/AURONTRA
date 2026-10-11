@@ -31,6 +31,17 @@ class APIKeyCreateRequest(BaseModel):
     expires_in_days: int | None = Field(default=90, ge=1, le=365)
 
 
+def _is_active_key(row: APIKey) -> bool:
+    if row.revoked_at is not None:
+        return False
+    expires_at = row.expires_at
+    if expires_at is None:
+        return True
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    return expires_at > datetime.now(timezone.utc)
+
+
 def _require_admin(request: Request) -> tuple[str, str]:
     tenant_id = getattr(request.state, "tenant_id", None)
     subject = getattr(request.state, "subject", None)
@@ -87,7 +98,7 @@ async def list_api_keys(request: Request, db: AsyncSession = Depends(get_tenant_
         {"id": row.id, "prefix": row.key_prefix, "scopes": row.scopes,
          "created_at": row.created_at, "expires_at": row.expires_at,
          "revoked_at": row.revoked_at, "last_used_at": row.last_used_at,
-         "active": row.revoked_at is None and (row.expires_at is None or row.expires_at > datetime.now(timezone.utc))}
+         "active": _is_active_key(row)}
         for row in rows
     ]}
 
