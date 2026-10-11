@@ -29,11 +29,16 @@ from models.device import Device
 from models.threat_containment_attempt import ThreatContainmentAttempt
 from models.threat_finding import ThreatFinding
 from models.telemetry_record import TelemetryRecord
+from models.containment_verification_evidence import ContainmentVerificationEvidence
 
 logger = logging.getLogger(__name__)
 _SAFE_CODE = re.compile(r"^[a-z][a-z0-9_]{0,79}$")
 _SAFE_EVIDENCE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
 _ALLOWED_PENDING_STATES = frozenset({"waiting_approval", "approval_required", "pending_approval", "approval_pending"})
+
+
+class VerificationPending(RuntimeError):
+    """Independent control-plane evidence has not arrived yet."""
 
 
 class ThreatContainmentError(RuntimeError):
@@ -86,11 +91,73 @@ class ThreatContainmentVerifier(Protocol):
         *,
         tenant_id: str,
         device: Device,
+        db: AsyncSession,
         finding: ThreatFinding,
         execution: GovernedActionResult,
     ) -> ContainmentVerification:
         """Read independent endpoint/control-plane state; do not trust tool output alone."""
         ...
+
+
+class DatabaseContainmentVerifier:
+    """Verify only signed, persisted control-plane evidence bound to this exact action."""
+
+    def __init__(self) -> None:
+        import json
+        try:
+            parsed = json.loads(settings.THREAT_VERIFIER_HMAC_KEYS_JSON or "{}")
+            self._configured = isinstance(parsed, dict) and bool(parsed)
+        except (TypeError, ValueError):
+            self._configured = False
+
+    @property
+    def is_configured(self) -> bool:
+        return self._configured
+
+    async def verify(
+        self,
+        *,
+        db: AsyncSession,
+        tenant_id: str,
+        device: Device,
+        finding: ThreatFinding,
+        execution: GovernedActionResult,
+    ) -> ContainmentVerification:
+        if not self._configured:
+            raise ThreatContainmentError("verifier_not_configured", 503)
+        attempt = await db.scalar(select(ThreatContainmentAttempt).where(
+            ThreatContainmentAttempt.org_id == tenant_id,
+            ThreatContainmentAttempt.finding_id == finding.id,
+            ThreatContainmentAttempt.device_id == device.id,
+            ThreatContainmentAttempt.platform_action_id == str(execution.action_id),
+            ThreatContainmentAttempt.platform_execution_id == str(execution.execution_id),
+        ))
+        if attempt is None:
+            raise VerificationPending("containment_attempt_not_yet_visible")
+        evidence = await db.scalar(select(ContainmentVerificationEvidence).where(
+            ContainmentVerificationEvidence.org_id == tenant_id,
+            ContainmentVerificationEvidence.attempt_id == attempt.id,
+            ContainmentVerificationEvidence.finding_id == finding.id,
+            ContainmentVerificationEvidence.device_id == device.id,
+            ContainmentVerificationEvidence.action_id == str(execution.action_id),
+            ContainmentVerificationEvidence.execution_id == str(execution.execution_id),
+            ContainmentVerificationEvidence.signature_valid.is_(True),
+            ContainmentVerificationEvidence.source_type.in_(("network_control_plane", "cloud_control_plane")),
+        ).order_by(ContainmentVerificationEvidence.observed_at.desc()).limit(1))
+        if evidence is None:
+            raise VerificationPending("independent_control_plane_evidence_pending")
+        return ContainmentVerification(
+            verified=evidence.isolation_active is True,
+            isolation_active=evidence.isolation_active is True,
+            tenant_id=tenant_id,
+            device_id=device.id,
+            finding_id=finding.id,
+            execution_id=str(execution.execution_id),
+            observed_at=evidence.observed_at,
+            evidence_source=evidence.source_type,
+            evidence_ids=(evidence.evidence_id,),
+            reason_code=evidence.reason_code,
+        )
 
 
 THREAT_CONTAINMENT_ACTION = GovernedActionDefinition(
@@ -184,7 +251,11 @@ class ThreatContainmentService:
             raise ThreatContainmentError("containment_disabled", 503)
         if not settings.AGENT_PLATFORM_ENABLED:
             raise ThreatContainmentError("platform_integration_disabled", 503)
-        if self._verifier is None or not callable(getattr(self._verifier, "verify", None)):
+        if (
+            self._verifier is None
+            or not callable(getattr(self._verifier, "verify", None))
+            or getattr(self._verifier, "is_configured", True) is False
+        ):
             raise ThreatContainmentError("independent_verifier_not_configured", 503)
         if db.info.get("tenant_id") != tenant_id:
             raise ThreatContainmentError("tenant_session_mismatch", 403)
@@ -340,24 +411,100 @@ class ThreatContainmentService:
         attempt.platform_evidence_ids = [str(item) for item in result.evidence_ids]
         attempt.audit_event_ids = [str(item) for item in result.audit_event_ids]
         attempt.version += 1
+        # Persist execution identity before waiting for independent control-plane evidence.
+        await _commit_with_tenant_context(db, tenant_id)
         if result.execution_id is None or platform_state not in {"completed", "succeeded"}:
             attempt.status = "approval_pending" if platform_state in _ALLOWED_PENDING_STATES else "platform_pending"
             attempt.reason_code = attempt.status
             await _commit_with_tenant_context(db, tenant_id)
             return attempt, False
 
+        return await self._verify_and_finalize(
+            db=db, tenant_id=tenant_id, attempt=attempt, finding=finding, device=device, execution=result,
+        )
+
+    async def verify_attempt(
+        self, *, db: AsyncSession, tenant_id: str, attempt_id: str,
+    ) -> tuple[ThreatContainmentAttempt, bool]:
+        attempt = await db.scalar(select(ThreatContainmentAttempt).where(
+            ThreatContainmentAttempt.org_id == tenant_id,
+            ThreatContainmentAttempt.id == attempt_id,
+        ))
+        if attempt is None:
+            raise ThreatContainmentError("containment_attempt_not_found", 404)
+        if attempt.status == "contained" and attempt.verification_evidence_ids:
+            return attempt, True
+        if attempt.status not in {"awaiting_verification", "platform_pending", "submitting"}:
+            raise ThreatContainmentError("containment_attempt_not_verifiable", 409)
+        if not attempt.platform_execution_id or attempt.platform_state not in {"completed", "succeeded"}:
+            raise ThreatContainmentError("platform_execution_not_completed", 409)
         try:
+            action_id = UUID(attempt.platform_action_id)
+            run_id = UUID(attempt.platform_run_id) if attempt.platform_run_id else None
+            execution_id = UUID(attempt.platform_execution_id)
+            if run_id is None:
+                raise ValueError("Platform run ID missing")
+            evidence_ids = tuple(UUID(item) for item in (attempt.platform_evidence_ids or []))
+            audit_ids = tuple(UUID(item) for item in (attempt.audit_event_ids or []))
+        except (ValueError, TypeError):
+            raise ThreatContainmentError("platform_execution_evidence_invalid", 409) from None
+        finding = await db.scalar(select(ThreatFinding).where(
+            ThreatFinding.org_id == tenant_id,
+            ThreatFinding.id == attempt.finding_id,
+        ))
+        device = await db.scalar(select(Device).where(
+            Device.org_id == tenant_id,
+            Device.id == attempt.device_id,
+        ))
+        if finding is None or device is None:
+            raise ThreatContainmentError("containment_target_not_found", 404)
+        execution = GovernedActionResult(
+            action_id=action_id,
+            run_id=run_id,
+            platform_state=attempt.platform_state,
+            execution_id=execution_id,
+            evidence_ids=evidence_ids,
+            audit_event_ids=audit_ids,
+            error_code=None,
+            retryable=False,
+            business_outcome_verified=False,
+        )
+        return await self._verify_and_finalize(
+            db=db, tenant_id=tenant_id, attempt=attempt, finding=finding, device=device, execution=execution,
+        )
+
+    async def _verify_and_finalize(
+        self,
+        *,
+        db: AsyncSession,
+        tenant_id: str,
+        attempt: ThreatContainmentAttempt,
+        finding: ThreatFinding,
+        device: Device,
+        execution: GovernedActionResult,
+    ) -> tuple[ThreatContainmentAttempt, bool]:
+        try:
+            if self._verifier is None or getattr(self._verifier, "is_configured", True) is False:
+                raise ThreatContainmentError("independent_verifier_not_configured", 503)
             verification = await self._verifier.verify(
-                tenant_id=tenant_id, device=device, finding=finding, execution=result,
+                db=db, tenant_id=tenant_id, device=device, finding=finding, execution=execution,
             )
             if not isinstance(verification, ContainmentVerification):
                 raise TypeError("invalid verification result")
+        except VerificationPending:
+            attempt.status = "awaiting_verification"
+            attempt.reason_code = "awaiting_independent_evidence"
+            attempt.last_error_code = None
+            attempt.version += 1
+            await _commit_with_tenant_context(db, tenant_id)
+            return attempt, False
         except Exception as exc:
             logger.warning("Threat containment verifier failed finding_id=%s error_type=%s", finding.id, type(exc).__name__)
             attempt.status = "verification_failed"
             attempt.reason_code = "independent_verification_failed"
             attempt.last_error_code = "independent_verification_failed"
             attempt.completed_at = datetime.now(timezone.utc)
+            attempt.version += 1
             await _commit_with_tenant_context(db, tenant_id)
             return attempt, False
 
@@ -367,15 +514,15 @@ class ThreatContainmentService:
             verification.tenant_id == tenant_id
             and verification.device_id == device.id
             and verification.finding_id == finding.id
-            and verification.execution_id == str(result.execution_id)
+            and verification.execution_id == str(execution.execution_id)
         )
         fresh = -settings.TELEMETRY_FUTURE_SKEW_SECONDS <= age <= settings.TELEMETRY_MAX_AGE_SECONDS
         verified = (
             verification.verified is True
             and verification.isolation_active is True
             and bool(verification.evidence_ids)
-            and bool(result.evidence_ids)
-            and bool(result.audit_event_ids)
+            and bool(execution.evidence_ids)
+            and bool(execution.audit_event_ids)
             and identity_matches
             and fresh
         )
@@ -399,5 +546,6 @@ class ThreatContainmentService:
             attempt.status = "verification_failed"
             attempt.last_error_code = "containment_postcondition_not_verified"
             attempt.completed_at = datetime.now(timezone.utc)
+        attempt.version += 1
         await _commit_with_tenant_context(db, tenant_id)
         return attempt, False
