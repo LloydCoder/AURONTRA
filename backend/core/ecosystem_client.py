@@ -250,7 +250,7 @@ async def request_json(
                             # that the service is unhealthy; don't trip the circuit breaker.
                             raise EcosystemIntegrationError("bridge_upstream_rejected", 502)
                         body = bytearray()
-                        async for chunk in response.aiter_bytes():
+                        async for chunk in response.aiter_bytes(chunk_size=64 * 1024):
                             if len(body) + len(chunk) > MAX_RESPONSE_BYTES:
                                 raise EcosystemIntegrationError("bridge_response_too_large", 502)
                             body.extend(chunk)
@@ -268,7 +268,14 @@ async def request_json(
                     async with circuit.lock:
                         circuit.probe_in_flight = False
                     raise
-                if exc.code not in {"bridge_upstream_retryable", "bridge_response_too_large", "bridge_response_invalid_json"}:
+                if exc.code == "bridge_response_too_large":
+                    async with circuit.lock:
+                        circuit.failures += 1
+                        circuit.probe_in_flight = False
+                        if circuit.failures >= 5:
+                            circuit.opened_at = time.monotonic()
+                    raise
+                if exc.code not in {"bridge_upstream_retryable", "bridge_response_invalid_json"}:
                     async with circuit.lock:
                         circuit.probe_in_flight = False
                     raise
