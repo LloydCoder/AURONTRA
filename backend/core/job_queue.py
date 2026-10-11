@@ -37,8 +37,13 @@ def _utc(value: datetime) -> datetime:
 
 
 def _canonical_hash(value: Any) -> str:
-    encoded = json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
-    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+    encoded = json.dumps(
+        value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False
+    )
+    encoded_bytes = encoded.encode("utf-8")
+    if len(encoded_bytes) > 65536:
+        raise ValueError("JSON payload exceeds 64 KiB.")
+    return hashlib.sha256(encoded_bytes).hexdigest()
 
 
 def _safe_error_code(value: str) -> str:
@@ -189,6 +194,10 @@ async def complete_job(
     worker_id: str,
     result_metadata: dict | None = None,
 ) -> DurableJob:
+    if result_metadata is not None and not isinstance(result_metadata, dict):
+        raise ValueError("result_metadata must be a JSON object.")
+    safe_metadata = result_metadata or {}
+    _canonical_hash(safe_metadata)
     now = _now()
     job = await session.scalar(
         select(DurableJob).where(DurableJob.id == job_id, DurableJob.org_id == org_id).with_for_update()
@@ -200,7 +209,7 @@ async def complete_job(
         job.status = "cancelled"
     else:
         job.status = "succeeded"
-        job.result_metadata = result_metadata or {}
+        job.result_metadata = safe_metadata
     job.completed_at = now
     job.lease_owner = None
     job.lease_expires_at = None
