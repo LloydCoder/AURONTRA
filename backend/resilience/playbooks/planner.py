@@ -40,6 +40,34 @@ PROPOSAL_TTL_SECONDS = 300
 MAX_CLEANUP_BYTES = 50 * 1024 * 1024
 MIN_CLEANUP_AGE_SECONDS = 3_600
 MAX_PROCESS_THROTTLE_SECONDS = 300
+_ACTION_KEY_BY_PLAYBOOK = {
+    "disk_full": "disk_full.cleanup_candidates",
+    "service_restart": "service_restart.restart",
+    "cert_expiry": "cert_expiry.renew_owned_certificate",
+    "high_cpu": "high_cpu.throttle_process",
+}
+_RISK_CONTRACT = {
+    "disk_full": ("high", "irreversible", "internal", "single_device"),
+    "service_restart": ("high", "partially_reversible", "internal", "single_service"),
+    "cert_expiry": ("high", "partially_reversible", "internal", "single_certificate"),
+    "high_cpu": ("high", "reversible", "internal", "single_process"),
+}
+
+
+def _utc_now(value: datetime | None) -> datetime:
+    if value is None:
+        return datetime.now(timezone.utc)
+    if value.tzinfo is None or value.utcoffset() is None:
+        raise ValueError("now must be timezone-aware")
+    return value.astimezone(timezone.utc)
+
+
+def _valid_public_domain(value: Any) -> bool:
+    if not isinstance(value, str):
+        return False
+    normalized = value.rstrip(".").lower()
+    pattern = r"(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}"
+    return re.fullmatch(pattern, normalized) is not None
 
 
 class VerifiedTelemetry(BaseModel):
@@ -157,12 +185,21 @@ class PlaybookActionProposal(BaseModel):
             raise ValueError("proposal arguments must use canonical JSON serialization")
         return value
 
+    @field_validator("created_at", "expires_at")
+    @classmethod
+    def proposal_timestamps_must_be_timezone_aware(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("proposal timestamps must be timezone-aware")
+        return value.astimezone(timezone.utc)
+
     @model_validator(mode="after")
     def validate_time_window(self) -> "PlaybookActionProposal":
-        if self.created_at.tzinfo is None or self.expires_at.tzinfo is None:
-            raise ValueError("proposal timestamps must be timezone-aware")
         if self.expires_at <= self.created_at:
             raise ValueError("proposal expiry must be after creation")
+        if (self.expires_at - self.created_at).total_seconds() > PROPOSAL_TTL_SECONDS:
+            raise ValueError("proposal lifetime exceeds the bounded TTL")
+        if not self.source_evidence_ids:
+            raise ValueError("proposal must cite at least one source evidence identifier")
         return self
 
     @property
@@ -195,7 +232,7 @@ class PlaybookPlanner:
         *,
         now: datetime | None = None,
     ) -> PlaybookPlan:
-        now = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
+        now = _utc_now(now)
         if context.device_active is not True or context.device_enrolled is not True:
             return self._blocked("device_not_active_and_enrolled")
 
