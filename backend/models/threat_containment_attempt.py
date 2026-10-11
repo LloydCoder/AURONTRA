@@ -10,6 +10,7 @@ class ThreatContainmentAttempt(Base):
     __tablename__ = "threat_containment_attempts"
     __table_args__ = (
         UniqueConstraint("org_id", "finding_id", name="uq_threat_containment_org_finding"),
+        UniqueConstraint("org_id", "id", name="uq_threat_containment_org_id"),
         UniqueConstraint("org_id", "idempotency_key", name="uq_threat_containment_org_idempotency"),
         ForeignKeyConstraint(
             ["org_id", "finding_id"],
