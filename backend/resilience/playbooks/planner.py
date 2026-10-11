@@ -63,6 +63,14 @@ def _utc_now(value: datetime | None) -> datetime:
     return value.astimezone(timezone.utc)
 
 
+def _normalized_text(value: str) -> bool:
+    return (
+        bool(value)
+        and value == value.strip()
+        and not any(ord(character) < 0x20 or ord(character) == 0x7F for character in value)
+    )
+
+
 def _valid_public_domain(value: Any) -> bool:
     if not isinstance(value, str):
         return False
@@ -86,6 +94,13 @@ class VerifiedTelemetry(BaseModel):
     process_instance_id: UUID | None = None
     unhealthy_services: tuple[ServiceName, ...] = ()
 
+    @field_validator("tenant_id", "device_id")
+    @classmethod
+    def identity_values_must_be_normalized(cls, value: str) -> str:
+        if not _normalized_text(value):
+            raise ValueError("tenant/device identifiers must be normalized")
+        return value
+
     @field_validator("observed_at")
     @classmethod
     def observed_at_must_be_timezone_aware(cls, value: datetime) -> datetime:
@@ -107,6 +122,13 @@ class VerifiedCertificateInventory(BaseModel):
     observed_at: datetime
     evidence_id: UUID
     days_until_expiry: int = Field(ge=-36_500, le=36_500)
+
+    @field_validator("tenant_id", "device_id")
+    @classmethod
+    def identity_values_must_be_normalized(cls, value: str) -> str:
+        if not _normalized_text(value):
+            raise ValueError("tenant/device identifiers must be normalized")
+        return value
 
     @field_validator("observed_at")
     @classmethod
@@ -137,6 +159,13 @@ class PlaybookPlanningContext(BaseModel):
     telemetry: VerifiedTelemetry | None = None
     certificate: VerifiedCertificateInventory | None = None
 
+    @field_validator("tenant_id", "device_id")
+    @classmethod
+    def identity_values_must_be_normalized(cls, value: str) -> str:
+        if not _normalized_text(value):
+            raise ValueError("tenant/device identifiers must be normalized")
+        return value
+
 
 class PlaybookRequest(BaseModel):
     """Validated playbook intent; it cannot supply a raw path, command, or arbitrary domain."""
@@ -164,13 +193,33 @@ class PlaybookActionProposal(BaseModel):
     reversibility: Reversibility
     data_class: DataClass
     blast_radius: BlastRadius
-    source_evidence_ids: tuple[UUID, ...]
+    source_evidence_ids: tuple[UUID, ...] = Field(min_length=1, max_length=8)
     expected_postconditions: tuple[str, ...] = Field(min_length=1, max_length=8)
     required_evidence: tuple[str, ...] = Field(min_length=1, max_length=8)
     created_at: datetime
     expires_at: datetime
     execution_enabled: Literal[False] = False
     business_outcome_verified: Literal[False] = False
+
+    @field_validator("tenant_id", "device_id", "action_key", "resource", "intent")
+    @classmethod
+    def proposal_text_must_be_normalized(cls, value: str, info) -> str:
+        if not _normalized_text(value):
+            raise ValueError(f"{info.field_name} must be normalized text")
+        if info.field_name == "action_key" and not re.fullmatch(r"[a-z0-9_.-]{1,128}", value):
+            raise ValueError("action_key must be a canonical identifier")
+        if info.field_name == "resource" and not re.fullmatch(r"[A-Za-z0-9:_./-]{1,255}", value):
+            raise ValueError("resource must be a canonical resource identifier")
+        if info.field_name == "intent" and len(value) > 2048:
+            raise ValueError("intent exceeds its size bound")
+        return value
+
+    @field_validator("expected_postconditions", "required_evidence")
+    @classmethod
+    def evidence_codes_must_be_machine_identifiers(cls, values: tuple[str, ...]) -> tuple[str, ...]:
+        if any(not re.fullmatch(r"[a-z0-9_]{1,80}", value) for value in values):
+            raise ValueError("postconditions and evidence names must be machine identifiers")
+        return values
 
     @field_validator("arguments_json")
     @classmethod
