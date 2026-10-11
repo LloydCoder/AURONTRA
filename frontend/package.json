@@ -17,6 +17,10 @@
     "react": "19.1.1",
     "react-dom": "19.1.1"
   },
+  "overrides": {
+    "postcss": "8.5.23",
+    "braces": "3.0.3"
+  },
   "devDependencies": {
     "@types/node": "22.18.6",
     "@types/react": "19.1.16",
