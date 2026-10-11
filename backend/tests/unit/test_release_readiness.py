@@ -141,15 +141,15 @@ def test_release_gate_rejects_unhashable_gate_status_without_crashing(monkeypatc
     evidence_dir = root / "release/evidence"
     evidence_dir.mkdir(parents=True)
     (root / "backend/core/config.py").write_text(
-        'DB_SCHEMA_REVISION: str = "0014_test"\\n'
-        "DATA_PLANE_ENABLED: bool = False\\n"
-        "AGENT_PLATFORM_ENABLED: bool = False\\n"
-        "REMEDIATION_SUBMISSION_ENABLED: bool = False\\n"
-        "THREAT_CONTAINMENT_ENABLED: bool = False\\n",
+        'DB_SCHEMA_REVISION: str = "0014_test"\n'
+        "DATA_PLANE_ENABLED: bool = False\n"
+        "AGENT_PLATFORM_ENABLED: bool = False\n"
+        "REMEDIATION_SUBMISSION_ENABLED: bool = False\n"
+        "THREAT_CONTAINMENT_ENABLED: bool = False\n",
         encoding="utf-8",
     )
     (root / "backend/alembic/versions/0014_test.py").write_text(
-        'revision = "0014_test"\\n', encoding="utf-8"
+        'revision = "0014_test"\n', encoding="utf-8"
     )
     (root / "frontend/package-lock.json").write_text('{"lockfileVersion":3}', encoding="utf-8")
     manifest_path = root / "release/acceptance-manifest.json"
