@@ -22,6 +22,7 @@ Until secure endpoint execution and authorization are implemented and tested:
 - Billing webhooks are rejected when signature verification cannot be performed.
 - Public organization registration and checkout are disabled until secure tenant lifecycle and provider-backed billing are implemented.
 - The production business data plane is disabled by default until JWT verification and durable tenant isolation are configured.
+- Phase 10 provides a pure remediation planner and feature-gated Platform submission service with independent postcondition-verification contracts; it is not connected to public routes and remains disabled until exact Platform tools and a real tenant-scoped verifier are configured.
 - ROI outputs are illustrative models, not measured savings; control mappings are not compliance certification.
 - Deployment status is reported separately from test status.
 
@@ -32,6 +33,10 @@ Backend CI uses Python 3.12 and pytest. The CI workflow is the source of truth f
 ## Endpoint-agent identity (Phase 08)
 
 The endpoint-agent API uses Platform-approved, short-lived DPoP-bound access tokens. Aurontra verifies issuer/JWKS, audience, tenant/device subject, scopes, key thumbprint, fresh per-request proof, request URI/method, access-token hash, and a body-hash extension. Replay identifiers are persisted with forced PostgreSQL RLS. Enrollment, telemetry, and key rotation require separate scopes and active device lifecycle state. Agent authentication remains disabled by default; no production enablement is claimed until the approved identity provider is configured and the full data-plane release gate passes. See [docs/PHASE_08_AGENT_IDENTITY.md](docs/PHASE_08_AGENT_IDENTITY.md).
+
+## Safe remediation playbooks (Phase 10)
+
+Phase 10 adds deterministic, evidence-freshness-bounded plans for disk pressure, allowlisted service restarts, certificate expiry, and read-only high-CPU diagnostics. A gated internal service submits only validated plans through code-owned contracts and requires independent postcondition evidence. It performs no local shell, filesystem, process, service, or certificate side effects. Submission is disabled by default; public routes remain disabled until Platform tool registrations and a concrete tenant-scoped verifier are provisioned. See [Phase 10 design](docs/PHASE_10_SAFE_REMEDIATION.md) and [Phase 10 forensic audit](docs/audits/PHASE_10_FORENSIC_AUDIT.md).
 
 ## Governed action engine (Phase 09)
 
