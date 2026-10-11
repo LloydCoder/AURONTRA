@@ -7,14 +7,14 @@ groups:
           (
             sum(rate(aurontra_http_requests_total{status_class="5xx"}[5m]))
             /
-            clamp_min(sum(rate(aurontra_http_requests_total[5m])), 1)
-          ) > 0.01
+            clamp_min(sum(rate(aurontra_http_requests_total[5m])), 0.001)
+          ) > 0.001
         for: 10m
         labels:
           severity: page
         annotations:
-          summary: "Aurontra server error rate exceeds 1%"
-          description: "More than 1% of observed requests returned server errors for 10 minutes."
+          summary: "Aurontra server error rate exceeds 0.1%"
+          description: "More than 0.1% of observed requests returned server errors for 10 minutes."
       - alert: AurontraHighP95Latency
         expr: |
           histogram_quantile(
