@@ -20,6 +20,7 @@ class Device(Base):
     revoked_at = Column(DateTime(timezone=True), nullable=True)
     agent_version = Column(String(64), nullable=True)
     agent_key_thumbprint = Column(String(128), nullable=True)
+    agent_key_rotated_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
