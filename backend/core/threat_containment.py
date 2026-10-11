@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from typing import Protocol
 from uuid import NAMESPACE_URL, UUID, uuid5
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import settings
@@ -117,8 +117,18 @@ THREAT_CONTAINMENT_ACTION = GovernedActionDefinition(
 THREAT_CONTAINMENT_REGISTRY = GovernedActionRegistry((THREAT_CONTAINMENT_ACTION,))
 
 
-def _iso_utc(value: datetime | None) -> str | None:
-    if value is None:
+async def _commit_with_tenant_context(db: AsyncSession, tenant_id: str) -> None:
+    await db.commit()
+    # RLS settings use transaction-local scope and are cleared by COMMIT.
+    # Re-establish context for any subsequent query in this request.
+    if db.get_bind().dialect.name == "postgresql":
+        await db.execute(
+            text("SELECT set_config('app.current_org_id', :tenant_id, true)"),
+            {"tenant_id": tenant_id},
+        )
+
+
+def _iso_utc(value: datetime | None) -> str | None:    if value is None:
         return None
     if value.tzinfo is None or value.utcoffset() is None:
         value = value.replace(tzinfo=timezone.utc)
