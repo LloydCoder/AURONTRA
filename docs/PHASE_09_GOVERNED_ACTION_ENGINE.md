@@ -1,6 +1,6 @@
 # Phase 09 — Governed Action Engine
 
-**Status:** Implementation in progress on `phase-09-governed-action-engine`.  
+**Status:** Complete at implementation/CI level; PR #4 awaits merge.  
 **Authority:** Tinlance Agent Platform.  
 **Integration contract:** Tinlance Agent Platform SDK 1.0.0 / Platform API 1.1 / `governed-execution.v1`.  
 **Reviewed SDK source:** `LloydCoder/tinlance-agent-platform-sdk@615eef529831fdfbe37e050e45d9a1a8c4472291`.  
@@ -57,6 +57,14 @@ Production must not enable insecure HTTP. These settings do not open Aurontra's 
 7. A forensic audit confirms there is no local `subprocess`, `systemctl`, Certbot, shell, or filesystem side-effect fallback.
 8. Documentation clearly separates repository CI evidence from live Platform connectivity and production deployment.
 9. PR CI, PostgreSQL RLS/restore checks, and secret/history/archive scan are green before merge.
+
+## Verified CI evidence
+
+- PR head audited: `8dc412742f6c2c946e1c358d63d359855017a329`.
+- Backend CI: 325 passed, 1 skipped, 84.08% coverage; `pip check`, migration validation and compilation passed.
+- PostgreSQL RLS/backup-restore job passed; secret/history/archive scan passed.
+- Deployment was skipped by configuration. No live Platform or production runtime was verified.
+- Full forensic review: [docs/audits/PHASE_09_FORENSIC_AUDIT.md](audits/PHASE_09_FORENSIC_AUDIT.md).
 
 ## Explicit exclusions
 
