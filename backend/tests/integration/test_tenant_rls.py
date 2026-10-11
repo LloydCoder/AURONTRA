@@ -25,6 +25,8 @@ async def test_rls_scopes_organization_and_device_rows_and_rejects_cross_tenant_
     kb_global = f"kb-global-{suffix}"
     kb_draft_a = f"kb-draft-a-{suffix}"
     kb_draft_b = f"kb-draft-b-{suffix}"
+    finding_a = f"finding-a-{suffix}"
+    finding_b = f"finding-b-{suffix}"
     replay_b = f"replay-b-{suffix}"
     role = f"aurontra_rls_{suffix}"
     password = f"test-{suffix}-only"
@@ -33,10 +35,16 @@ async def test_rls_scopes_organization_and_device_rows_and_rejects_cross_tenant_
     try:
         await admin.execute(f'CREATE ROLE "{role}" LOGIN PASSWORD \'{password}\' NOSUPERUSER NOBYPASSRLS')
         await admin.execute(f'GRANT USAGE ON SCHEMA public TO "{role}"')
-        await admin.execute(f'GRANT SELECT, INSERT, UPDATE, DELETE ON organizations, devices, tickets, durable_jobs, outbox_events, agent_request_replays, remediation_intents, telemetry_records, knowledge_articles TO "{role}"')
+        await admin.execute(f'GRANT SELECT, INSERT, UPDATE, DELETE ON organizations, devices, tickets, durable_jobs, outbox_events, agent_request_replays, remediation_intents, telemetry_records, knowledge_articles, threat_findings TO "{role}"')
         await admin.execute(
             "INSERT INTO organizations (id, name, status) VALUES ($1, $1, 'active'), ($2, $2, 'active')",
             org_a, org_b,
+        )
+        await admin.execute(
+            "INSERT INTO threat_findings (id, org_id, threat_level, score, score_components, mitre_ttp, reason, evidence_sha256, evidence, containment_recommended, containment_verified, status) "
+            "VALUES ($1, $2, 'high', 90, '{\"z_score_points\":40}'::jsonb, 'T1071.001', 'test finding A', repeat('a', 64), '{\"protocol\":\"QUIC\"}'::jsonb, true, false, 'review_required'), "
+            "($3, $4, 'medium', 45, '{\"z_score_points\":25}'::jsonb, 'T1071', 'test finding B', repeat('b', 64), '{\"protocol\":\"HTTPS\"}'::jsonb, false, false, 'assessed')",
+            finding_a, org_a, finding_b, org_b,
         )
         await admin.execute(
             "INSERT INTO knowledge_articles (id, org_id, article_key, slug, title, category, content, content_sha256, status, version, approved_by, approved_at) "
@@ -116,6 +124,8 @@ async def test_rls_scopes_organization_and_device_rows_and_rejects_cross_tenant_
         assert [row["id"] for row in visible_telemetry] == [f"telemetry-a-{suffix}"]
         visible_knowledge = await app.fetch("SELECT id FROM knowledge_articles ORDER BY id")
         assert [row["id"] for row in visible_knowledge] == [kb_a, kb_draft_a, kb_global]
+        visible_findings = await app.fetch("SELECT id FROM threat_findings")
+        assert [row["id"] for row in visible_findings] == [finding_a]
 
         await app.execute("SELECT set_config('app.current_org_id', '', false)")
         assert await app.fetch("SELECT id FROM devices") == []
@@ -126,6 +136,7 @@ async def test_rls_scopes_organization_and_device_rows_and_rejects_cross_tenant_
         assert await app.fetch("SELECT id FROM remediation_intents") == []
         assert await app.fetch("SELECT id FROM telemetry_records") == []
         assert await app.fetch("SELECT id FROM knowledge_articles") == []
+        assert await app.fetch("SELECT id FROM threat_findings") == []
 
         await app.execute("SELECT set_config('app.current_org_id', $1, false)", org_a)
         with pytest.raises(asyncpg.InsufficientPrivilegeError):
@@ -133,6 +144,20 @@ async def test_rls_scopes_organization_and_device_rows_and_rejects_cross_tenant_
                 "INSERT INTO devices (id, org_id, name) VALUES ($1, $2, $3)",
                 f"forbidden-{suffix}", org_b, "cross-tenant-write",
             )
+        with pytest.raises(asyncpg.InsufficientPrivilegeError):
+            await app.execute(
+                "INSERT INTO threat_findings (id, org_id, threat_level, score, score_components, mitre_ttp, reason, evidence_sha256, evidence, containment_recommended, containment_verified, status) "
+                "VALUES ($1, $2, 'high', 90, '{}'::jsonb, 'T1071', 'cross tenant', repeat('c', 64), '{}'::jsonb, true, false, 'review_required')",
+                f"forbidden-finding-{suffix}", org_b,
+            )
+        with pytest.raises(asyncpg.InsufficientPrivilegeError):
+            await app.execute(
+                "INSERT INTO threat_findings (id, org_id, threat_level, score, score_components, mitre_ttp, reason, evidence_sha256, evidence, containment_recommended, containment_verified, status) "
+                "VALUES ($1, $2, 'high', 90, '{}'::jsonb, 'T1071', 'fake containment', repeat('d', 64), '{}'::jsonb, true, true, 'review_required')",
+                f"forbidden-containment-{suffix}", org_a,
+            )
+        assert await app.fetch("UPDATE threat_findings SET reason='tampered' WHERE id=$1 RETURNING id", finding_a) == []
+        assert await app.fetch("DELETE FROM threat_findings WHERE id=$1 RETURNING id", finding_a) == []
         with pytest.raises(asyncpg.InsufficientPrivilegeError):
             await app.execute(
                 "INSERT INTO knowledge_articles (id, org_id, article_key, slug, title, category, content, content_sha256, status, version, approved_by, approved_at) "
