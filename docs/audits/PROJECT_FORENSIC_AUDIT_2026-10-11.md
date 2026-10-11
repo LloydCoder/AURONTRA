@@ -64,6 +64,14 @@ Main CI and the secret/archive scan passed on the audit baseline. Historical pha
 
 The original CI had dependency consistency checks but no resolved-package vulnerability audit. A pinned `pip-audit==2.10.1` workflow and CI discovery step are now in the candidate branch. The first scan reported 78 vulnerability findings across 10 packages, including LangChain packages not referenced by the inspected application code, PyJWT, pytest, python-dotenv, python-multipart, and Starlette. The candidate removes the unused LangChain requirements and upgrades affected packages, including FastAPI/Starlette, Pydantic, PyJWT, pytest/pytest-asyncio, python-dotenv, and python-multipart. The post-upgrade audit reports no known vulnerabilities, and the dependency audit is now blocking in both the dedicated workflow and main CI. Candidate `161a0fa988a02ddd7ffe134bddcacff8d8d2f540` passed with 503 tests passed, 1 skipped, 85.08% coverage, PostgreSQL RLS/restore checks, dependency audit, and secret/archive scan. Final docs-only reconciliation still requires a fresh same-SHA run.
 
+### F-11 — Ecosystem client origin trust and response resource bounds
+
+The initial shared HTTP client accepted a caller-supplied `base_url` after scheme/path checks without proving that it matched the configured destination for the named service. That is an SSRF trust-boundary gap under the [OWASP SSRF Prevention Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html). The client now maps supported services to their configured origin settings and rejects unknown services and non-matching origins. Redirects remain disabled. This application-level allowlist is not a substitute for DNS-rebinding-resistant egress controls and private/link-local destination blocking at deployment time.
+
+The previous response-size check ran after `httpx` had buffered the full body, so it did not bound memory consumption. The client now consumes successful response bodies incrementally and stops once the 1 MiB cap is exceeded. Tenant-scoped operations also require a typed `TSICIdentityContext`; bridge operations for ThreatFade and FusionOps propagate that context, and the legacy threat-assessment bridge refuses mismatched organization context. Regression tests cover spoofed origins, unknown services, untyped context, oversized responses, and cross-tenant event mismatches. The final candidate must pass all CI/security workflows on the same SHA before this remediation is accepted.
+
+W3C trace-context parsing follows the current `00` format and rejects zero trace/span IDs, consistent with the [W3C Trace Context specification](https://www.w3.org/TR/trace-context/). Event-envelope shape is pinned to the TSIC contract rather than silently assumed from generic CloudEvents defaults.
+
 ### F-10 — TSIC trace-context contract version drift
 
 The TSIC contract registry listed `trace-context` as `1.0.0`, while `contracts/telemetry/trace-context.json` declares `schema_version: 1.1.0`. This is a cross-system compatibility defect. TSIC PR #54 updates the registry to `1.1.0` and pins the Aurontra adapter's per-contract versions. TSIC PR #54 merged as `619db9e264cdc71369de621c981bfc2ba1615a1d` after all 32 associated workflows passed on the reviewed candidate. The registry and Aurontra adapter now agree on trace-context `1.1.0`. Aurontra's shared client now validates typed identity context and event envelopes, binds tenant/execution/trace/correlation fields, emits a semver contract header, propagates W3C trace context, and rejects unsafe correlation/idempotency header values. Regression tests pass; live end-to-end propagation remains unverified.
@@ -86,8 +94,8 @@ The TSIC contract registry listed `trace-context` as `1.0.0`, while `contracts/t
 - [x] Identify phase-count inconsistency and production-readiness non-claims.
 - [x] Create a Phase 17 integration plan.
 - [ ] Map every phase acceptance criterion to current source, tests, migrations, and exact evidence.
-- [ ] Add a reproducible dependency vulnerability audit and triage results.
-- [ ] Maintain a release evidence ledger tied to exact candidate SHAs.
+- [x] Add a reproducible pinned dependency vulnerability audit and remediate the reported findings.
+- [x] Maintain a release evidence ledger tied to exact candidate SHAs; update the current candidate entry after the latest CI run completes.
 
 ### Gates 1–16 — Revalidate existing phase claims
 - Revalidate implementation and negative tests against the current candidate, not only historical prose.
