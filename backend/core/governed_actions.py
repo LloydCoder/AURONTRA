@@ -272,10 +272,6 @@ def _new_platform_client(
         or settings.AGENT_PLATFORM_TIMEOUT_SECONDS <= 0
     ):
         raise GovernedActionError("platform_timeout_invalid")
-    if not _bounded_text(settings.AGENT_PLATFORM_TENANT_ID, maximum=128):
-        raise GovernedActionError("platform_tenant_id_invalid")
-    if not _bounded_text(settings.AGENT_PLATFORM_SUBJECT_ID, maximum=256):
-        raise GovernedActionError("platform_subject_id_invalid")
     if settings.ENVIRONMENT.lower() == "production":
         if not settings.AGENT_PLATFORM_BASE_URL.startswith("https://"):
             raise GovernedActionError("platform_https_required")
