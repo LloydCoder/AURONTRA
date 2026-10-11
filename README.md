@@ -33,6 +33,12 @@ Backend CI uses Python 3.12 and pytest. The CI workflow is the source of truth f
 
 The endpoint-agent API uses Platform-approved, short-lived DPoP-bound access tokens. Aurontra verifies issuer/JWKS, audience, tenant/device subject, scopes, key thumbprint, fresh per-request proof, request URI/method, access-token hash, and a body-hash extension. Replay identifiers are persisted with forced PostgreSQL RLS. Enrollment, telemetry, and key rotation require separate scopes and active device lifecycle state. Agent authentication remains disabled by default; no production enablement is claimed until the approved identity provider is configured and the full data-plane release gate passes. See [docs/PHASE_08_AGENT_IDENTITY.md](docs/PHASE_08_AGENT_IDENTITY.md).
 
+## Governed action engine (Phase 09)
+
+The governed-action adapter is implemented in PR #4 against the pinned Tinlance Agent Platform SDK. It uses a code-owned action allowlist, trusted tenant/subject/agent/task context, stable idempotency keys, bounded JSON arguments, and Platform-owned policy/approval/execution/evidence. It does not execute local shell commands or treat execution acceptance as proof of a business outcome.
+
+The integration remains **disabled by default** and is not connected to public playbook routes. The environment-token configuration is single-tenant; multi-tenant deployment requires an approved tenant-scoped credential provider and per-tenant Platform registration. CI and PostgreSQL RLS/restore checks passed for the implementation, but deployment was skipped and no live Platform connection or production action is claimed. See [Phase 09 implementation](docs/PHASE_09_GOVERNED_ACTION_ENGINE.md) and the [Phase 09 forensic audit](docs/audits/PHASE_09_FORENSIC_AUDIT.md).
+
 ## Architecture and security principles
 
 1. Default-deny for privileged actions.

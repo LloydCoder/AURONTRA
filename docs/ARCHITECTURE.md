@@ -37,7 +37,11 @@ The reviewed Tinlance Agent System baseline is **tsic-19-agent-system-2026-10-08
 
 ## Current implementation status
 
-The current Aurontra repository has not yet completed the SDK integration. The public automation execution and threat containment routes are intentionally disabled until the governed execution path and verification contracts are implemented. This document defines the target boundary; it does not claim integration is already live.
+The Phase 09 governed-action adapter is implemented in PR #4 using the reviewed SDK commit `615eef529831fdfbe37e050e45d9a1a8c4472291`. It submits typed run/tool requests through the SDK, enforces code-owned action allowlists, binds requests to trusted tenant/subject/agent/task context, uses stable idempotency keys, preserves Platform evidence references, and never marks business postconditions verified. The adapter is disabled by default and is not wired to public automation routes. The static environment credential mode is single-tenant; multi-tenant use requires an approved tenant-scoped credential provider and per-tenant Platform agent/task binding. No live Platform connectivity, production credential, or deployed action has been verified.
+
+## Phase 09 SDK compatibility finding
+
+At the pinned SDK revision, `ClientConfig.as_client_kwargs()` emits `tracestate` and `trace_context` arguments that the pinned `AgentPlatform.__init__` does not accept. Aurontra uses the SDK's supported direct constructor and has a regression test. This avoids duplicating the transport but does not fix the upstream SDK defect; the SDK should receive a separate compatibility patch before consumers rely on the `ClientConfig` constructor path.
 
 ## Conformance and release
 

@@ -34,6 +34,19 @@ class Settings(BaseSettings):
     AGENT_ACCESS_TOKEN_MAX_TTL_SECONDS: int = 600
     AGENT_REPLAY_RETENTION_SECONDS: int = 300
 
+    # Governed execution consumes the official Platform SDK; disabled by default.
+    # The credential is injected by the deployment secret manager/environment.
+    AGENT_PLATFORM_ENABLED: bool = False
+    AGENT_PLATFORM_BASE_URL: str = ""
+    AGENT_PLATFORM_BEARER_TOKEN: str = ""
+    AGENT_PLATFORM_TENANT_ID: str = ""
+    AGENT_PLATFORM_SUBJECT_ID: str = ""
+    AGENT_PLATFORM_AGENT_ID: str = ""
+    AGENT_PLATFORM_TASK_ID: str = ""
+    AGENT_PLATFORM_API_VERSION: str = "1.1"
+    AGENT_PLATFORM_TIMEOUT_SECONDS: float = 10.0
+    AGENT_PLATFORM_ALLOW_INSECURE_HTTP: bool = False
+
     # Local development default; production must explicitly configure PostgreSQL.
     DATABASE_URL: str = "sqlite+aiosqlite:///./aurontra_dev.db"
     REDIS_URL: str = "redis://localhost:6379"

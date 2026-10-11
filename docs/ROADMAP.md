@@ -2,7 +2,7 @@
 
 Aurontra is a Tinlance ecosystem product and a consumer of the four-repository Tinlance Agent System. It must not duplicate the Agent Platform's authoritative identity, authorization, policy, approval, sandbox, secrets, execution, or evidence controls.
 
-Phases are sequential release gates. A phase is complete only after implementation, tests, documentation reconciliation, security review, and CI evidence. Passing CI does not certify production readiness. Phases 01–08 are complete at the repository/CI level with per-phase reviews; Phase 08 is merged at `830047fa11b75c97f2b7b67847cd28f727b3b4a8`, backend CI is green (300 passed, 1 skipped; 83.06% coverage), PostgreSQL RLS/backup-restore checks are green, and the history/archive scan is green. Phase 08's production issuer configuration and end-to-end agent deployment remain external release prerequisites. Phase 09 is the next implementation phase. The production data plane remains closed because several other business subsystems are not yet migrated.
+Phases are sequential release gates. A phase is complete only after implementation, tests, documentation reconciliation, security review, and CI evidence. Passing CI does not certify production readiness. Phases 01–09 are complete at the repository/CI level with per-phase reviews. Phase 08 is merged at `830047fa11b75c97f2b7b67847cd28f727b3b4a8`; Phase 09's governed-action adapter is implemented in PR #4 and passed CI (325 passed, 1 skipped; 84.08% coverage), PostgreSQL RLS/backup-restore checks, and secret/history/archive scan. The deployment job is skipped; no live Platform connection or production action is claimed. Phase 08 issuer configuration and Phase 09 tenant-scoped Platform credentials/tool registrations remain external release prerequisites. Phase 10 is next after the Phase 09 documentation reconciliation workflow is green. The production data plane remains closed because several other business subsystems are not yet migrated.
 
 | Phase | Scope | Acceptance evidence | Status |
 |---|---|---|---|
@@ -14,8 +14,8 @@ Phases are sequential release gates. A phase is complete only after implementati
 | 06 | Durable jobs and event processing | Retry, idempotency, replay, cancellation, lease recovery, dead-letter, outbox atomicity, PostgreSQL RLS and CI evidence | Complete — 285 passed, 1 skipped; PostgreSQL RLS/restore and history scan green; deployment remains intentionally skipped |
 | 07 | Organization/device lifecycle | Tenant-scoped provisioning, inactive-by-default devices, idempotent revocation, offboarding, retention, negative isolation tests | **Complete — PR #2 merged; 292 passed, PostgreSQL RLS/restore green; secret/history scan green** |
 | 08 | Authenticated endpoint agent | Platform-bound DPoP tokens, per-request proof, body binding, replay table/RLS, enrollment, scoped key rotation, telemetry, versioning tests | **Complete — PR #3 merged; 300 passed, 1 skipped; 83.06% coverage; PostgreSQL RLS/restore and secret/history scan green; production identity-provider configuration remains a release prerequisite** |
-| 09 | Governed action engine | Official Platform SDK/TSIC contracts, pinned reviewed dependency, policy/approval/evidence contract tests, no local execution authority | **Next — in progress after Phase 08 forensic audit** |
-| 10 | Safe remediation playbooks | Allowlist, least privilege, bounded execution and postcondition tests | Not started |
+| 09 | Governed action engine | Official Platform SDK/TSIC contracts, pinned reviewed dependency, policy/approval/evidence contract tests, no local execution authority | **Complete in PR #4 — 325 passed, 1 skipped; 84.08% coverage; PostgreSQL RLS/restore and secret/history/archive scan green; deployment skipped** |
+| 10 | Safe remediation playbooks | Allowlist, least privilege, bounded execution and postcondition tests | **Next — start after Phase 09 merge and forensic audit** |
 | 11 | Orchestration recovery | Crash, retry, duplicate, partial failure and reconciliation tests | Not started |
 | 12 | Telemetry pipeline | Provenance, freshness, schema, missing-data and retention tests | Not started |
 | 13 | Predictive resilience evaluation | Reproducible labeled benchmark and model-quality report | Not started |
@@ -34,6 +34,7 @@ Phases are sequential release gates. A phase is complete only after implementati
 ## Current implementation evidence
 
 - Public playbook execution is disabled; local playbooks are recommendation-only.
+- Phase 09 adds a pinned official Agent Platform SDK adapter with immutable action allowlists, trusted tenant/agent/task context, stable idempotency, Platform evidence references and fail-closed defaults. It is not wired to public routes and has no live production credential; multi-tenant credential-provider and endpoint/tool registration remain release prerequisites.
 - Threat containment is disabled until a real enforcement adapter and independent verification exist.
 - Billing webhook signatures fail closed; checkout and onboarding remain disabled.
 - JWT/JWKS verification and conservative role policy are implemented and tested. Ticket and device APIs now use durable tenant-scoped queries, require an active organization, and have cross-tenant negative tests. This is not a complete object-level authorization claim for every business route.
