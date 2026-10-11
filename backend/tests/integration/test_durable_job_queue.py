@@ -211,3 +211,89 @@ async def test_domain_write_and_outbox_event_share_transaction():
         assert await session.scalar(
             select(OutboxEvent).where(OutboxEvent.idempotency_key == "ticket:outbox-atomic-ticket:created")
         ) is None
+
+
+
+@pytest.mark.asyncio
+async def test_worker_processes_only_explicitly_registered_handlers():
+    from core.workers.job_worker import process_job_batch
+
+    async def echo(payload, idempotency_key):
+        assert idempotency_key == "worker:echo:1"
+        return {"echo": payload["value"]}
+
+    async with AsyncSessionLocal() as session:
+        await enqueue_job(
+            session, org_id="test-tenant", job_type="test.echo",
+            idempotency_key="worker:echo:1", payload={"value": "ok"},
+        )
+        await enqueue_job(
+            session, org_id="test-tenant", job_type="test.not_registered",
+            idempotency_key="worker:unknown:1", payload={},
+        )
+        await session.commit()
+
+    result = await process_job_batch(
+        session_factory=AsyncSessionLocal, worker_id="worker-batch",
+        handlers={"test.echo": echo}, limit=10,
+    )
+    assert result == {
+        "claimed": 2, "succeeded": 1,
+        "retrying_or_dead_letter": 1, "unsupported": 1,
+    }
+    async with AsyncSessionLocal() as session:
+        rows = list((await session.scalars(select(DurableJob).order_by(DurableJob.job_type))).all())
+        by_type = {row.job_type: row for row in rows}
+        assert by_type["test.echo"].status == "succeeded"
+        assert by_type["test.echo"].result_metadata == {"echo": "ok"}
+        assert by_type["test.not_registered"].status == "retry_wait"
+
+
+@pytest.mark.asyncio
+async def test_outbox_worker_publishes_and_records_durable_ack():
+    from core.workers.job_worker import publish_outbox_batch
+
+    delivered = []
+
+    async def publisher(payload, idempotency_key):
+        delivered.append((payload, idempotency_key))
+
+    async with AsyncSessionLocal() as session:
+        await enqueue_outbox_event(
+            session, org_id="test-tenant", aggregate_type="ticket", aggregate_id="tkt-worker",
+            event_type="ticket.created", idempotency_key="outbox:worker:1",
+            payload={"ticket_id": "tkt-worker"},
+        )
+        await session.commit()
+
+    result = await publish_outbox_batch(
+        session_factory=AsyncSessionLocal, worker_id="outbox-worker",
+        publisher=publisher, limit=10,
+    )
+    assert result == {"claimed": 1, "published": 1, "retrying_or_dead_letter": 0}
+    assert delivered == [({"ticket_id": "tkt-worker"}, "outbox:worker:1")]
+    async with AsyncSessionLocal() as session:
+        event = await session.scalar(select(OutboxEvent).where(OutboxEvent.idempotency_key == "outbox:worker:1"))
+        assert event.status == "published"
+        assert event.published_at is not None
+
+
+@pytest.mark.asyncio
+async def test_expired_job_lease_can_be_reclaimed_but_old_worker_cannot_commit():
+    async with AsyncSessionLocal() as session:
+        job, _ = await enqueue_job(
+            session, org_id="test-tenant", job_type="test.lease",
+            idempotency_key="lease-recovery", payload={}, max_attempts=3,
+        )
+        await claim_jobs(session, worker_id="worker-old", limit=1, lease_seconds=30)
+        job.lease_expires_at = datetime.now(timezone.utc) - timedelta(seconds=1)
+        await session.flush()
+        recovered = await claim_jobs(session, worker_id="worker-new", limit=1, lease_seconds=30)
+        assert len(recovered) == 1
+        assert recovered[0].id == job.id
+        assert recovered[0].attempts == 2
+        with pytest.raises(JobLeaseLost):
+            await complete_job(
+                session, job_id=job.id, org_id="test-tenant",
+                worker_id="worker-old", result_metadata={},
+            )
