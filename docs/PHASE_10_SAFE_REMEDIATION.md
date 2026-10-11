@@ -21,7 +21,7 @@ Phase 10 creates a deterministic, pure remediation planner for the existing disk
 - Service restart is disruptive, restricted to a small allowlist, and always requires approval.
 - Certificate renewal requires a syntactically valid public FQDN and a reference to domain-ownership evidence. The planner does not probe the domain and does not assert that a reference itself proves ownership; the calling service must resolve and validate it from the tenant's durable asset inventory.
 - High-CPU handling is read-only diagnostic collection; no process killing, reprioritization, or arbitrary command execution is proposed.
-- Every plan explicitly marks execution, Platform submission, enforcement, and business outcome verification as false. Plan IDs are deterministic for identical tenant/device/evidence/action inputs to support later idempotent orchestration; Phase 11 must persist plans and reconcile retries.
+- Every plan explicitly marks execution, Platform submission, enforcement, and business outcome verification as false. Plan IDs are deterministic for identical tenant/device/evidence/action inputs to support idempotent orchestration. Phase 11 now persists remediation intents, atomically creates job/outbox records, and schedules reconciliation; the production worker/scheduler remains unconfigured.
 - A plan is not an approval or authorization grant. Platform policy, approvals, budgets, sandbox, secrets, tool registration and evidence remain authoritative.
 
 ## Verification record
