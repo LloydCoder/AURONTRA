@@ -348,3 +348,19 @@ def test_client_factory_binds_trusted_context_and_w3c_trace(monkeypatch):
     assert config.timeout == 7.0
     assert re.fullmatch(r"00-[0-9a-f]{32}-[0-9a-f]{16}-01", config.traceparent)
     assert config.traceparent.split("-")[1] == action_id.hex
+
+
+def test_client_factory_rejects_noncanonical_base_url(monkeypatch):
+    from core.governed_actions import _new_platform_client
+
+    monkeypatch.setattr(settings, "AGENT_PLATFORM_ENABLED", True)
+    monkeypatch.setattr(settings, "AGENT_PLATFORM_BASE_URL", "https://platform.example.invalid/prefix")
+    monkeypatch.setattr(settings, "AGENT_PLATFORM_BEARER_TOKEN", "test-injected-credential")
+    monkeypatch.setattr(settings, "AGENT_PLATFORM_TENANT_ID", "trusted-tenant")
+    monkeypatch.setattr(settings, "AGENT_PLATFORM_SUBJECT_ID", "aurontra-service")
+    monkeypatch.setattr(settings, "AGENT_PLATFORM_API_VERSION", "1.1")
+    monkeypatch.setattr(settings, "AGENT_PLATFORM_TIMEOUT_SECONDS", 7.0)
+    monkeypatch.setattr(settings, "AGENT_PLATFORM_ALLOW_INSECURE_HTTP", False)
+    monkeypatch.setattr(settings, "ENVIRONMENT", "test")
+    with pytest.raises(GovernedActionError, match="platform_base_url_invalid"):
+        _new_platform_client(uuid4(), "run")
