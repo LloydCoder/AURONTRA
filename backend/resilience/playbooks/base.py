@@ -8,6 +8,14 @@ logger = logging.getLogger(__name__)
 _SAFE_DEVICE_ID = re.compile(r"^[A-Za-z0-9:_-]{1,128}$")
 
 
+def normalize_device_id(context: object) -> tuple[str, str]:
+    """Return a bounded display identifier; this is not an authorization check."""
+    raw_device_id = context.get("device_id") if isinstance(context, dict) else None
+    if isinstance(raw_device_id, str) and _SAFE_DEVICE_ID.fullmatch(raw_device_id):
+        return raw_device_id, "caller_supplied_unverified"
+    return "unknown", "not_provided_or_invalid"
+
+
 class BasePlaybook(ABC):
     name: str = "base"
 
@@ -38,13 +46,12 @@ class BasePlaybook(ABC):
     def _base_result(self, context: dict, **kwargs) -> dict:
         """Build the standard result envelope."""
         created_at = datetime.now(timezone.utc).isoformat()
-        raw_device_id = context.get("device_id") if isinstance(context, dict) else None
-        device_id = raw_device_id if isinstance(raw_device_id, str) and _SAFE_DEVICE_ID.fullmatch(raw_device_id) else "unknown"
+        device_id, device_id_source = normalize_device_id(context)
         result = {
             **kwargs,
             "playbook": self.name,
             "device_id": device_id,
-            "device_id_source": "caller_supplied_unverified" if device_id != "unknown" else "not_provided_or_invalid",
+            "device_id_source": device_id_source,
             "created_at": created_at,
             "executed_at": created_at,
             "timestamp_semantics": "recommendation_created",
