@@ -30,3 +30,14 @@ condition = "AND"
 regexTarget = "line"
 regexes = ['''THREAT_VERIFIER_HMAC_KEYS_JSON=''']
 paths = ['''\.env\.example''']
+
+# Narrow historical false positive: Gitleaks' generic-api-key rule matched a
+# descriptive audit-summary sentence, not a credential. Scope this exception to
+# the exact historical line, exact audit file, and generic-api-key rule only.
+[[allowlists]]
+description = "Historical audit prose false positive"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+regexes = ['''The current repository is materially beyond a scaffold: it contains a FastAPI backend, SQLAlchemy/Alembic persistence, tenant-isolation tests, endpoint-agent DPoP verification, governed Platform action adapters, durable job/outbox primitives, remediation planning/orchestration, telemetry evidence, offline prediction evaluation, AI service-desk assistance, threat findings, and a Platform-governed containment state machine.''']
+paths = ['''docs/audits/PROJECT_FORENSIC_AUDIT_2026-10-11\.md''']
