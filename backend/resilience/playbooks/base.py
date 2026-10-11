@@ -2,6 +2,7 @@
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
 import logging
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -35,11 +36,12 @@ class BasePlaybook(ABC):
 
     def _base_result(self, context: dict, **kwargs) -> dict:
         """Build the standard result envelope."""
+        created_at = datetime.now(timezone.utc).isoformat()
         return {
             "playbook": self.name,
             "device_id": context.get("device_id", "unknown"),
-            "created_at": datetime.now(timezone.utc).isoformat(),
-            "executed_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": created_at,
+            "executed_at": created_at,
             "timestamp_semantics": "recommendation_created",
             "status": "simulated",
             "execution_mode": "recommendation_only",
