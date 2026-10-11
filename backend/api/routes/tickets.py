@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from agents.ticket_resolver import resolve_ticket
 from core.database import get_tenant_db
+from core.job_queue import enqueue_outbox_event
 from ingestion.email_parser import parse_email
 from ingestion.webhook import parse_webhook
 from models.device import Device
@@ -99,6 +100,17 @@ async def _create_ticket(data: dict, request: Request, db: AsyncSession) -> Tick
     )
     db.add(ticket)
     await db.flush()
+    # The domain row and its event are committed atomically. Event consumers
+    # receive identifiers only; they must fetch tenant-scoped records themselves.
+    await enqueue_outbox_event(
+        db,
+        org_id=tenant_id,
+        aggregate_type="ticket",
+        aggregate_id=ticket.id,
+        event_type="ticket.created",
+        idempotency_key=f"ticket:{ticket.id}:created",
+        payload={"ticket_id": ticket.id, "source": source.value},
+    )
     # Commit before returning a success response so database errors are not
     # deferred to dependency teardown after the response has been sent.
     await db.commit()
