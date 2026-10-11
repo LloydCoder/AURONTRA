@@ -169,12 +169,56 @@ jobs:
           done
           echo "PostgreSQL custom-format backup restored with tenant data and RLS policies intact."
 
-  deploy:
-    name: Deploy to configured EC2 host
-    needs: [test, tenant-rls]
+  frontend:
+    name: Static customer console build and authenticated browser tests
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && needs.test.result == 'success' && vars.DEPLOY_ENABLED == 'true'
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+
+      - name: Validate and build dependency-free frontend
+        run: |
+          set -euo pipefail
+          python3 build.py --check
+          python3 build.py
+          python3 build.py --verify
+          cp dist/manifest.sha256 "$RUNNER_TEMP/frontend-manifest-before"
+          python3 build.py
+          cmp "$RUNNER_TEMP/frontend-manifest-before" dist/manifest.sha256
+
+      - name: Test build configuration and tamper detection
+        run: python3 -m unittest discover -s tests -v
+
+      - name: Install pinned Playwright test runner
+        timeout-minutes: 5
+        run: npm install --no-save --package-lock=false @playwright/test@1.64.0
+
+      - name: Install Chromium
+        timeout-minutes: 5
+        run: npx playwright install --with-deps chromium
+
+      - name: Run authenticated browser tests
+        timeout-minutes: 5
+        run: npm run test:e2e
+
+      - name: Upload browser test evidence
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: frontend-playwright-results
+          path: frontend/test-results/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  deploy:
+    name: Deploy to configured EC2 host
+    needs: [test, tenant-rls, frontend]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && needs.test.result == 'success' && needs.frontend.result == 'success' && vars.DEPLOY_ENABLED == 'true'
     environment: production
     env:
       EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
