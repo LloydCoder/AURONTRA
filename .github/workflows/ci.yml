@@ -18,6 +18,7 @@ jobs:
   test:
     name: Backend tests and static sanity
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: backend
@@ -32,7 +33,8 @@ jobs:
           cache-dependency-path: backend/requirements.txt
 
       - name: Install dependencies
-        run: python -m pip install -r requirements.txt
+        timeout-minutes: 5
+        run: python -m pip install --retries 2 --timeout 30 -r requirements.txt
 
       - name: Validate dependency environment
         run: python -m pip check
@@ -48,6 +50,7 @@ jobs:
         run: python -m compileall -q .
 
       - name: Run full test suite with coverage
+        timeout-minutes: 5
         env:
           # Explicit test-only opt-out; production defaults remain auth-required and data-plane-closed.
           AUTH_MODE: disabled
@@ -67,6 +70,7 @@ jobs:
   tenant-rls:
     name: PostgreSQL tenant isolation and RLS tests
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     services:
       postgres:
         image: postgres:16
@@ -96,7 +100,8 @@ jobs:
           cache: pip
           cache-dependency-path: backend/requirements.txt
       - name: Install dependencies
-        run: python -m pip install -r requirements.txt
+        timeout-minutes: 5
+        run: python -m pip install --retries 2 --timeout 30 -r requirements.txt
       - name: Validate dependency environment
         run: python -m pip check
       - name: Apply PostgreSQL migrations
@@ -108,7 +113,8 @@ jobs:
     name: Deploy to configured EC2 host
     needs: [test, tenant-rls]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && needs.test.result == 'success'
+    timeout-minutes: 15
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && needs.test.result == 'success' && vars.DEPLOY_ENABLED == 'true'
     environment: production
     env:
       EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
