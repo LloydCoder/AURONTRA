@@ -36,11 +36,11 @@ The open PR #8 was compared against current main. Its branch predates Phases 11â
 
 - The action definitions in Aurontra are client-side request contracts. The Platform operator must register the exact matching capabilities/tools and configure their approval, budget, sandbox, and evidence policies. This was not validated against a live Platform.
 - The `PostconditionVerifier` is an interface contract. A real implementation must query independently sourced, durable, tenant-scoped device state and return evidence IDs. Fake-verifier tests do not prove production verification.
-- No durable remediation intent or crash/retry/reconciliation record exists. Phase 11 must add durable intent persistence, leases, retry safety, idempotency/reconciliation and outbox coordination before any public workflow can be enabled.
+- Durable remediation intents, atomic job/outbox creation, idempotency, lease/retry primitives and stale-state reconciliation scheduling were added in Phase 11 and are covered by their own tests. The processor is injected and no production worker/scheduler is configured, so public workflow enablement remains blocked.
 - No public route invokes the service. This is intentional while the full data plane remains closed.
 - No endpoint-agent registration, production credential, live action, deployment, rollback, SLO, or customer environment was tested.
 - This is not a production-readiness certification, compliance attestation, or independent penetration test.
 
 ## Decision
 
-Phase 10 is accepted at repository/CI level because safe planning, gated SDK submission, independent-verification contracts, negative tests and forensic documentation are implemented and CI is green. Production execution remains explicitly blocked by missing exact Platform registrations, a concrete tenant-scoped verifier, durable orchestration, deployment configuration and full data-plane release gates. Proceed to Phase 11 without enabling public execution.
+Phase 10 is accepted at repository/CI level because safe planning, gated SDK submission, independent-verification contracts, negative tests and forensic documentation are implemented and CI is green. Production execution remains explicitly blocked by missing exact Platform registrations, a concrete tenant-scoped verifier, durable orchestration, deployment configuration and full data-plane release gates. Phase 11's repository/CI implementation is present; proceed to the next roadmap release gate only after current CI and security workflows pass, without enabling public execution.
