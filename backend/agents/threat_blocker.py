@@ -6,8 +6,12 @@ recommendation only. It does not enforce network or endpoint controls.
 A containment claim is valid only when an independent enforcement adapter
 reports success and a postcondition check verifies the resulting state.
 """
+import ipaddress
+import math
+import re
 import uuid
 from datetime import datetime, timezone
+from numbers import Real
 from typing import Optional
 import bridges.threatfade as threatfade_bridge
 
@@ -49,6 +53,7 @@ def map_mitre_ttp(
     Map signal characteristics to the most relevant MITRE ATT&CK TTP.
     Returns a TTP string like 'T1071.001'.
     """
+    protocol = str(protocol or "").upper()
     tags = tags or []
 
     # Tag-based mapping takes priority
@@ -117,6 +122,59 @@ def _compute_score(signal: dict) -> int:
     """Compute the legacy 0-100 heuristic score. It is not a probability."""
     return min(100, sum(_score_components(signal).values()))
 
+def _normalize_signal(signal: dict) -> dict:
+    """Validate and canonicalize supported evidence fields before scoring."""
+    if not isinstance(signal, dict):
+        raise ValueError("Signal must be an object.")
+    allowed = {"src_ip", "dst_port", "protocol", "bytes_out", "entropy", "z_score", "beacon_interval", "jitter"}
+    unknown = set(signal) - allowed
+    if unknown:
+        raise ValueError("Signal contains unsupported fields.")
+    normalized = dict(signal)
+
+    if normalized.get("src_ip") is not None:
+        try:
+            normalized["src_ip"] = str(ipaddress.ip_address(str(normalized["src_ip"])))
+        except ValueError as exc:
+            raise ValueError("src_ip must be a valid IPv4 or IPv6 address.") from exc
+
+    if normalized.get("protocol") is not None:
+        protocol = str(normalized["protocol"]).strip().upper()
+        if len(protocol) > 16 or (protocol and not re.fullmatch(r"[A-Z0-9._-]+", protocol)):
+            raise ValueError("protocol must be a short protocol token.")
+        normalized["protocol"] = protocol
+
+    bounds = {
+        "entropy": (0.0, 8.0),
+        "z_score": (-20.0, 100.0),
+        "jitter": (0.0, 1.0),
+    }
+    for key, (minimum, maximum) in bounds.items():
+        if key not in normalized or normalized[key] is None:
+            continue
+        value = normalized[key]
+        if isinstance(value, bool) or not isinstance(value, Real) or not math.isfinite(float(value)):
+            raise ValueError(f"{key} must be a finite number.")
+        if not minimum <= float(value) <= maximum:
+            raise ValueError(f"{key} is outside the supported range.")
+        normalized[key] = float(value)
+
+    integer_bounds = {
+        "dst_port": (1, 65535),
+        "bytes_out": (0, 9223372036854775807),
+        "beacon_interval": (1, 86400),
+    }
+    for key, (minimum, maximum) in integer_bounds.items():
+        if key not in normalized or normalized[key] is None:
+            continue
+        value = normalized[key]
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise ValueError(f"{key} must be an integer.")
+        if not minimum <= value <= maximum:
+            raise ValueError(f"{key} is outside the supported range.")
+    return normalized
+
+
 def analyse_signal(signal: dict) -> dict:
     """
     Analyse a raw network/telemetry signal and return a threat assessment.
@@ -147,6 +205,7 @@ def analyse_signal(signal: dict) -> dict:
             "reason": "No signal data provided",
         }
 
+    signal = _normalize_signal(signal)
     score_components = _score_components(signal)
     score = min(100, sum(score_components.values()))
     periodic_pattern = (
@@ -180,7 +239,7 @@ def analyse_signal(signal: dict) -> dict:
         reasons.append(f"Z-score {signal['z_score']:.2f} exceeds C2 threshold")
     if signal.get("entropy", 0) >= 6.5:
         reasons.append(f"Entropy {signal['entropy']:.2f} indicates obfuscation")
-    if signal.get("protocol", "").upper() == "QUIC":
+    if str(signal.get("protocol") or "").upper() == "QUIC":
         reasons.append("QUIC protocol observed; protocol alone is not evidence of malicious activity")
     if "beacon_interval" in signal:
         reasons.append("Regular beacon interval detected")
