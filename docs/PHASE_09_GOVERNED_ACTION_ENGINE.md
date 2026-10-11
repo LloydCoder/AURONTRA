@@ -13,6 +13,7 @@ Replace any product-side assumption that a playbook can authorize or execute an 
 ## Contract requirements
 
 - Use only the official SDK public surface; do not copy or reimplement its HTTP protocol.
+- The pinned SDK's `ClientConfig.as_client_kwargs()` currently supplies `tracestate` and `trace_context` keywords that the pinned `AgentPlatform.__init__` signature does not accept. Aurontra uses the SDK's validated direct constructor with the supported `traceparent` parameter and has a regression test for it; this compatibility finding is documented rather than silently bypassed.
 - Pin the SDK to the reviewed full commit SHA, not a branch or floating version.
 - Platform API version is exactly `1.1`; contract is `governed-execution.v1`.
 - Use the SDK's `POST /v1/agent-platform` transport with bearer credential, `X-Tinlance-API-Version`, request ID, idempotency key for consequential operations, and W3C trace context.
