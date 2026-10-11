@@ -1,6 +1,6 @@
 """Tenant organization lifecycle endpoints.
 
-Offboarding is a reversible administrative state transition, not destructive
+Offboarding is a controlled administrative state transition, not destructive
 deletion. The authenticated endpoint-agent protocol is implemented in Phase 08;
 provisioned devices remain inactive until that protocol is completed.
 """
