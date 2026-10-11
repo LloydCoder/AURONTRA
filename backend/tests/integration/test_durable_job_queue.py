@@ -62,7 +62,7 @@ async def test_job_claim_retry_and_success_lifecycle():
             error_code="TimeoutError: provider key=should_not_be_persisted", retry_after_seconds=1,
         )
         assert retry.status == "retry_wait"
-        assert retry.last_error_code == "TimeoutError__provider_key_should_not_be_persisted"[:100]
+        assert retry.last_error_code == "worker_error"
         retry.available_at = datetime.now(timezone.utc) - timedelta(seconds=1)
         await session.flush()
 
