@@ -70,6 +70,7 @@ def _serialize(finding: ThreatFinding) -> dict:
         "id": finding.id,
         "event_id": finding.event_id,
         "device_id": finding.device_id,
+        "telemetry_record_id": finding.telemetry_record_id,
         "source": finding.source,
         "detector_version": finding.detector_version,
         "observed_at": _iso_utc(finding.observed_at),
