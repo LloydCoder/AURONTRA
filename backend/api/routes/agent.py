@@ -9,7 +9,7 @@ from uuid import UUID, uuid4
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -233,6 +233,20 @@ async def ingest_agent_telemetry(
             "received_at": existing.received_at.isoformat(),
             "quality_flags": existing.quality_flags,
         }
+
+    if settings.TELEMETRY_MAX_EVENTS_PER_MINUTE < 1:
+        raise HTTPException(status_code=503, detail="Telemetry rate-limit configuration is invalid.")
+    recent_count = await db.scalar(select(func.count()).select_from(TelemetryRecord).where(
+        TelemetryRecord.org_id == identity.tenant_id,
+        TelemetryRecord.device_id == identity.device_id,
+        TelemetryRecord.received_at >= now - timedelta(seconds=60),
+    ))
+    if int(recent_count or 0) >= settings.TELEMETRY_MAX_EVENTS_PER_MINUTE:
+        return JSONResponse(
+            status_code=429,
+            headers={"Retry-After": "60"},
+            content={"detail": "Device telemetry rate limit exceeded.", "code": "TELEMETRY_RATE_LIMITED"},
+        )
 
     latest = await db.scalar(select(TelemetryRecord).where(
         TelemetryRecord.org_id == identity.tenant_id,
