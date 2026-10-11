@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import re
 from datetime import datetime, timedelta, timezone
-from typing import Any, Literal
+from typing import Any, Callable, Literal
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -22,6 +22,7 @@ from core.governed_actions import (
     PlatformGovernedActionExecutor,
     TrustedPlatformContext,
 )
+from tinlance_agent_platform_sdk.async_client import AsyncAgentPlatform
 
 PlaybookName = Literal["disk_full", "service_restart", "cert_expiry", "high_cpu"]
 ServiceName = Literal["application", "api", "worker"]
@@ -448,6 +449,79 @@ class PlaybookDispatchResult(BaseModel):
     business_outcome_verified: Literal[False] = False
 
 
+def _proposal_contract_problem(proposal: PlaybookActionProposal, now: datetime) -> str | None:
+    """Revalidate proposal shape at the dispatch boundary; do not trust a model alone."""
+    if proposal.action_key != _ACTION_KEY_BY_PLAYBOOK[proposal.playbook_name]:
+        return "proposal_action_key_mismatch"
+    if (
+        proposal.risk,
+        proposal.reversibility,
+        proposal.data_class,
+        proposal.blast_radius,
+    ) != _RISK_CONTRACT[proposal.playbook_name]:
+        return "proposal_risk_contract_mismatch"
+    if proposal.created_at > now + timedelta(seconds=MAX_CLOCK_SKEW_SECONDS):
+        return "proposal_created_in_future"
+    if not proposal.source_evidence_ids:
+        return "proposal_evidence_missing"
+
+    args = proposal.arguments
+    if proposal.playbook_name == "disk_full":
+        if set(args) != {"scope", "max_bytes", "minimum_age_seconds"}:
+            return "proposal_arguments_invalid"
+        if (
+            args["scope"] != "app_cache"
+            or type(args["max_bytes"]) is not int
+            or not 1 <= args["max_bytes"] <= MAX_CLEANUP_BYTES
+            or type(args["minimum_age_seconds"]) is not int
+            or not MIN_CLEANUP_AGE_SECONDS <= args["minimum_age_seconds"] <= 604_800
+            or proposal.resource != f"device:{proposal.device_id}"
+        ):
+            return "proposal_arguments_out_of_bounds"
+    elif proposal.playbook_name == "service_restart":
+        if set(args) != {"service_name", "grace_period_seconds", "health_check_timeout_seconds"}:
+            return "proposal_arguments_invalid"
+        service = args["service_name"]
+        if (
+            service not in {"application", "api", "worker"}
+            or type(args["grace_period_seconds"]) is not int
+            or not 0 <= args["grace_period_seconds"] <= 60
+            or type(args["health_check_timeout_seconds"]) is not int
+            or not 1 <= args["health_check_timeout_seconds"] <= 120
+            or proposal.resource != f"device:{proposal.device_id}/service:{service}"
+        ):
+            return "proposal_arguments_out_of_bounds"
+    elif proposal.playbook_name == "cert_expiry":
+        if set(args) != {"certificate_id", "domain"}:
+            return "proposal_arguments_invalid"
+        try:
+            certificate_id = UUID(args["certificate_id"])
+        except (TypeError, ValueError, AttributeError):
+            return "proposal_certificate_id_invalid"
+        if (
+            not _valid_public_domain(args["domain"])
+            or args["domain"] != args["domain"].lower().rstrip(".")
+            or proposal.resource != f"certificate:{certificate_id}"
+        ):
+            return "proposal_certificate_binding_invalid"
+    elif proposal.playbook_name == "high_cpu":
+        if set(args) != {"process_instance_id", "target_cpu_percent", "duration_seconds"}:
+            return "proposal_arguments_invalid"
+        try:
+            process_id = UUID(args["process_instance_id"])
+        except (TypeError, ValueError, AttributeError):
+            return "proposal_process_id_invalid"
+        if (
+            type(args["target_cpu_percent"]) is not int
+            or not 1 <= args["target_cpu_percent"] <= 99
+            or type(args["duration_seconds"]) is not int
+            or not 1 <= args["duration_seconds"] <= MAX_PROCESS_THROTTLE_SECONDS
+            or proposal.resource != f"device:{proposal.device_id}/process:{process_id}"
+        ):
+            return "proposal_arguments_out_of_bounds"
+    return None
+
+
 class PlaybookActionDispatcher:
     """Optional Platform dispatcher; empty registry and disabled flag fail closed."""
 
@@ -455,10 +529,10 @@ class PlaybookActionDispatcher:
         self,
         registry: GovernedActionRegistry | None = None,
         *,
-        client_factory: Any = None,
-        credential_provider: Any = None,
+        client_factory: Callable[[UUID, str, TrustedPlatformContext], AsyncAgentPlatform] | None = None,
+        credential_provider: Callable[[TrustedPlatformContext], str] | None = None,
     ) -> None:
-        self._registry = registry or GovernedActionRegistry()
+        self._registry = registry if registry is not None else GovernedActionRegistry()
         self._executor = PlatformGovernedActionExecutor(
             self._registry,
             client_factory=client_factory,
@@ -472,11 +546,14 @@ class PlaybookActionDispatcher:
         *,
         now: datetime | None = None,
     ) -> PlaybookDispatchResult:
-        now = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
+        now = _utc_now(now)
         if proposal.expires_at <= now:
             return self._not_dispatched(proposal, "proposal_expired")
         if proposal.tenant_id != context.tenant_id:
             return self._not_dispatched(proposal, "proposal_tenant_mismatch")
+        contract_problem = _proposal_contract_problem(proposal, now)
+        if contract_problem:
+            return self._not_dispatched(proposal, contract_problem)
         if not settings.AGENT_PLATFORM_ENABLED:
             return self._not_dispatched(proposal, "platform_integration_disabled")
 
