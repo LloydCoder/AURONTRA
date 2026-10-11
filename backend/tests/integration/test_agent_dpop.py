@@ -3,19 +3,23 @@ import base64
 import json
 import time
 import uuid
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 import jwt
 import pytest
 from cryptography.hazmat.primitives.asymmetric import ec
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import select
 
 from core import agent_auth
 from core.config import settings
 from core.database import AsyncSessionLocal
+from models.agent_request_replay import AgentRequestReplay
 from models.device import Device
 from models.durable_job import OutboxEvent
 from models.organization import Organization
+from models.telemetry_record import TelemetryRecord
 
 
 def _b64(raw: bytes) -> str:
@@ -32,8 +36,17 @@ def _jwk(private_key):
     }
 
 
-def _headers(monkeypatch, *, device_id, tenant_id, scope, path, body, device_key=None):
-    issuer_key = ec.generate_private_key(ec.SECP256R1())
+def _telemetry_payload(*, event_id=None, observed_at=None, **metrics):
+    return {
+        "event_id": str(event_id or uuid.uuid4()),
+        "schema_version": "1",
+        "timestamp": (observed_at or datetime.now(timezone.utc)).isoformat().replace("+00:00", "Z"),
+        **metrics,
+    }
+
+
+def _headers(monkeypatch, *, device_id, tenant_id, scope, path, body, device_key=None, issuer_key=None):
+    issuer_key = issuer_key or ec.generate_private_key(ec.SECP256R1())
     client_key = device_key or ec.generate_private_key(ec.SECP256R1())
     jwk = _jwk(client_key)
     thumbprint = agent_auth.jwk_thumbprint(jwk)
@@ -148,7 +161,7 @@ async def test_dpop_telemetry_accepts_enrolled_device_and_rejects_replayed_proof
         ))
         await db.commit()
 
-    payload = {"cpu_percent": 24.0, "memory_percent": 48.0, "disk_percent": 55.0}
+    payload = _telemetry_payload(cpu_percent=24.0, memory_percent=48.0, disk_percent=55.0)
     body = _body(payload)
     headers, _ = _headers(
         monkeypatch,
@@ -179,7 +192,7 @@ async def test_dpop_proof_is_bound_to_exact_body(monkeypatch):
         ))
         await db.commit()
 
-    signed_body = _body({"cpu_percent": 20.0})
+    signed_body = _body(_telemetry_payload(cpu_percent=20.0))
     headers, thumbprint = _headers(
         monkeypatch,
         device_id=device_id,
@@ -196,7 +209,7 @@ async def test_dpop_proof_is_bound_to_exact_body(monkeypatch):
     async with await _client() as client:
         response = await client.post(
             "/agent/v1/telemetry",
-            content=_body({"cpu_percent": 99.0}),
+            content=_body(_telemetry_payload(cpu_percent=99.0)),
             headers=headers,
         )
 
@@ -219,7 +232,7 @@ async def test_agent_scope_and_tenant_binding_are_enforced(monkeypatch):
         ))
         await db.commit()
 
-    payload = {"cpu_percent": 12.0}
+    payload = _telemetry_payload(cpu_percent=12.0)
     body = _body(payload)
     headers, _ = _headers(
         monkeypatch, device_id="other-tenant-device", tenant_id="test-tenant",
@@ -244,7 +257,7 @@ async def test_agent_scope_is_required_for_telemetry(monkeypatch):
         ))
         await db.commit()
 
-    body = _body({"cpu_percent": 18.0})
+    body = _body(_telemetry_payload(cpu_percent=18.0))
     headers, _ = _headers(
         monkeypatch, device_id=device_id, tenant_id="test-tenant",
         scope="aurontra:agent:enroll", path="/agent/v1/telemetry", body=body, device_key=key,
@@ -287,7 +300,7 @@ async def test_platform_scoped_key_rotation_rebinds_device_and_rejects_old_key(m
         assert device.agent_key_rotated_at is not None
         assert device.agent_version == "1.1.0"
 
-    telemetry_body = _body({"cpu_percent": 10.0})
+    telemetry_body = _body(_telemetry_payload(cpu_percent=10.0))
     old_headers, _ = _headers(
         monkeypatch, device_id=device_id, tenant_id="test-tenant",
         scope="aurontra:telemetry:write", path="/agent/v1/telemetry",
@@ -297,6 +310,157 @@ async def test_platform_scoped_key_rotation_rebinds_device_and_rejects_old_key(m
         old_key_response = await client.post("/agent/v1/telemetry", content=telemetry_body, headers=old_headers)
 
     assert old_key_response.status_code == 404
+
+
+
+@pytest.mark.asyncio
+async def test_telemetry_persists_provenance_and_duplicate_event_is_idempotent(monkeypatch):
+    device_id = "telemetry-durable-01"
+    key = ec.generate_private_key(ec.SECP256R1())
+    issuer_key = ec.generate_private_key(ec.SECP256R1())
+    thumbprint = agent_auth.jwk_thumbprint(_jwk(key))
+    async with AsyncSessionLocal() as db:
+        db.add(Device(
+            id=device_id, org_id="test-tenant", name="durable telemetry endpoint",
+            is_active=True, enrolled_at=datetime.now(timezone.utc),
+            agent_key_thumbprint=thumbprint, agent_version="3.1.0",
+        ))
+        await db.commit()
+
+    payload = _telemetry_payload(cpu_percent=22.0, memory_percent=41.0, disk_percent=58.0, process_count=12, platform="Linux")
+    body = _body(payload)
+    headers1, _ = _headers(monkeypatch, device_id=device_id, tenant_id="test-tenant",
+        scope="aurontra:telemetry:write", path="/agent/v1/telemetry", body=body, device_key=key, issuer_key=issuer_key)
+    headers2, _ = _headers(monkeypatch, device_id=device_id, tenant_id="test-tenant",
+        scope="aurontra:telemetry:write", path="/agent/v1/telemetry", body=body, device_key=key, issuer_key=issuer_key)
+    async with await _client() as client:
+        first = await client.post("/agent/v1/telemetry", content=body, headers=headers1)
+        duplicate = await client.post("/agent/v1/telemetry", content=body, headers=headers2)
+
+    assert first.status_code == 200, first.text
+    assert first.json()["persistence"] == "telemetry_evidence_recorded"
+    assert first.json()["duplicate"] is False
+    assert duplicate.status_code == 200, duplicate.text
+    assert duplicate.json()["duplicate"] is True
+    assert duplicate.json()["telemetry_id"] == first.json()["telemetry_id"]
+    async with AsyncSessionLocal() as db:
+        rows = list((await db.scalars(select(TelemetryRecord).where(
+            TelemetryRecord.org_id == "test-tenant", TelemetryRecord.device_id == device_id
+        ))).all())
+        events = list((await db.scalars(select(OutboxEvent).where(
+            OutboxEvent.org_id == "test-tenant", OutboxEvent.event_type == "telemetry.accepted"
+        ))).all())
+        assert len(rows) == 1
+        assert rows[0].key_thumbprint == thumbprint
+        assert rows[0].agent_version == "3.1.0"
+        assert rows[0].request_hash
+        assert rows[0].payload_hash
+        assert rows[0].proof_jti
+        assert rows[0].retention_expires_at > rows[0].received_at
+        assert len(events) == 1
+
+
+@pytest.mark.asyncio
+async def test_same_telemetry_event_id_with_changed_content_returns_409_and_consumes_proof(monkeypatch):
+    device_id = "telemetry-conflict-01"
+    key = ec.generate_private_key(ec.SECP256R1())
+    issuer_key = ec.generate_private_key(ec.SECP256R1())
+    thumbprint = agent_auth.jwk_thumbprint(_jwk(key))
+    async with AsyncSessionLocal() as db:
+        db.add(Device(
+            id=device_id, org_id="test-tenant", name="conflict telemetry endpoint",
+            is_active=True, enrolled_at=datetime.now(timezone.utc),
+            agent_key_thumbprint=thumbprint,
+        ))
+        await db.commit()
+    event_id = uuid.uuid4()
+    timestamp = datetime.now(timezone.utc)
+    body1 = _body(_telemetry_payload(event_id=event_id, observed_at=timestamp, cpu_percent=10.0))
+    body2 = _body(_telemetry_payload(event_id=event_id, observed_at=timestamp, cpu_percent=99.0))
+    headers1, _ = _headers(monkeypatch, device_id=device_id, tenant_id="test-tenant",
+        scope="aurontra:telemetry:write", path="/agent/v1/telemetry", body=body1, device_key=key, issuer_key=issuer_key)
+    headers2, _ = _headers(monkeypatch, device_id=device_id, tenant_id="test-tenant",
+        scope="aurontra:telemetry:write", path="/agent/v1/telemetry", body=body2, device_key=key, issuer_key=issuer_key)
+    async with await _client() as client:
+        first = await client.post("/agent/v1/telemetry", content=body1, headers=headers1)
+        conflict = await client.post("/agent/v1/telemetry", content=body2, headers=headers2)
+    assert first.status_code == 200, first.text
+    assert conflict.status_code == 409
+    async with AsyncSessionLocal() as db:
+        rows = list((await db.scalars(select(TelemetryRecord).where(
+            TelemetryRecord.org_id == "test-tenant", TelemetryRecord.device_id == device_id
+        ))).all())
+        replays = list((await db.scalars(select(AgentRequestReplay).where(
+            AgentRequestReplay.org_id == "test-tenant", AgentRequestReplay.device_id == device_id
+        ))).all())
+        assert len(rows) == 1
+        assert len(replays) == 2
+
+
+@pytest.mark.asyncio
+async def test_stale_and_future_telemetry_timestamps_are_rejected(monkeypatch):
+    device_id = "telemetry-time-boundary"
+    key = ec.generate_private_key(ec.SECP256R1())
+    issuer_key = ec.generate_private_key(ec.SECP256R1())
+    thumbprint = agent_auth.jwk_thumbprint(_jwk(key))
+    async with AsyncSessionLocal() as db:
+        db.add(Device(
+            id=device_id, org_id="test-tenant", name="timestamp boundary device",
+            is_active=True, enrolled_at=datetime.now(timezone.utc),
+            agent_key_thumbprint=thumbprint,
+        ))
+        await db.commit()
+
+    bodies = [
+        _body(_telemetry_payload(observed_at=datetime.now(timezone.utc) - timedelta(seconds=settings.TELEMETRY_MAX_AGE_SECONDS + 10), cpu_percent=10.0)),
+        _body(_telemetry_payload(observed_at=datetime.now(timezone.utc) + timedelta(seconds=settings.TELEMETRY_FUTURE_SKEW_SECONDS + 10), cpu_percent=10.0)),
+    ]
+    responses = []
+    async with await _client() as client:
+        for body in bodies:
+            headers, _ = _headers(monkeypatch, device_id=device_id, tenant_id="test-tenant",
+                scope="aurontra:telemetry:write", path="/agent/v1/telemetry", body=body, device_key=key, issuer_key=issuer_key)
+            responses.append(await client.post("/agent/v1/telemetry", content=body, headers=headers))
+    assert [response.status_code for response in responses] == [422, 422]
+    async with AsyncSessionLocal() as db:
+        assert await db.scalar(select(TelemetryRecord.id).where(TelemetryRecord.device_id == device_id)) is None
+
+
+@pytest.mark.asyncio
+async def test_out_of_order_telemetry_is_stored_but_does_not_overwrite_current_score(monkeypatch):
+    device_id = "telemetry-out-of-order"
+    key = ec.generate_private_key(ec.SECP256R1())
+    issuer_key = ec.generate_private_key(ec.SECP256R1())
+    thumbprint = agent_auth.jwk_thumbprint(_jwk(key))
+    async with AsyncSessionLocal() as db:
+        db.add(Device(
+            id=device_id, org_id="test-tenant", name="out-of-order device",
+            is_active=True, enrolled_at=datetime.now(timezone.utc),
+            agent_key_thumbprint=thumbprint,
+        ))
+        await db.commit()
+    now = datetime.now(timezone.utc)
+    first_body = _body(_telemetry_payload(observed_at=now - timedelta(seconds=10), cpu_percent=10.0, memory_percent=20.0, disk_percent=30.0))
+    older_body = _body(_telemetry_payload(observed_at=now - timedelta(seconds=20), cpu_percent=98.0, memory_percent=99.0, disk_percent=99.0))
+    headers1, _ = _headers(monkeypatch, device_id=device_id, tenant_id="test-tenant",
+        scope="aurontra:telemetry:write", path="/agent/v1/telemetry", body=first_body, device_key=key, issuer_key=issuer_key)
+    headers2, _ = _headers(monkeypatch, device_id=device_id, tenant_id="test-tenant",
+        scope="aurontra:telemetry:write", path="/agent/v1/telemetry", body=older_body, device_key=key, issuer_key=issuer_key)
+    async with await _client() as client:
+        first = await client.post("/agent/v1/telemetry", content=first_body, headers=headers1)
+        older = await client.post("/agent/v1/telemetry", content=older_body, headers=headers2)
+    assert first.status_code == 200, first.text
+    assert first.json()["current_state_updated"] is True
+    assert older.status_code == 200, older.text
+    assert older.json()["current_state_updated"] is False
+    assert "out_of_order" in older.json()["quality_flags"]
+    async with AsyncSessionLocal() as db:
+        device = await db.get(Device, device_id)
+        rows = list((await db.scalars(select(TelemetryRecord).where(
+            TelemetryRecord.org_id == "test-tenant", TelemetryRecord.device_id == device_id
+        ))).all())
+        assert len(rows) == 2
+        assert device.resilience_score == first.json()["resilience"]["score"]
 
 
 @pytest.mark.asyncio
@@ -323,7 +487,7 @@ async def test_revoked_agent_cannot_send_telemetry(monkeypatch):
         ))
         await db.commit()
 
-    body = _body({"cpu_percent": 14.0})
+    body = _body(_telemetry_payload(cpu_percent=14.0))
     headers, _ = _headers(
         monkeypatch, device_id=device_id, tenant_id="test-tenant",
         scope="aurontra:telemetry:write", path="/agent/v1/telemetry", body=body, device_key=key,
@@ -332,3 +496,113 @@ async def test_revoked_agent_cannot_send_telemetry(monkeypatch):
         response = await client.post("/agent/v1/telemetry", content=body, headers=headers)
 
     assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_partial_telemetry_is_evidence_only_and_cannot_overwrite_resilience_score(monkeypatch):
+    device_id = "telemetry-partial-score"
+    key = ec.generate_private_key(ec.SECP256R1())
+    thumbprint = agent_auth.jwk_thumbprint(_jwk(key))
+    async with AsyncSessionLocal() as db:
+        db.add(Device(
+            id=device_id, org_id="test-tenant", name="partial telemetry endpoint",
+            is_active=True, enrolled_at=datetime.now(timezone.utc),
+            agent_key_thumbprint=thumbprint, resilience_score=73,
+        ))
+        await db.commit()
+
+    body = _body(_telemetry_payload(cpu_percent=99.0))
+    headers, _ = _headers(
+        monkeypatch, device_id=device_id, tenant_id="test-tenant",
+        scope="aurontra:telemetry:write", path="/agent/v1/telemetry", body=body, device_key=key,
+    )
+    async with await _client() as client:
+        response = await client.post("/agent/v1/telemetry", content=body, headers=headers)
+
+    assert response.status_code == 200, response.text
+    assert response.json()["current_state_updated"] is False
+    assert response.json()["resilience"]["score"] is None
+    assert response.json()["resilience"]["status"] == "insufficient_data"
+    assert "memory_percent" in response.json()["missing_metrics"]
+    assert "disk_percent" in response.json()["missing_metrics"]
+
+    async with AsyncSessionLocal() as db:
+        device = await db.get(Device, device_id)
+        record = await db.scalar(select(TelemetryRecord).where(TelemetryRecord.device_id == device_id))
+        assert device.resilience_score == 73
+        assert record.computed_score is None
+        assert record.score_status == "insufficient_data"
+        assert set(record.missing_metrics) == {"memory_percent", "disk_percent"}
+
+
+@pytest.mark.asyncio
+async def test_telemetry_rate_limit_bounds_device_ingestion_and_consumes_rejected_proof(monkeypatch):
+    device_id = "telemetry-rate-limited"
+    key = ec.generate_private_key(ec.SECP256R1())
+    issuer_key = ec.generate_private_key(ec.SECP256R1())
+    thumbprint = agent_auth.jwk_thumbprint(_jwk(key))
+    monkeypatch.setattr(settings, "TELEMETRY_MAX_EVENTS_PER_MINUTE", 1)
+    async with AsyncSessionLocal() as db:
+        db.add(Device(
+            id=device_id, org_id="test-tenant", name="rate-limited endpoint",
+            is_active=True, enrolled_at=datetime.now(timezone.utc),
+            agent_key_thumbprint=thumbprint,
+        ))
+        await db.commit()
+
+    body1 = _body(_telemetry_payload(cpu_percent=20.0, memory_percent=30.0, disk_percent=40.0))
+    body2 = _body(_telemetry_payload(cpu_percent=21.0, memory_percent=31.0, disk_percent=41.0))
+    headers1, _ = _headers(monkeypatch, device_id=device_id, tenant_id="test-tenant",
+        scope="aurontra:telemetry:write", path="/agent/v1/telemetry", body=body1, device_key=key, issuer_key=issuer_key)
+    headers2, _ = _headers(monkeypatch, device_id=device_id, tenant_id="test-tenant",
+        scope="aurontra:telemetry:write", path="/agent/v1/telemetry", body=body2, device_key=key, issuer_key=issuer_key)
+    async with await _client() as client:
+        first = await client.post("/agent/v1/telemetry", content=body1, headers=headers1)
+        limited = await client.post("/agent/v1/telemetry", content=body2, headers=headers2)
+
+    assert first.status_code == 200, first.text
+    assert limited.status_code == 429
+    assert limited.headers["retry-after"] == "60"
+    assert limited.json()["code"] == "TELEMETRY_RATE_LIMITED"
+    async with AsyncSessionLocal() as db:
+        rows = list((await db.scalars(select(TelemetryRecord).where(
+            TelemetryRecord.device_id == device_id
+        ))).all())
+        proofs = list((await db.scalars(select(AgentRequestReplay).where(
+            AgentRequestReplay.device_id == device_id
+        ))).all())
+    assert len(rows) == 1
+    assert len(proofs) == 2
+
+
+@pytest.mark.asyncio
+async def test_payload_device_id_is_only_a_hint_and_must_match_authenticated_identity(monkeypatch):
+    device_id = "telemetry-bound-device"
+    key = ec.generate_private_key(ec.SECP256R1())
+    thumbprint = agent_auth.jwk_thumbprint(_jwk(key))
+    async with AsyncSessionLocal() as db:
+        db.add(Device(
+            id=device_id, org_id="test-tenant", name="identity-bound endpoint",
+            is_active=True, enrolled_at=datetime.now(timezone.utc),
+            agent_key_thumbprint=thumbprint,
+        ))
+        await db.commit()
+
+    body = _body(_telemetry_payload(
+        device_id="attacker-selected-device",
+        cpu_percent=20.0,
+        memory_percent=30.0,
+        disk_percent=40.0,
+    ))
+    headers, _ = _headers(
+        monkeypatch, device_id=device_id, tenant_id="test-tenant",
+        scope="aurontra:telemetry:write", path="/agent/v1/telemetry", body=body, device_key=key,
+    )
+    async with await _client() as client:
+        response = await client.post("/agent/v1/telemetry", content=body, headers=headers)
+
+    assert response.status_code == 403
+    async with AsyncSessionLocal() as db:
+        assert await db.scalar(select(TelemetryRecord.id).where(
+            TelemetryRecord.device_id == device_id
+        )) is None

@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     # Secure-by-default: the business data plane stays closed until auth and tenant-scoped persistence are ready.
     AUTH_MODE: str = "required"
     DATA_PLANE_ENABLED: bool = False
-    DB_SCHEMA_REVISION: str = "0005_agent_dpop_identity"
+    DB_SCHEMA_REVISION: str = "0007_telemetry_evidence"
     TEST_MODE: bool = False
     JWT_JWKS_URL: str = ""
     JWT_ISSUER: str = ""
@@ -33,6 +33,12 @@ class Settings(BaseSettings):
     AGENT_CLOCK_SKEW_SECONDS: int = 30
     AGENT_ACCESS_TOKEN_MAX_TTL_SECONDS: int = 600
     AGENT_REPLAY_RETENTION_SECONDS: int = 300
+
+    # Telemetry evidence is fresh-windowed and retained for a bounded period.
+    TELEMETRY_MAX_AGE_SECONDS: int = 300
+    TELEMETRY_FUTURE_SKEW_SECONDS: int = 30
+    TELEMETRY_RETENTION_DAYS: int = 90
+    TELEMETRY_MAX_EVENTS_PER_MINUTE: int = 120
 
     # Governed execution consumes the official Platform SDK; disabled by default.
     # The credential is injected by the deployment secret manager/environment.
