@@ -33,6 +33,29 @@ def upgrade():
             'USING ("org_id"::text = current_setting(\'app.current_org_id\', true)) '
             'WITH CHECK ("org_id"::text = current_setting(\'app.current_org_id\', true))'
         ))
+        op.execute(sa.text("""
+            CREATE FUNCTION reject_report_artifact_mutation() RETURNS trigger AS $
+            BEGIN
+                RAISE EXCEPTION 'report artifacts are append-only';
+            END;
+            $ LANGUAGE plpgsql
+        """))
+        op.execute(sa.text("""
+            CREATE TRIGGER report_artifacts_no_update
+            BEFORE UPDATE OR DELETE ON report_artifacts
+            FOR EACH ROW EXECUTE FUNCTION reject_report_artifact_mutation()
+        """))
+    else:
+        op.execute(sa.text("""
+            CREATE TRIGGER report_artifacts_no_update
+            BEFORE UPDATE ON report_artifacts
+            BEGIN SELECT RAISE(ABORT, 'report artifacts are append-only'); END
+        """))
+        op.execute(sa.text("""
+            CREATE TRIGGER report_artifacts_no_delete
+            BEFORE DELETE ON report_artifacts
+            BEGIN SELECT RAISE(ABORT, 'report artifacts are append-only'); END
+        """))
 
 
 def downgrade():
@@ -40,6 +63,11 @@ def downgrade():
     if bind.execute(sa.text("SELECT COUNT(*) FROM report_artifacts")).scalar_one():
         raise RuntimeError("Cannot drop report artifacts with persisted evidence; use a reviewed archive procedure.")
     if bind.dialect.name == "postgresql":
+        op.execute(sa.text('DROP TRIGGER IF EXISTS report_artifacts_no_update ON report_artifacts'))
+        op.execute(sa.text("DROP FUNCTION IF EXISTS reject_report_artifact_mutation()"))
         op.execute(sa.text('DROP POLICY IF EXISTS "tenant_isolation_report_artifacts" ON report_artifacts'))
+    else:
+        op.execute(sa.text("DROP TRIGGER IF EXISTS report_artifacts_no_update"))
+        op.execute(sa.text("DROP TRIGGER IF EXISTS report_artifacts_no_delete"))
     op.drop_index("ix_report_artifacts_org_created", table_name="report_artifacts")
     op.drop_table("report_artifacts")
