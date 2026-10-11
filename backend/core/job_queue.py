@@ -247,6 +247,34 @@ async def fail_job(
     return job
 
 
+async def dead_letter_job(
+    session: AsyncSession,
+    *,
+    job_id: str,
+    org_id: str,
+    worker_id: str,
+    error_code: str = "unsupported_job",
+) -> DurableJob:
+    """Terminally reject a leased job that cannot be safely dispatched."""
+    now = _now()
+    job = await session.scalar(
+        select(DurableJob).where(
+            DurableJob.id == job_id, DurableJob.org_id == org_id
+        ).with_for_update()
+    )
+    if job is None:
+        raise LookupError("Job not found.")
+    _assert_lease(job, worker_id, now)
+    job.status = "dead_letter"
+    job.last_error_code = _safe_error_code(error_code)
+    job.completed_at = now
+    job.lease_owner = None
+    job.lease_expires_at = None
+    job.updated_at = now
+    await session.flush()
+    return job
+
+
 async def cancel_job(
     session: AsyncSession, *, job_id: str, org_id: str
 ) -> DurableJob:
