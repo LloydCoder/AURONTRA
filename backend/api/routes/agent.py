@@ -136,7 +136,7 @@ async def ingest_agent_telemetry(
     payload: AgentTelemetryPayload,
     request: Request,
     identity: AgentIdentity = Depends(get_agent_identity),
-    db: AsyncSession = Depends(get_tenant_db),
+    db: AsyncSession = Depends(get_agent_tenant_db),
 ):
     if "aurontra:telemetry:write" not in identity.scopes:
         raise HTTPException(status_code=403, detail="Telemetry write scope is required.")
