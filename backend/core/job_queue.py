@@ -427,10 +427,6 @@ async def mark_outbox_published(
     org_id: str,
     worker_id: str,
 ) -> OutboxEvent:
-    if not 1 <= max_attempts <= 100:
-        raise ValueError("max_attempts must be between 1 and 100")
-    if retry_after_seconds is not None and not 1 <= retry_after_seconds <= 86400:
-        raise ValueError("retry_after_seconds must be between 1 and 86400")
     now = _now()
     event = await session.scalar(
         select(OutboxEvent).where(
@@ -461,6 +457,10 @@ async def fail_outbox_event(
     retry_after_seconds: int | None = None,
     max_attempts: int = 10,
 ) -> OutboxEvent:
+    if not 1 <= max_attempts <= 100:
+        raise ValueError("max_attempts must be between 1 and 100")
+    if retry_after_seconds is not None and not 1 <= retry_after_seconds <= 86400:
+        raise ValueError("retry_after_seconds must be between 1 and 86400")
     now = _now()
     event = await session.scalar(
         select(OutboxEvent).where(
