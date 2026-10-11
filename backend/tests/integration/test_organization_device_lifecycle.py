@@ -112,3 +112,26 @@ async def test_offboarded_organization_can_only_inspect_lifecycle_state():
     assert response.status_code == 200
     assert response.json()["status"] == "offboarded"
     assert blocked_business_access.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_telemetry_rejects_active_flag_without_enrollment_proof():
+    async with AsyncSessionLocal() as db:
+        db.add(Device(
+            id="legacy-active",
+            org_id="test-tenant",
+            name="legacy device",
+            is_active=True,
+            enrolled_at=None,
+        ))
+        await db.commit()
+
+    from main import app
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post("/devices/telemetry", json={
+            "device_id": "legacy-active",
+            "cpu_percent": 25,
+        })
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Enrolled device not found"
