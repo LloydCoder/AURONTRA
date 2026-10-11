@@ -38,7 +38,7 @@ async def get_current_organization(
 @router.post("/offboard")
 async def offboard_organization(
     request: Request,
-    db: AsyncSession = Depends(get_tenant_db),
+    db: AsyncSession = Depends(get_tenant_db_lifecycle),
 ):
     """Disable the tenant and every provisioned endpoint without deleting evidence."""
     org = await db.scalar(
