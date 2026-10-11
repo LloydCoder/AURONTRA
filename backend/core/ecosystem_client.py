@@ -16,8 +16,10 @@ from typing import Any
 from urllib.parse import urlsplit
 
 import httpx
+from pydantic import ValidationError
 
 from core.config import settings
+from core.tsic_contracts import TSICIdentityContext, validate_event_envelope
 
 logger = logging.getLogger(__name__)
 CONTRACT_VERSION = "1.0.0"
@@ -107,6 +109,7 @@ async def request_json(
     idempotency_key: str | None = None,
     traceparent: str | None = None,
     correlation_id: str | None = None,
+    identity_context: TSICIdentityContext | dict[str, Any] | None = None,
     timeout_seconds: float | None = None,
     transport: httpx.AsyncBaseTransport | None = None,
 ) -> Any:
