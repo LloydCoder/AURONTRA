@@ -37,4 +37,4 @@ Phase 10 creates a deterministic, pure remediation planner for the existing disk
 2. Existing playbook and full backend tests remain green.
 3. Public automation remains disabled and the Platform adapter and remediation submission remain disabled by default.
 4. Submission requires exact Platform tool registrations and an independently implemented tenant-scoped verifier; the current verifier is an injected protocol contract tested with fakes, not a production integration.
-4. Phase-specific forensic audit documents exactly what is implemented and what still requires external registration/deployment.
+5. Phase-specific forensic audit documents exactly what is implemented and what still requires external registration/deployment.

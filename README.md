@@ -22,13 +22,13 @@ Until secure endpoint execution and authorization are implemented and tested:
 - Billing webhooks are rejected when signature verification cannot be performed.
 - Public organization registration and checkout are disabled until secure tenant lifecycle and provider-backed billing are implemented.
 - The production business data plane is disabled by default until JWT verification and durable tenant isolation are configured.
-- Phase 10 provides a pure remediation planner and feature-gated Platform submission service with independent postcondition-verification contracts; it is not connected to public routes and remains disabled until exact Platform tools and a real tenant-scoped verifier are configured.
+- Phase 10 provides a pure remediation planner and feature-gated Platform submission service with independent postcondition-verification contracts. Phase 11 adds durable tenant-scoped remediation intents, atomic job/outbox creation, crash-safe unknown-outcome state, and idempotent reconciliation scheduling. Neither phase is wired to a production worker or public route; submission remains disabled until exact Platform tools, a real tenant-scoped verifier, and a scheduler are configured.
 - ROI outputs are illustrative models, not measured savings; control mappings are not compliance certification.
 - Deployment status is reported separately from test status.
 
 ## Development and verification
 
-Backend CI uses Python 3.12 and pytest. The CI workflow is the source of truth for currently enforced checks. Durable job/outbox worker primitives are covered by CI; production scheduler/broker configuration, frontend build/integration, remaining subsystem persistence, inbound billing-webhook idempotency, and deployment verification remain release gates. Ticket and device APIs now use durable tenant-scoped persistence; CI verifies cross-tenant behavior, PostgreSQL RLS for tenant-owned tables (including durable replay records), and a backup/restore smoke test. Other business modules remain gated, and no production database migration or tenant-isolated data-plane release is claimed.
+Backend CI uses Python 3.12 and pytest. The CI workflow is the source of truth for currently enforced checks. Durable job/outbox worker primitives are covered by CI; production scheduler/broker configuration, frontend build/integration, remaining subsystem persistence, inbound billing-webhook idempotency, and deployment verification remain release gates. Ticket and device APIs now use durable tenant-scoped persistence; CI verifies cross-tenant behavior, PostgreSQL RLS for tenant-owned tables (including durable replay and remediation intent records), and a backup/restore smoke test. Other business modules remain gated, and no production database migration or tenant-isolated data-plane release is claimed.
 
 ## Endpoint-agent identity (Phase 08)
 
@@ -37,6 +37,10 @@ The endpoint-agent API uses Platform-approved, short-lived DPoP-bound access tok
 ## Safe remediation playbooks (Phase 10)
 
 Phase 10 adds deterministic, evidence-freshness-bounded plans for disk pressure, allowlisted service restarts, certificate expiry, and read-only high-CPU diagnostics. A gated internal service submits only validated plans through code-owned contracts and requires independent postcondition evidence. It performs no local shell, filesystem, process, service, or certificate side effects. Submission is disabled by default; public routes remain disabled until Platform tool registrations and a concrete tenant-scoped verifier are provisioned. See [Phase 10 design](docs/PHASE_10_SAFE_REMEDIATION.md) and [Phase 10 forensic audit](docs/audits/PHASE_10_FORENSIC_AUDIT.md).
+
+## Durable remediation orchestration (Phase 11)
+
+Phase 11 persists remediation intents with deterministic plan/idempotency keys, state/version transitions, platform/evidence references, and tenant-scoped RLS. Intent, submit job, and outbox event are committed atomically. The worker gets tenant identity from the claimed job row, marks ambiguous external outcomes as `unknown_outcome`, and schedules idempotent reconciliation for stale external states. A plan is only marked verified when Platform execution is completed and independent postcondition evidence exists. The processor and scheduler are not configured in production; no live execution is claimed. See [Phase 11 design](docs/PHASE_11_ORCHESTRATION_RECOVERY.md) and [Phase 11 forensic audit](docs/audits/PHASE_11_FORENSIC_AUDIT.md).
 
 ## Governed action engine (Phase 09)
 

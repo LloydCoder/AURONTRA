@@ -9,9 +9,10 @@ from models.audit_event import AuditEvent
 from models.webhook_event import WebhookEvent
 from models.durable_job import DurableJob, OutboxEvent
 from models.agent_request_replay import AgentRequestReplay
+from models.remediation_intent import RemediationIntent
 
 __all__ = [
     "Device", "Ticket", "TicketStatus", "TicketPriority", "TicketSource",
     "ResilienceScore", "AutomationRule", "Organization", "APIKey", "AuditEvent", "WebhookEvent",
-    "DurableJob", "OutboxEvent", "AgentRequestReplay",
+    "DurableJob", "OutboxEvent", "AgentRequestReplay", "RemediationIntent",
 ]

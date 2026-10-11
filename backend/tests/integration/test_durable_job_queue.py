@@ -319,3 +319,30 @@ async def test_queue_rejects_non_json_numbers_and_oversized_payloads():
                 aggregate_id="tkt-large", event_type="ticket.created",
                 idempotency_key="large-outbox-payload", payload={"body": "x" * 70000},
             )
+
+@pytest.mark.asyncio
+async def test_tenant_aware_worker_passes_authoritative_org_from_job_row():
+    from workers.job_worker import process_job_batch
+
+    observed = []
+
+    async def tenant_handler(payload, idempotency_key, trusted_org_id):
+        observed.append((payload.get("org_id"), trusted_org_id, idempotency_key))
+        return {"trusted_tenant": trusted_org_id}
+
+    async with AsyncSessionLocal() as session:
+        job, _ = await enqueue_job(
+            session, org_id="test-tenant", job_type="tenant.echo",
+            idempotency_key="tenant-echo-1",
+            payload={"org_id": "attacker-controlled-value", "value": "ok"},
+        )
+        await session.commit()
+
+    result = await process_job_batch(
+        session_factory=AsyncSessionLocal,
+        worker_id="tenant-aware-worker",
+        handlers={"tenant.echo": tenant_handler},
+        tenant_aware_handlers=frozenset({"tenant.echo"}),
+    )
+    assert result["succeeded"] == 1
+    assert observed == [("attacker-controlled-value", "test-tenant", "tenant-echo-1")]
