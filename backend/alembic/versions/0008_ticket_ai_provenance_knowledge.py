@@ -2,7 +2,7 @@
 from alembic import op
 import sqlalchemy as sa
 
-revision = "0008_ticket_ai_provenance_knowledge"
+revision = "0008_ticket_ai_knowledge"
 down_revision = "0007_telemetry_evidence"
 branch_labels = None
 depends_on = None
