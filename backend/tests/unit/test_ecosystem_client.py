@@ -1,0 +1,182 @@
+"""Security and resilience tests for the shared Tinlance ecosystem client."""
+import json
+
+import httpx
+import pytest
+
+from core.config import settings
+from core.ecosystem_client import (
+    EcosystemIntegrationError,
+    request_json,
+    reset_circuits_for_tests,
+)
+
+
+@pytest.fixture(autouse=True)
+def reset_circuit_state(monkeypatch):
+    reset_circuits_for_tests()
+    monkeypatch.setattr(settings, "BRIDGE_AUTH_TOKENS_JSON", json.dumps({
+        "test-service": "t" * 48,
+    }))
+    monkeypatch.setattr(settings, "ENVIRONMENT", "test")
+    monkeypatch.setattr(settings, "BRIDGE_ALLOW_INSECURE_HTTP", False)
+    yield
+    reset_circuits_for_tests()
+
+
+@pytest.mark.asyncio
+async def test_client_sends_bearer_and_versioned_contract_headers():
+    seen = {}
+
+    async def handler(request):
+        seen.update(dict(request.headers))
+        return httpx.Response(200, json={"status": "ok"})
+
+    result = await request_json(
+        service="test-service",
+        base_url="https://integration.example",
+        method="GET",
+        path="/health",
+        transport=httpx.MockTransport(handler),
+    )
+    assert result == {"status": "ok"}
+    assert seen["authorization"] == "Bearer " + "t" * 48
+    assert seen["x-tinlance-contract-version"] == "1"
+    assert seen["x-request-id"]
+
+
+@pytest.mark.asyncio
+async def test_client_fails_closed_without_per_service_credentials(monkeypatch):
+    monkeypatch.setattr(settings, "BRIDGE_AUTH_TOKENS_JSON", "{}")
+    with pytest.raises(EcosystemIntegrationError) as error:
+        await request_json(
+            service="test-service", base_url="https://integration.example",
+            method="GET", path="/health",
+        )
+    assert error.value.code == "bridge_credentials_missing"
+
+
+@pytest.mark.asyncio
+async def test_production_rejects_plain_http(monkeypatch):
+    monkeypatch.setattr(settings, "ENVIRONMENT", "production")
+    with pytest.raises(EcosystemIntegrationError) as error:
+        await request_json(
+            service="test-service", base_url="http://integration.example",
+            method="GET", path="/health",
+        )
+    assert error.value.code == "bridge_https_required"
+
+
+@pytest.mark.asyncio
+async def test_origin_and_path_validation_prevent_url_injection():
+    with pytest.raises(EcosystemIntegrationError):
+        await request_json(
+            service="test-service", base_url="https://user:pass@integration.example",
+            method="GET", path="/health",
+        )
+    with pytest.raises(EcosystemIntegrationError):
+        await request_json(
+            service="test-service", base_url="https://integration.example",
+            method="GET", path="//evil.example/steal",
+        )
+
+
+@pytest.mark.asyncio
+async def test_retryable_get_retries_transient_upstream_failures():
+    calls = 0
+
+    async def handler(request):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return httpx.Response(503, json={"detail": "untrusted upstream message"})
+        return httpx.Response(200, json={"events": []})
+
+    result = await request_json(
+        service="test-service", base_url="https://integration.example",
+        method="GET", path="/events", transport=httpx.MockTransport(handler),
+    )
+    assert result == {"events": []}
+    assert calls == 2
+
+
+@pytest.mark.asyncio
+async def test_non_idempotent_post_is_not_retried():
+    calls = 0
+
+    async def handler(request):
+        nonlocal calls
+        calls += 1
+        return httpx.Response(503, json={"detail": "retry must not happen"})
+
+    with pytest.raises(EcosystemIntegrationError) as error:
+        await request_json(
+            service="test-service", base_url="https://integration.example",
+            method="POST", path="/actions", payload={"action": "submit"},
+            transport=httpx.MockTransport(handler),
+        )
+    assert error.value.code == "bridge_upstream_retryable"
+    assert calls == 1
+
+
+@pytest.mark.asyncio
+async def test_post_retries_only_with_explicit_idempotency_key():
+    calls = 0
+    keys = []
+
+    async def handler(request):
+        nonlocal calls
+        calls += 1
+        keys.append(request.headers.get("Idempotency-Key"))
+        if calls == 1:
+            return httpx.Response(503, json={})
+        return httpx.Response(200, json={"accepted": True})
+
+    result = await request_json(
+        service="test-service", base_url="https://integration.example",
+        method="POST", path="/events", payload={"event": "x"},
+        idempotency_key="event-123", transport=httpx.MockTransport(handler),
+    )
+    assert result == {"accepted": True}
+    assert calls == 2
+    assert keys == ["event-123", "event-123"]
+
+
+@pytest.mark.asyncio
+async def test_client_does_not_follow_redirects():
+    calls = 0
+
+    async def handler(request):
+        nonlocal calls
+        calls += 1
+        return httpx.Response(302, headers={"Location": "https://evil.example/"})
+
+    with pytest.raises(EcosystemIntegrationError) as error:
+        await request_json(
+            service="test-service", base_url="https://integration.example",
+            method="GET", path="/health", transport=httpx.MockTransport(handler),
+        )
+    assert error.value.code == "bridge_upstream_rejected"
+    assert calls == 1
+
+
+@pytest.mark.asyncio
+async def test_repeated_upstream_failures_open_circuit_without_leaking_body():
+    async def handler(request):
+        return httpx.Response(503, json={"detail": "secret upstream diagnostic"})
+
+    transport = httpx.MockTransport(handler)
+    for _ in range(5):
+        with pytest.raises(EcosystemIntegrationError):
+            await request_json(
+                service="test-service", base_url="https://integration.example",
+                method="GET", path="/health", transport=transport,
+            )
+
+    with pytest.raises(EcosystemIntegrationError) as error:
+        await request_json(
+            service="test-service", base_url="https://integration.example",
+            method="GET", path="/health", transport=transport,
+        )
+    assert error.value.code == "bridge_circuit_open"
+    assert "secret" not in str(error.value)
