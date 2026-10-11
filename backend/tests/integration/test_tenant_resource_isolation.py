@@ -159,6 +159,8 @@ async def test_threat_assessment_persists_idempotently_and_never_claims_containm
     assert replay.status_code == 200, replay.text
     finding = first.json()["finding"]
     assert finding["containment_verified"] is False
+    assert finding["observed_at"].endswith("+00:00")
+    assert finding["assessment"]["mitre_mapping_semantics"] == "heuristic_hypothesis_not_confirmed_behavior"
     assert finding["assessment"]["blocked"] is False
     assert len(finding["signal_sha256"]) == 64
     assert replay.json()["idempotent_replay"] is True
