@@ -95,7 +95,7 @@ async function verifyIdToken(token, metadata, expectedNonce) {
   const parts = String(token).split(".");
   if (parts.length !== 3) throw new Error("Invalid identity token.");
   const header = parseJwtSegment(parts[0]);
-  if (header.alg !== "RS256" || typeof header.kid !== "string") {
+  if (header.alg !== "RS256" || typeof header.kid !== "string" || header.crit !== undefined) {
     throw new Error("Unsupported identity-token signature.");
   }
   const jwksUrl = safeUrl(metadata.jwks_uri);
