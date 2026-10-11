@@ -25,6 +25,8 @@ async def test_rls_scopes_organization_and_device_rows_and_rejects_cross_tenant_
     kb_global = f"kb-global-{suffix}"
     kb_draft_a = f"kb-draft-a-{suffix}"
     kb_draft_b = f"kb-draft-b-{suffix}"
+    threat_a = f"threat-a-{suffix}"
+    threat_b = f"threat-b-{suffix}"
     replay_b = f"replay-b-{suffix}"
     role = f"aurontra_rls_{suffix}"
     password = f"test-{suffix}-only"
@@ -87,6 +89,12 @@ async def test_rls_scopes_organization_and_device_rows_and_rejects_cross_tenant_
             f"telemetry-b-{suffix}", org_b, device_b, f"proof-b-{suffix}", "b" * 64,
         )
         await admin.execute(
+            "INSERT INTO threat_findings (id, org_id, event_id, source, detector_version, observed_at, signal_sha256, signal, assessment, score, threat_level, mitre_ttp, decision_status, containment_verified) "
+            "VALUES ($1, $2, $1, 'api_signal', 'threat-heuristic.v2', now(), repeat('a', 64), '{}'::jsonb, '{}'::jsonb, 70, 'high', 'T1071', 'assessed', false), "
+            "($3, $4, $3, 'api_signal', 'threat-heuristic.v2', now(), repeat('b', 64), '{}'::jsonb, '{}'::jsonb, 20, 'low', 'T1071', 'assessed', false)",
+            threat_a, org_a, threat_b, org_b,
+        )
+        await admin.execute(
             "INSERT INTO remediation_intents (id, org_id, device_id, plan_id, idempotency_key, playbook, source_evidence_id, plan_payload, status, version, platform_evidence_ids, audit_event_ids, postcondition_evidence_ids, result_metadata) "
             "VALUES ($1, $2, $3, $1, $4, 'high_cpu', 'evidence-a', '{}'::jsonb, 'proposed', 0, '[]'::jsonb, '[]'::jsonb, '[]'::jsonb, '{}'::jsonb), "
             "($5, $6, $7, $5, $8, 'high_cpu', 'evidence-b', '{}'::jsonb, 'proposed', 0, '[]'::jsonb, '[]'::jsonb, '[]'::jsonb, '{}'::jsonb)",
@@ -114,6 +122,8 @@ async def test_rls_scopes_organization_and_device_rows_and_rejects_cross_tenant_
         assert [row["id"] for row in visible_intents] == [f"intent-a-{suffix}"]
         visible_telemetry = await app.fetch("SELECT id FROM telemetry_records")
         assert [row["id"] for row in visible_telemetry] == [f"telemetry-a-{suffix}"]
+        visible_threats = await app.fetch("SELECT id FROM threat_findings")
+        assert [row["id"] for row in visible_threats] == [threat_a]
         visible_knowledge = await app.fetch("SELECT id FROM knowledge_articles ORDER BY id")
         assert [row["id"] for row in visible_knowledge] == [kb_a, kb_draft_a, kb_global]
 
@@ -125,6 +135,7 @@ async def test_rls_scopes_organization_and_device_rows_and_rejects_cross_tenant_
         assert await app.fetch("SELECT jti FROM agent_request_replays") == []
         assert await app.fetch("SELECT id FROM remediation_intents") == []
         assert await app.fetch("SELECT id FROM telemetry_records") == []
+        assert await app.fetch("SELECT id FROM threat_findings") == []
         assert await app.fetch("SELECT id FROM knowledge_articles") == []
 
         await app.execute("SELECT set_config('app.current_org_id', $1, false)", org_a)
@@ -173,6 +184,12 @@ async def test_rls_scopes_organization_and_device_rows_and_rejects_cross_tenant_
                 "INSERT INTO telemetry_records (id, org_id, device_id, event_id, schema_version, source, key_thumbprint, proof_jti, request_id, request_hash, payload_hash, observed_at, received_at, metrics, missing_metrics, quality_flags, computed_score, score_components, score_status, retention_expires_at) "
                 "VALUES ($1, $2, $3, $1, '1', 'endpoint_agent', 'thumb', $4, 'req', $5, $5, now(), now(), '{}'::jsonb, '[]'::jsonb, '[]'::jsonb, 90, '{}'::jsonb, 'ok', now() + interval '90 days')",
                 f"forbidden-telemetry-{suffix}", org_b, device_b, f"proof-forbidden-{suffix}", "c" * 64,
+            )
+        with pytest.raises(asyncpg.InsufficientPrivilegeError):
+            await app.execute(
+                "INSERT INTO threat_findings (id, org_id, event_id, source, detector_version, observed_at, signal_sha256, signal, assessment, score, threat_level, mitre_ttp, decision_status, containment_verified) "
+                "VALUES ($1, $2, $1, 'api_signal', 'threat-heuristic.v2', now(), repeat('c', 64), '{}'::jsonb, '{}'::jsonb, 70, 'high', 'T1071', 'assessed', false)",
+                f"forbidden-threat-{suffix}", org_b,
             )
         with pytest.raises(asyncpg.InsufficientPrivilegeError):
             await app.execute(
