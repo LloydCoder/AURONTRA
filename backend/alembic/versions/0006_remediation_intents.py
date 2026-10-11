@@ -31,6 +31,7 @@ def upgrade():
             sa.Column("audit_event_ids", sa.JSON(), nullable=False),
             sa.Column("postcondition_evidence_ids", sa.JSON(), nullable=False),
             sa.Column("result_metadata", sa.JSON(), nullable=False),
+            sa.Column("reason_code", sa.String(100), nullable=True),
             sa.Column("last_error_code", sa.String(100), nullable=True),
             sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
             sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
@@ -56,6 +57,10 @@ def upgrade():
             "ix_remediation_intents_device_created", "remediation_intents",
             ["org_id", "device_id", "created_at"],
         )
+
+    columns = {item["name"] for item in sa.inspect(bind).get_columns("remediation_intents")}
+    if "reason_code" not in columns:
+        op.add_column("remediation_intents", sa.Column("reason_code", sa.String(100), nullable=True))
 
     if bind.dialect.name == "postgresql":
         op.execute(sa.text('ALTER TABLE "remediation_intents" ENABLE ROW LEVEL SECURITY'))

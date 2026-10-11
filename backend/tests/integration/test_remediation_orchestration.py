@@ -188,6 +188,8 @@ async def test_worker_persists_verified_result_only_with_postcondition_evidence(
         assert persisted.postcondition_evidence_ids == ["verification-01"]
         assert persisted.platform_evidence_ids == ["platform-evidence-01"]
         assert persisted.completed_at is not None
+        assert persisted.reason_code == "postcondition_confirmed"
+        assert persisted.last_error_code is None
 
 
 @pytest.mark.asyncio
@@ -213,6 +215,7 @@ async def test_processor_crash_records_unknown_outcome_then_reuses_same_idempote
         persisted = await get_remediation_intent(session, org_id="test-tenant", intent_id=plan.plan_id)
         assert persisted.status == "unknown_outcome"
         assert persisted.last_error_code == "processor_outcome_unknown"
+        assert persisted.reason_code == "processor_outcome_unknown"
 
     succeeding = _Processor(_verified_result(plan))
     retry_handler = make_remediation_job_handler(session_factory=AsyncSessionLocal, processor=succeeding)

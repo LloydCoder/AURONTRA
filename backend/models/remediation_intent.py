@@ -44,6 +44,7 @@ class RemediationIntent(Base):
     audit_event_ids = Column(JSON, nullable=False, default=list)
     postcondition_evidence_ids = Column(JSON, nullable=False, default=list)
     result_metadata = Column(JSON, nullable=False, default=dict)
+    reason_code = Column(String(100), nullable=True)
     last_error_code = Column(String(100), nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())

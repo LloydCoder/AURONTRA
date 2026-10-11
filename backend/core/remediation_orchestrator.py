@@ -221,9 +221,9 @@ async def transition_remediation_intent(
     platform_state: str | None = None,
     platform_run_id: str | None = None,
     platform_execution_id: str | None = None,
-    platform_evidence_ids: Any = (),
-    audit_event_ids: Any = (),
-    postcondition_evidence_ids: Any = (),
+    platform_evidence_ids: Any | None = None,
+    audit_event_ids: Any | None = None,
+    postcondition_evidence_ids: Any | None = None,
     result_metadata: dict[str, Any] | None = None,
 ) -> RemediationIntent:
     """Apply a locked, validated state transition and append an outbox event."""
@@ -244,7 +244,7 @@ async def transition_remediation_intent(
     if to_status not in _ALLOWED_TRANSITIONS.get(intent.status, set()):
         raise RemediationOrchestrationError("remediation_transition_not_allowed")
 
-    metadata = result_metadata or {}
+    metadata = result_metadata if result_metadata is not None else dict(intent.result_metadata or {})
     if not isinstance(metadata, dict):
         raise RemediationOrchestrationError("remediation_result_metadata_invalid")
     _canonical_hash(metadata)
@@ -257,17 +257,22 @@ async def transition_remediation_intent(
     intent.status = to_status
     intent.version += 1
     intent.updated_at = datetime.now(timezone.utc)
-    intent.last_error_code = reason_code
+    intent.reason_code = reason_code
+    intent.last_error_code = reason_code if to_status in {"failed", "verification_failed", "unknown_outcome"} else None
     if platform_state is not None:
         intent.platform_state = platform_state
     if platform_run_id is not None:
         intent.platform_run_id = platform_run_id
     if platform_execution_id is not None:
         intent.platform_execution_id = platform_execution_id
-    intent.platform_evidence_ids = _safe_ids(platform_evidence_ids, "platform_evidence_ids")
-    intent.audit_event_ids = _safe_ids(audit_event_ids, "audit_event_ids")
-    intent.postcondition_evidence_ids = _safe_ids(postcondition_evidence_ids, "postcondition_evidence_ids")
-    intent.result_metadata = metadata
+    if platform_evidence_ids is not None:
+        intent.platform_evidence_ids = _safe_ids(platform_evidence_ids, "platform_evidence_ids")
+    if audit_event_ids is not None:
+        intent.audit_event_ids = _safe_ids(audit_event_ids, "audit_event_ids")
+    if postcondition_evidence_ids is not None:
+        intent.postcondition_evidence_ids = _safe_ids(postcondition_evidence_ids, "postcondition_evidence_ids")
+    if result_metadata is not None:
+        intent.result_metadata = metadata
     if to_status in _TERMINAL:
         intent.completed_at = datetime.now(timezone.utc)
     await session.flush()
@@ -283,7 +288,7 @@ async def transition_remediation_intent(
             "intent_id": intent.id,
             "status": intent.status,
             "version": intent.version,
-            "reason_code": intent.last_error_code,
+            "reason_code": intent.reason_code,
         },
     )
     return intent
