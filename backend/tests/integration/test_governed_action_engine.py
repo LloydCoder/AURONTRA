@@ -280,3 +280,71 @@ def test_platform_sdk_configuration_is_rejected_without_https_in_production(monk
     monkeypatch.setattr(settings, "ENVIRONMENT", "production")
     with pytest.raises(GovernedActionError, match="platform_https_required"):
         _new_platform_client(uuid4(), "run")
+
+
+@pytest.mark.asyncio
+async def test_platform_run_identity_mismatch_never_executes_tool(monkeypatch):
+    monkeypatch.setattr(settings, "AGENT_PLATFORM_AGENT_ID", str(AGENT_ID))
+    monkeypatch.setattr(settings, "AGENT_PLATFORM_TASK_ID", str(TASK_ID))
+    calls = []
+
+    class MismatchedRunClient(FakePlatform):
+        async def create_run(self, **kwargs):
+            self.calls.append(("runs.create", kwargs))
+            return SimpleNamespace(
+                run_id=RUN_ID,
+                task_id=TASK_ID,
+                agent_id=uuid4(),
+                state="created",
+            )
+
+    def factory(action_id, operation):
+        return MismatchedRunClient(calls)
+
+    executor = PlatformGovernedActionExecutor(
+        GovernedActionRegistry((_definition(),)),
+        client_factory=factory,
+    )
+    with pytest.raises(GovernedActionError, match="platform_run_identity_mismatch") as caught:
+        await executor.submit(
+            action_id=uuid4(),
+            action_key="diagnostic.read",
+            resource="device:device-123",
+            intent="Read diagnostic metrics",
+            arguments={"metric": "cpu"},
+        )
+    assert caught.value.run_id == RUN_ID
+    assert [call[0] for call in calls] == ["runs.create"]
+
+
+def test_client_factory_binds_trusted_context_and_w3c_trace(monkeypatch):
+    import re
+    import core.governed_actions as governed
+
+    captured = {}
+    monkeypatch.setattr(settings, "AGENT_PLATFORM_ENABLED", True)
+    monkeypatch.setattr(settings, "AGENT_PLATFORM_BASE_URL", "https://platform.example.invalid")
+    monkeypatch.setattr(settings, "AGENT_PLATFORM_BEARER_TOKEN", "test-injected-credential")
+    monkeypatch.setattr(settings, "AGENT_PLATFORM_TENANT_ID", "trusted-tenant")
+    monkeypatch.setattr(settings, "AGENT_PLATFORM_SUBJECT_ID", "aurontra-service")
+    monkeypatch.setattr(settings, "AGENT_PLATFORM_API_VERSION", "1.1")
+    monkeypatch.setattr(settings, "AGENT_PLATFORM_TIMEOUT_SECONDS", 7.0)
+    monkeypatch.setattr(settings, "AGENT_PLATFORM_ALLOW_INSECURE_HTTP", False)
+    monkeypatch.setattr(settings, "ENVIRONMENT", "test")
+
+    class FakeAsyncPlatform:
+        def __init__(self, *, config):
+            captured["config"] = config
+
+    monkeypatch.setattr(governed, "AsyncAgentPlatform", FakeAsyncPlatform)
+    action_id = uuid4()
+    client = governed._new_platform_client(action_id, "execute")
+    config = captured["config"]
+    assert isinstance(client, FakeAsyncPlatform)
+    assert config.base_url == "https://platform.example.invalid"
+    assert config.tenant_id == "trusted-tenant"
+    assert config.subject_id == "aurontra-service"
+    assert config.api_version == "1.1"
+    assert config.timeout == 7.0
+    assert re.fullmatch(r"00-[0-9a-f]{32}-[0-9a-f]{16}-01", config.traceparent)
+    assert config.traceparent.split("-")[1] == action_id.hex
