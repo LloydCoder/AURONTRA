@@ -2,7 +2,14 @@
 import pytest
 from pydantic import ValidationError
 
-from core.tsic_contracts import TSICIdentityContext, validate_event_envelope
+from core.tsic_contracts import (
+    EVENT_ENVELOPE_CONTRACT_VERSION,
+    IDENTITY_CONTEXT_CONTRACT_VERSION,
+    TRACE_CONTEXT_CONTRACT_VERSION,
+    TSIC_REGISTRY_REVISION,
+    TSICIdentityContext,
+    validate_event_envelope,
+)
 
 
 def _context(**overrides):
@@ -36,6 +43,13 @@ def _event(context, **overrides):
     }
     value.update(overrides)
     return value
+
+
+def test_contract_snapshot_versions_match_merged_tsic_registry():
+    assert IDENTITY_CONTEXT_CONTRACT_VERSION == "1.0.0"
+    assert EVENT_ENVELOPE_CONTRACT_VERSION == "1.0.0"
+    assert TRACE_CONTEXT_CONTRACT_VERSION == "1.1.0"
+    assert TSIC_REGISTRY_REVISION == "619db9e264cdc71369de621c981bfc2ba1615a1d"
 
 
 def test_identity_context_rejects_zero_or_malformed_trace_id():
