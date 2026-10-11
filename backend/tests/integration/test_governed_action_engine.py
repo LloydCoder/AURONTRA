@@ -51,9 +51,14 @@ def _definition(**overrides):
 
 
 class FakePlatform:
-    def __init__(self, calls, *, run_state="created", execution=None, execute_error=None):
+    def __init__(
+        self, calls, *, run_state="created", execution=None, execute_error=None,
+        agent_id=AGENT_ID, task_id=TASK_ID,
+    ):
         self.calls = calls
         self.run_state = run_state
+        self.agent_id = agent_id
+        self.task_id = task_id
         self.execution = execution or SimpleNamespace(
             execution_id=EXECUTION_ID,
             state="completed",
@@ -71,8 +76,8 @@ class FakePlatform:
         self.calls.append(("runs.create", kwargs))
         return SimpleNamespace(
             run_id=RUN_ID,
-            task_id=TASK_ID,
-            agent_id=AGENT_ID,
+            task_id=self.task_id,
+            agent_id=self.agent_id,
             state=self.run_state,
         )
 
@@ -98,6 +103,8 @@ def _executor(monkeypatch, *, run_state="created", execution=None, execute_error
             run_state=run_state,
             execution=execution,
             execute_error=execute_error,
+            agent_id=context.agent_id,
+            task_id=context.task_id,
         )
         clients.append(client)
         return client
@@ -581,3 +588,24 @@ def test_dynamic_credential_provider_binds_each_client_to_trusted_context(monkey
     assert client._sync._tenant_id == "tenant-b"
     assert client._sync._subject_id == "service-b"
     assert client._sync._bearer_token == "credential-for-tenant-b"
+
+
+@pytest.mark.asyncio
+async def test_tenant_context_selects_its_own_platform_agent_and_task(monkeypatch):
+    executor, calls, _ = _executor(monkeypatch)
+    tenant_agent = uuid4()
+    tenant_task = uuid4()
+    await executor.submit(
+        action_id=uuid4(),
+        context=_context("tenant-b", "service-b", agent_id=tenant_agent, task_id=tenant_task),
+        action_key="diagnostic.read",
+        resource="device:device-456",
+        intent="Read tenant B diagnostic metrics",
+        arguments={"metric": "cpu"},
+    )
+    run_request = calls[0][1]
+    execute_request = calls[1][1]
+    assert run_request["agent_id"] == tenant_agent
+    assert run_request["task_id"] == tenant_task
+    assert execute_request["agent_id"] == tenant_agent
+    assert execute_request["run_id"] == RUN_ID
