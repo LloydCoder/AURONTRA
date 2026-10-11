@@ -12,10 +12,12 @@ class HighCPUPlaybook(BasePlaybook):
             context,
             status="simulated",
             cpu_percent=cpu_pct,
+            cpu_percent_source="caller_supplied_unverified" if cpu_pct is not None else "not_provided",
             processes_checked=0,
             top_processes=[],
             processes_niced=0,
-            actions_taken=[
+            actions_taken=[],
+            recommendations=[
                 "No host processes were inspected or reprioritized.",
                 "CPU remediation requires authenticated telemetry from the target device and a scoped action policy.",
             ],
