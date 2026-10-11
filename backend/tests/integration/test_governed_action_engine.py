@@ -235,3 +235,48 @@ def test_registry_rejects_duplicate_action_keys():
 def test_definition_rejects_required_arguments_outside_allowlist():
     with pytest.raises(ValueError, match="subset"):
         _definition(required_arguments=frozenset({"not_allowed"}))
+
+
+@pytest.mark.asyncio
+async def test_invalid_resource_and_control_characters_are_rejected_before_network(monkeypatch):
+    executor, calls, _ = _executor(monkeypatch)
+    base = {
+        "action_id": uuid4(),
+        "action_key": "diagnostic.read",
+        "intent": "Read diagnostic metrics",
+        "arguments": {"metric": "cpu"},
+    }
+    with pytest.raises(GovernedActionError, match="resource_invalid"):
+        await executor.submit(**base, resource="device:\nforged")
+    with pytest.raises(GovernedActionError, match="intent_invalid"):
+        await executor.submit(**{**base, "resource": "device:device-123", "intent": "read\x00metrics"})
+    assert calls == []
+
+
+def test_traceparent_uses_action_id_as_stable_trace_and_fresh_span_ids():
+    from core.governed_actions import _traceparent
+
+    action_id = uuid4()
+    first = _traceparent(action_id)
+    second = _traceparent(action_id)
+    assert first.startswith(f"00-{action_id.hex}-")
+    assert second.startswith(f"00-{action_id.hex}-")
+    assert first != second
+    assert len(first.split("-")) == 4
+    assert first.split("-")[2] != "0" * 16
+
+
+def test_platform_sdk_configuration_is_rejected_without_https_in_production(monkeypatch):
+    from core.governed_actions import _new_platform_client
+
+    monkeypatch.setattr(settings, "AGENT_PLATFORM_ENABLED", True)
+    monkeypatch.setattr(settings, "AGENT_PLATFORM_BASE_URL", "http://platform.example.invalid")
+    monkeypatch.setattr(settings, "AGENT_PLATFORM_BEARER_TOKEN", "injected-test-token")
+    monkeypatch.setattr(settings, "AGENT_PLATFORM_TENANT_ID", "tenant-test")
+    monkeypatch.setattr(settings, "AGENT_PLATFORM_SUBJECT_ID", "subject-test")
+    monkeypatch.setattr(settings, "AGENT_PLATFORM_API_VERSION", "1.1")
+    monkeypatch.setattr(settings, "AGENT_PLATFORM_TIMEOUT_SECONDS", 10.0)
+    monkeypatch.setattr(settings, "AGENT_PLATFORM_ALLOW_INSECURE_HTTP", True)
+    monkeypatch.setattr(settings, "ENVIRONMENT", "production")
+    with pytest.raises(GovernedActionError, match="platform_https_required"):
+        _new_platform_client(uuid4(), "run")
