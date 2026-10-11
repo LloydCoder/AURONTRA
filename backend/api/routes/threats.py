@@ -129,7 +129,7 @@ async def analyse_threat(
         id=str(uuid4()),
         org_id=tenant_id,
         event_id=event_id,
-        source="api_signal",
+        source="network_signal",
         detector_version=DETECTOR_VERSION,
         observed_at=observed_at,
         signal_sha256=signal_hash,
