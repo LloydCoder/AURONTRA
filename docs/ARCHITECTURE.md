@@ -97,3 +97,12 @@ Aurontra is a resource server, not an identity provider. Endpoint agents must pr
 - `POST /agent/v1/rotate-key` requires a Platform-issued rotation scope bound to the new key; it updates the thumbprint and rotation timestamp. The prior key then fails the enrolled-key comparison.
 - Private keys and credential issuance remain outside Aurontra. The Platform-approved issuer is responsible for workload principal provisioning and sender-constrained token issuance.
 - `AGENT_AUTH_ENABLED` defaults to false. Production requires HTTPS issuer/JWKS and a canonical HTTPS public origin. The product-wide data-plane gate remains closed until all subsystems pass release criteria.
+
+
+## Threat evidence pipeline (Phase 15)
+
+Threat analysis is tenant-scoped, persisted in `threat_findings`, and identified by a canonical signal SHA-256 plus detector version. The `(org_id, event_id)` constraint makes event replay idempotent within a tenant. PostgreSQL forced RLS is tested with a non-owner/non-bypass role and included in backup/restore verification. `/threats/events` reads the durable Aurontra evidence store rather than treating upstream bridge claims as authoritative.
+
+Threat scores are deterministic heuristics, not calibrated probabilities. ATT&CK mappings are hypotheses rather than confirmation of attacker behavior. A repeatable offline evaluator reports confusion-matrix metrics and Wilson intervals only for the exact labelled dataset hash and threshold supplied; no production dataset or real-world performance claim is included. The containment endpoint remains disabled until Phase 16 adds a real Platform-governed enforcement path and independent postcondition verification.
+
+The production data plane remains closed. The Phase 15 code/CI gates passed (451 passed, 1 skipped, 85.49% coverage; PostgreSQL RLS/backup-restore and secret/history/archive scan green), but deployment was skipped. See [Phase 15 design](PHASE_15_THREAT_EVIDENCE.md) and [forensic audit](audits/PHASE_15_FORENSIC_AUDIT.md).
