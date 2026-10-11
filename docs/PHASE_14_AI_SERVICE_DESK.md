@@ -1,6 +1,6 @@
 # Phase 14 — AI Service Desk and Tenant-Scoped Knowledge Retrieval
 
-**Status:** Implementation and security review in progress. This phase is not a production certification.
+**Status:** Complete at code/CI level after forensic audit. This phase is not a production certification.
 **Owner:** Tinlance Limited / Aurontra
 **System boundary:** Aurontra consumes the Tinlance Agent System; it does not duplicate Platform identity, authorization, approval, execution, secrets, or audit authority.
 
@@ -30,13 +30,13 @@ Turn the legacy ticket resolver into a risk-based drafting assistant backed by a
 - `backend/api/routes/tickets.py`: retrieves approved references, refuses model invocation on knowledge-integrity failure, and persists suggestion provenance without resolving the ticket.
 - CI adds tenant-RLS assertions for published knowledge visibility, cross-tenant denial, tenant self-publication denial and backup/restore preservation of the table's RLS policies.
 
-## Verification required
+## Verification results
 
 - Unit tests for triage, unknown-case escalation, prompt-injection boundaries, PII/secret redaction, timeout, invalid/empty provider responses, output bounds, offline fallback and draft-only semantics.
 - Retrieval tests for tenant scoping, global published content, draft exclusion, integrity failure, invalid tenant/limit and source URL safety.
 - Route tests for persisted prompt/response/reference provenance and fail-closed behavior when a stored article digest is invalid.
 - SQLite Alembic upgrade, Python compilation, full backend suite with coverage, PostgreSQL non-owner RLS tests, backup/restore policy checks, and current-tree/history/archive secret scan.
-- Inspect CI logs and run a forensic audit of every changed file before marking this phase complete.
+- Forensic review recorded in [Phase 14 audit](audits/PHASE_14_FORENSIC_AUDIT.md). CI and secret/history/archive scan passed on the reviewed commit.
 
 ## Research basis
 
