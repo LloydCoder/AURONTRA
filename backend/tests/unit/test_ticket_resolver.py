@@ -22,7 +22,8 @@ class TestTicketClassifier:
         result = classify_ticket("VPN keeps disconnecting every 10 minutes")
         assert result["category"] == "connectivity"
         assert result["tier"] == 1
-        assert result["auto_resolvable"] is True
+        assert result["draft_eligible"] is True
+        assert result["auto_resolvable"] is False
 
     def test_classify_hardware_failure(self):
         from agents.ticket_resolver import classify_ticket
