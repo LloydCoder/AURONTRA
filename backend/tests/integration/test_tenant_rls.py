@@ -22,6 +22,7 @@ async def test_rls_scopes_organization_and_device_rows_and_rejects_cross_tenant_
     replay_a = f"replay-a-{suffix}"
     kb_a = f"kb-a-{suffix}"
     kb_b = f"kb-b-{suffix}"
+    kb_global = f"kb-global-{suffix}"
     kb_draft_a = f"kb-draft-a-{suffix}"
     kb_draft_b = f"kb-draft-b-{suffix}"
     replay_b = f"replay-b-{suffix}"
@@ -40,8 +41,9 @@ async def test_rls_scopes_organization_and_device_rows_and_rejects_cross_tenant_
         await admin.execute(
             "INSERT INTO knowledge_articles (id, org_id, article_key, slug, title, category, content, content_sha256, status, version, approved_by, approved_at) "
             "VALUES ($1, $2, $3, $4, 'A approved', 'connectivity', 'a', repeat('a', 64), 'published', 1, 'admin', now()), "
-            "($5, $6, $7, $8, 'B approved', 'connectivity', 'b', repeat('b', 64), 'published', 1, 'admin', now())",
-            kb_a, org_a, kb_a, kb_a, kb_b, org_b, kb_b, kb_b,
+            "($5, $6, $7, $8, 'B approved', 'connectivity', 'b', repeat('b', 64), 'published', 1, 'admin', now()), "
+            "($9, NULL, $10, $11, 'Global approved', 'connectivity', 'global', repeat('f', 64), 'published', 1, 'admin', now())",
+            kb_a, org_a, kb_a, kb_a, kb_b, org_b, kb_b, kb_b, kb_global, kb_global, kb_global,
         )
         await admin.execute(
             "INSERT INTO knowledge_articles (id, org_id, article_key, slug, title, category, content, content_sha256, status, version) "
@@ -113,7 +115,7 @@ async def test_rls_scopes_organization_and_device_rows_and_rejects_cross_tenant_
         visible_telemetry = await app.fetch("SELECT id FROM telemetry_records")
         assert [row["id"] for row in visible_telemetry] == [f"telemetry-a-{suffix}"]
         visible_knowledge = await app.fetch("SELECT id FROM knowledge_articles ORDER BY id")
-        assert [row["id"] for row in visible_knowledge] == [kb_a, kb_draft_a]
+        assert [row["id"] for row in visible_knowledge] == [kb_a, kb_draft_a, kb_global]
 
         await app.execute("SELECT set_config('app.current_org_id', '', false)")
         assert await app.fetch("SELECT id FROM devices") == []
