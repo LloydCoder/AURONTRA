@@ -17,7 +17,7 @@ from typing import Any
 from urllib.parse import urlsplit
 
 import jwt
-from fastapi import HTTPException, Request
+from fastapi import Depends, HTTPException, Request
 from jwt import PyJWKClient
 from jwt.exceptions import PyJWKClientConnectionError, PyJWTError
 
@@ -256,7 +256,7 @@ async def get_agent_identity(request: Request) -> AgentIdentity:
 
 
 
-async def get_agent_tenant_db(request: Request, identity: AgentIdentity = __import__("fastapi").Depends(get_agent_identity)):
+async def get_agent_tenant_db(request: Request, identity: AgentIdentity = Depends(get_agent_identity)):
     """Resolve agent identity first, then open a tenant-scoped business session."""
     from core.database import get_tenant_db
 
