@@ -12,9 +12,10 @@ from models.agent_request_replay import AgentRequestReplay
 from models.remediation_intent import RemediationIntent
 from models.telemetry_record import TelemetryRecord
 from models.knowledge_article import KnowledgeArticle
+from models.threat_finding import ThreatFinding
 
 __all__ = [
     "Device", "Ticket", "TicketStatus", "TicketPriority", "TicketSource",
     "ResilienceScore", "AutomationRule", "Organization", "APIKey", "AuditEvent", "WebhookEvent",
-    "DurableJob", "OutboxEvent", "AgentRequestReplay", "RemediationIntent", "TelemetryRecord", "KnowledgeArticle",
+    "DurableJob", "OutboxEvent", "AgentRequestReplay", "RemediationIntent", "TelemetryRecord", "KnowledgeArticle", "ThreatFinding",
 ]
