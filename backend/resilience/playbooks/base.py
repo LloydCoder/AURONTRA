@@ -37,5 +37,8 @@ class BasePlaybook(ABC):
             "device_id": context.get("device_id", "unknown"),
             "executed_at": datetime.now(timezone.utc).isoformat(),
             "status": "executed",
+            "execution_mode": "recommendation_only",
+            "execution_enabled": False,
+            "business_outcome_verified": False,
             **kwargs,
         }
