@@ -15,6 +15,7 @@ target_metadata = Base.metadata
 
 
 def run_migrations_offline() -> None:
+    # Keep generated offline SQL compatible with descriptive revision IDs.
     context.configure(
         url=settings.DATABASE_URL,
         target_metadata=target_metadata,
