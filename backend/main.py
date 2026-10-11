@@ -57,7 +57,7 @@ async def enforce_auth_and_data_plane(request: Request, call_next):
                 return JSONResponse(status_code=400, content={"detail": "Invalid Content-Length.", "code": "INVALID_CONTENT_LENGTH"})
             if body_length > settings.MAX_REQUEST_BODY_BYTES:
                 return JSONResponse(status_code=413, content={"detail": "Request body exceeds the configured limit.", "code": "REQUEST_BODY_TOO_LARGE"})
-    if path == "/health/live" or request.method == "OPTIONS":
+    if path in {"/health/live", "/health/ready"} or request.method == "OPTIONS":
         return await call_next(request)
     if settings.ENVIRONMENT.lower() == "production" and settings.TEST_MODE:
         return JSONResponse(status_code=503, content={"detail": "Test mode is forbidden in production.", "code": "PRODUCTION_TEST_MODE_FORBIDDEN"})
