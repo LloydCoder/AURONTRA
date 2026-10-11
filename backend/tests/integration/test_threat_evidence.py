@@ -175,7 +175,7 @@ async def test_siem_export_rejects_log_injection_and_never_trusts_blocked_claim(
             "mitre_ttp": "T1071.001",
             "blocked": False,
             "timestamp": "2026-10-11T12:00:00Z",
-            "reason": "safe message\\nCEF:0|fake",
+            "reason": "safe message\nCEF:0|fake",
         })
         naive_timestamp = await client.post("/threats/export/siem", json={
             "event_id": "siem-event-003",
