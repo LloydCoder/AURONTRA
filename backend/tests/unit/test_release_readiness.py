@@ -2,6 +2,8 @@
 import hashlib
 import importlib.util
 import json
+import subprocess
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -105,3 +107,15 @@ def test_release_gate_rejects_evidence_path_traversal(monkeypatch, tmp_path):
     result = release_readiness.evaluate()
     assert result["production_release_ready"] is False
     assert any("release/evidence" in item["reason"] for item in result["blockers"])
+
+
+def test_strict_release_cli_fails_while_required_gates_are_blocked():
+    result = subprocess.run(
+        [sys.executable, str(ROOT / "scripts" / "release_readiness.py"), "--strict"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 1
+    payload = json.loads(result.stdout)
+    assert payload["production_release_ready"] is False
