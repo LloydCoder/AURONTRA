@@ -62,3 +62,16 @@ async def test_slo_and_metrics_endpoints_are_available_when_enabled():
     assert slo_response.status_code == 200
     assert slo_response.json()["durable"] is False
     assert slo_response.json()["window"] == "process_lifetime"
+
+
+@pytest.mark.asyncio
+async def test_production_readiness_fails_closed_when_data_plane_is_disabled(monkeypatch):
+    from fastapi import Response
+    from api.routes import health
+    monkeypatch.setattr(health.settings, "ENVIRONMENT", "production")
+    monkeypatch.setattr(health.settings, "DATA_PLANE_ENABLED", False)
+    response = Response()
+    result = await health.readiness(response, db=None)
+    assert response.status_code == 503
+    assert result["ready"] is False
+    assert result["business_data_plane_ready"] is False
