@@ -33,6 +33,7 @@ class AgentTelemetryPayload(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     event_id: UUID
+    device_id: str | None = Field(default=None, min_length=1, max_length=128)
     schema_version: Literal["1"] = "1"
     observed_at: datetime = Field(alias="timestamp")
     cpu_percent: float | None = Field(default=None, ge=0, le=100, allow_inf_nan=False)
@@ -162,6 +163,8 @@ async def ingest_agent_telemetry(
     """Persist validated telemetry as provenance-bearing, idempotent evidence."""
     if "aurontra:telemetry:write" not in identity.scopes:
         raise HTTPException(status_code=403, detail="Telemetry write scope is required.")
+    if payload.device_id is not None and payload.device_id != identity.device_id:
+        raise HTTPException(status_code=403, detail="Payload device ID does not match authenticated agent identity.")
     metric_names = ("cpu_percent", "memory_percent", "disk_percent")
     metrics = {name: getattr(payload, name) for name in metric_names if getattr(payload, name) is not None}
     if not metrics:
@@ -198,6 +201,7 @@ async def ingest_agent_telemetry(
     telemetry_values = {**metrics, **{key: value for key, value in metadata.items() if value is not None}}
     canonical = {
         "event_id": str(payload.event_id),
+        "device_id": identity.device_id,
         "schema_version": payload.schema_version,
         "observed_at": payload.observed_at.isoformat(),
         "metrics": telemetry_values,
@@ -336,7 +340,7 @@ async def ingest_agent_telemetry(
         "resilience": score_result,
         "stored": True,
         "duplicate": False,
-        "current_state_updated": not out_of_order,
+        "current_state_updated": current_state_updated,
         "persistence": "telemetry_evidence_recorded",
         "observed_at": record.observed_at.isoformat(),
         "received_at": record.received_at.isoformat(),
