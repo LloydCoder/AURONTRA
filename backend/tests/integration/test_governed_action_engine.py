@@ -466,6 +466,9 @@ def test_platform_client_rejects_nonfinite_timeout(monkeypatch):
     monkeypatch.setattr(settings, "ENVIRONMENT", "test")
     with pytest.raises(GovernedActionError, match="platform_timeout_invalid"):
         _new_platform_client(uuid4(), "run", _context())
+    monkeypatch.setattr(settings, "AGENT_PLATFORM_TIMEOUT_SECONDS", 61.0)
+    with pytest.raises(GovernedActionError, match="platform_timeout_invalid"):
+        _new_platform_client(uuid4(), "run", _context())
 
 
 @pytest.mark.asyncio
