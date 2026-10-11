@@ -73,7 +73,7 @@ Aurontra now has tenant-scoped `durable_jobs` and `outbox_events` tables, introd
 
 ## Organization and device lifecycle (Phase 07)
 
-Alembic revision `0004_device_lifecycle` adds `enrolled_at`, `revoked_at`, and `agent_version` metadata to devices and an organization/activity index. Legacy devices are not silently declared enrolled: their enrollment timestamp remains NULL pending an explicit authenticated agent handshake.
+Alembic revision `0004_device_lifecycle` adds `enrolled_at`, `revoked_at`, and `agent_version` metadata to devices and an organization/activity index. Legacy devices are not silently declared enrolled: their enrollment timestamp remains NULL pending an explicit authenticated agent handshake, and migration `0004` disables records lacking that proof so old `is_active` flags cannot grant telemetry trust.
 
 - `POST /devices/provision` is an organization-admin operation that creates a tenant-owned, inactive device record. Provisioning is not enrollment and cannot authorize telemetry or execution.
 - `POST /devices/{device_id}/revoke` is organization-admin-only, tenant-scoped, and idempotent. A cross-tenant identifier is indistinguishable from a missing device.
