@@ -187,3 +187,39 @@ async def test_threat_analysis_rejects_out_of_range_signal():
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.post("/threats/analyse", json={"entropy": 99})
     assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_threat_finding_can_bind_only_to_active_enrolled_tenant_device():
+    from datetime import datetime, timezone
+    async with AsyncSessionLocal() as session:
+        session.add(Device(
+            id="threat-bound-device",
+            org_id="test-tenant",
+            name="Enrolled threat source",
+            is_active=True,
+            enrolled_at=datetime.now(timezone.utc),
+            last_seen_at=datetime.now(timezone.utc),
+        ))
+        await session.commit()
+
+    from main import app
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post("/threats/analyse", json={
+            "event_id": "threat-bound-device-event",
+            "device_id": "threat-bound-device",
+            "protocol": "QUIC",
+            "entropy": 7.5,
+            "z_score": 12.0,
+        })
+        cross_tenant = await client.post("/threats/analyse", json={
+            "event_id": "threat-cross-tenant-device-event",
+            "device_id": "private-device",
+            "protocol": "QUIC",
+            "entropy": 7.5,
+            "z_score": 12.0,
+        })
+
+    assert response.status_code == 200, response.text
+    assert response.json()["finding"]["device_id"] == "threat-bound-device"
+    assert cross_tenant.status_code == 404
