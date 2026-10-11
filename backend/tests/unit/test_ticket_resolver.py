@@ -390,6 +390,35 @@ class TestTicketResolverSecurityControls:
         assert "[REDACTED_CREDENTIAL]" in result["response"]
 
     @pytest.mark.asyncio
+    async def test_prompt_digest_covers_system_and_user_prompt(self):
+        from agents.ticket_resolver import _TICKET_SYSTEM_PROMPT, build_resolution_prompt, resolve_ticket
+        with patch("agents.ticket_resolver.llm") as mock_llm:
+            mock_llm.complete = AsyncMock(return_value={
+                "text": "Please check the approved VPN client settings.",
+                "model": "test-model",
+                "layer": 1,
+            })
+            result = await resolve_ticket(
+                ticket_id="tkt-prompt-digest",
+                title="VPN issue",
+                description="Cannot connect to VPN",
+                reporter_email="user@example.invalid",
+            )
+        user_prompt = build_resolution_prompt(
+            title="VPN issue",
+            description="Cannot connect to VPN",
+            reporter_email="user@example.invalid",
+            category="connectivity",
+        )
+        canonical = json.dumps(
+            {"system_prompt": _TICKET_SYSTEM_PROMPT, "user_prompt": user_prompt},
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        assert result["prompt_sha256"] == hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+    @pytest.mark.asyncio
     async def test_forged_knowledge_digest_never_reaches_llm(self):
         from agents.ticket_resolver import resolve_ticket
         with patch("agents.ticket_resolver.llm") as mock_llm:
