@@ -21,7 +21,7 @@ from core.job_queue import (
     mark_outbox_published,
 )
 
-JobHandler = Callable[[dict[str, Any], str], Awaitable[dict[str, Any] | None]]
+JobHandler = Callable[..., Awaitable[dict[str, Any] | None]]
 OutboxPublisher = Callable[[dict[str, Any], str], Awaitable[None]]
 
 
@@ -44,10 +44,18 @@ async def process_job_batch(
     limit: int = 10,
     lease_seconds: int = 60,
     handler_timeout_seconds: int = 120,
+    tenant_aware_handlers: frozenset[str] = frozenset(),
 ) -> dict[str, int]:
-    """Claim and process a bounded batch; cancellation leaves leases for recovery."""
+    """Claim and process a bounded batch; cancellation leaves leases for recovery.
+
+    Tenant-aware handlers receive the authoritative org_id from the claimed
+    DurableJob row as a third argument. They must not trust a tenant identifier
+    supplied only inside the JSON payload.
+    """
     if not 1 <= handler_timeout_seconds <= 300:
         raise ValueError("handler_timeout_seconds must be between 1 and 300")
+    if not isinstance(tenant_aware_handlers, frozenset) or not tenant_aware_handlers.issubset(handlers):
+        raise ValueError("tenant_aware_handlers must be a frozenset subset of registered handlers")
 
     async with session_factory() as session:
         jobs = await claim_jobs(
@@ -79,10 +87,11 @@ async def process_job_batch(
             counts["retrying_or_dead_letter"] += 1
             continue
         try:
-            result = await asyncio.wait_for(
-                handler(item["payload"], item["idempotency_key"]),
-                timeout=handler_timeout_seconds,
-            )
+            if item["job_type"] in tenant_aware_handlers:
+                call = handler(item["payload"], item["idempotency_key"], item["org_id"])
+            else:
+                call = handler(item["payload"], item["idempotency_key"])
+            result = await asyncio.wait_for(call, timeout=handler_timeout_seconds)
             safe_result = _validate_result(result)
         except asyncio.TimeoutError:
             async with session_factory() as session:

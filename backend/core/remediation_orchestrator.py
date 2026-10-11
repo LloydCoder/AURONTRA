@@ -431,24 +431,38 @@ def make_remediation_job_handler(
             raise RemediationOrchestrationError("processor_outcome_unknown") from None
 
         status = getattr(result, "status", None)
+        postcondition_ids = getattr(result, "postcondition_evidence_ids", ())
+        outcome_claim = getattr(result, "business_outcome_verified", False) is True
         mapping = {
-            "verified": "verified",
             "approval_pending": "approval_pending",
             "platform_not_completed": "platform_pending",
             "verification_failed": "verification_failed",
         }
-        target_status = mapping.get(status, "failed")
+        if status == "verified" and outcome_claim and isinstance(postcondition_ids, (tuple, list)) and len(postcondition_ids) > 0:
+            target_status = "verified"
+        elif status == "verified":
+            target_status = "verification_failed"
+        else:
+            target_status = mapping.get(status, "failed")
         platform_state = getattr(result, "platform_state", None)
+        if not isinstance(platform_state, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", platform_state):
+            platform_state = "unknown"
         action_id = getattr(result, "action_id", None)
         run_id = getattr(result, "run_id", None)
         execution_id = getattr(result, "execution_id", None)
         platform_evidence = getattr(result, "platform_evidence_ids", ())
         audit_ids = getattr(result, "audit_event_ids", ())
-        postcondition_ids = getattr(result, "postcondition_evidence_ids", ())
         reason_code = getattr(result, "reason_code", None)
+        if target_status == "verification_failed" and status == "verified":
+            reason_code = "postcondition_evidence_missing_or_unverified"
+        if target_status == "failed" and not isinstance(reason_code, str):
+            reason_code = "processor_result_invalid"
+        safe_action_id = str(action_id) if action_id is not None else ""
+        if safe_action_id and not _SAFE_ID.fullmatch(safe_action_id):
+            safe_action_id = ""
         safe_metadata = {
-            "action_id": str(action_id) if action_id is not None else "",
-            "business_outcome_verified": target_status == "verified" and getattr(result, "business_outcome_verified", False) is True,
+            "action_id": safe_action_id,
+            "business_outcome_verified": target_status == "verified" and outcome_claim and bool(postcondition_ids),
         }
         async with session_factory() as session:
             await _set_database_rls(session, trusted_org_id)
