@@ -50,13 +50,15 @@ async def _collect_evidence(db: AsyncSession, tenant_id: str, period_days: int, 
     ) or 0)
     tickets_resolved_ai = int(await db.scalar(
         select(func.count()).select_from(Ticket).where(
-            Ticket.org_id == tenant_id, Ticket.ai_resolved.is_(True),
-            Ticket.resolved_at.is_not(None), Ticket.resolved_at >= start, Ticket.resolved_at <= end
+            Ticket.org_id == tenant_id, Ticket.created_at >= start, Ticket.created_at <= end,
+            Ticket.ai_resolved.is_(True), Ticket.resolved_at.is_not(None),
+            Ticket.resolved_at >= start, Ticket.resolved_at <= end
         )
     ) or 0)
     tickets_resolved = int(await db.scalar(
         select(func.count()).select_from(Ticket).where(
-            Ticket.org_id == tenant_id, Ticket.status.in_([TicketStatus.RESOLVED, TicketStatus.CLOSED]),
+            Ticket.org_id == tenant_id, Ticket.created_at >= start, Ticket.created_at <= end,
+            Ticket.status.in_([TicketStatus.RESOLVED, TicketStatus.CLOSED]),
             Ticket.resolved_at.is_not(None), Ticket.resolved_at >= start, Ticket.resolved_at <= end
         )
     ) or 0)
@@ -98,6 +100,14 @@ async def _collect_evidence(db: AsyncSession, tenant_id: str, period_days: int, 
         "mfa_enabled": mfa_enabled,
         "mfa_provenance": "verified_identity_claim" if mfa_enabled else "not_proven_by_verified_identity_claim",
         "query_scope": "verified_tenant_id",
+        "source_queries": {
+            "active_devices": "devices.org_id = verified tenant AND active AND not revoked",
+            "tickets_created": "tickets.org_id = verified tenant AND created_at within report window",
+            "ai_resolved_tickets": "tenant tickets created and resolved within window with ai_resolved=true",
+            "resolved_or_closed_tickets": "tenant tickets created and resolved within window with resolved/closed status",
+            "verified_containment_attempts": "tenant containment attempts with status=contained and completed_at within window",
+            "average_resilience_score": "tenant resilience score snapshots recorded within window",
+        },
     }
     return evidence, start, end
 
@@ -142,6 +152,8 @@ async def roi_report(
         avg_hourly_rate=payload.avg_hourly_rate_usd, period_days=payload.period_days,
     )
     report.update({
+        "threats_verified_contained": evidence["verified_containment_attempts"],
+        "threats_reported_blocked_unverified": 0,
         "measured_savings": False,
         "methodology_status": "illustrative_model_not_measured",
         "input_provenance": "tenant_scoped_database_aggregates_plus_disclosed_hourly_rate_assumption",
