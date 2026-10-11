@@ -1,5 +1,6 @@
 """Phase 07 lifecycle regression tests for tenant organization/device state."""
 import pytest
+from datetime import datetime, timezone
 from httpx import ASGITransport, AsyncClient
 
 from core.database import AsyncSessionLocal
@@ -64,6 +65,13 @@ async def test_device_revocation_is_idempotent_and_tenant_scoped():
 async def test_offboarding_disables_org_and_all_owned_devices_without_deleting_them():
     async with AsyncSessionLocal() as db:
         db.add(Device(id="offboard-device", org_id="test-tenant", name="offboard device", is_active=True))
+        db.add(Device(
+            id="previously-revoked",
+            org_id="test-tenant",
+            name="previously revoked device",
+            is_active=False,
+            revoked_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
+        ))
         await db.commit()
 
     from main import app
@@ -80,10 +88,13 @@ async def test_offboarding_disables_org_and_all_owned_devices_without_deleting_t
     async with AsyncSessionLocal() as db:
         org = await db.get(Organization, "test-tenant")
         device = await db.get(Device, "offboard-device")
+        previous = await db.get(Device, "previously-revoked")
         assert org.status == "offboarded"
         assert device is not None
         assert device.is_active is False
         assert device.revoked_at is not None
+        assert previous.is_active is False
+        assert previous.revoked_at.year == 2025
 
 
 @pytest.mark.asyncio
