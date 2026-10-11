@@ -27,7 +27,7 @@ class ThreatFinding(Base):
     id = Column(String(36), primary_key=True)
     org_id = Column(String(64), ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False)
     event_id = Column(String(128), nullable=False)
-    source = Column(String(32), nullable=False, default="api_signal", server_default="api_signal")
+    source = Column(String(32), nullable=False, default="network_signal", server_default="network_signal")
     detector_version = Column(String(64), nullable=False)
     observed_at = Column(DateTime(timezone=True), nullable=False)
     received_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
