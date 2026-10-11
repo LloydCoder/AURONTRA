@@ -17,7 +17,7 @@ from urllib.parse import urlsplit
 from uuid import UUID, uuid4
 
 from tinlance_agent_platform_sdk.async_client import AsyncAgentPlatform
-from tinlance_agent_platform_sdk.errors import SdkError
+from tinlance_agent_platform_sdk.errors import SdkError, TransportError
 from tinlance_agent_platform_sdk.tools import ToolInvocation
 
 from core.config import settings
@@ -366,6 +366,17 @@ class PlatformGovernedActionExecutor:
             )
         except GovernedActionError:
             raise
+        except TransportError:
+            # The same action ID preserves the Platform idempotency key on retry.
+            logger.warning(
+                "Governed Platform transport failure operation=%s",
+                "execute" if run_id else "run",
+            )
+            raise GovernedActionError(
+                "platform_transport_error",
+                retryable=False,
+                run_id=run_id,
+            ) from None
         except SdkError as exc:
             raw_code = getattr(exc, "error_code", None) or type(exc).__name__.lower()
             code = re.sub(r"[^A-Za-z0-9_.-]", "_", str(raw_code))[:80] or "platform_error"
