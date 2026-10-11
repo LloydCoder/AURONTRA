@@ -1,88 +1,177 @@
+<div align="center">
+
 # Aurontra
 
-**Aurontra — Autonomous IT Resilience Platform.** Detect operational risk, assist IT service workflows, coordinate governed remediation, and produce auditable operational evidence.
+**Governed IT resilience for operations and security teams: turn operational signals into auditable, human-governed response workflows.**
 
-Aurontra is a Tinlance ecosystem product and consumer of the four-repository Tinlance Agent System. Its governed-action adapter uses the reviewed Platform SDK. TSIC manifest and reference-adapter registration merged as `f12105f5a64fc365eae1bd151d01eed509f3108d`. Phase 17 code-level contract hardening passed candidate CI at `b813d4bc45fc9a641c44b1ef4a83ca52fab1127f` (515 tests passed, 1 skipped, 85.28% coverage; PostgreSQL RLS/restore, dependency audit, and secret/archive scan green). Live cross-system contracts, trusted telemetry-to-finding, independent containment verification, and operational worker/scheduler acceptance remain open. Aurontra must not duplicate the Agent Platform's identity, authorization, policy, approval, sandbox, secrets, execution, or audit authority.
+[![CI](https://github.com/LloydCoder/AURONTRA/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/LloydCoder/AURONTRA/actions/workflows/ci.yml)
+[![Security scan](https://github.com/LloydCoder/AURONTRA/actions/workflows/security.yml/badge.svg?branch=main)](https://github.com/LloydCoder/AURONTRA/actions/workflows/security.yml)
 
-## Product scope
+</div>
 
-- IT service-desk assistance with risk-based escalation.
-- Device and infrastructure health telemetry and evaluated predictive signals.
-- Governed remediation through authenticated endpoint agents.
-- Threat analysis and containment with independently verified enforcement outcomes.
-- Enterprise integrations, operational reporting, and evidence provenance.
+> [!WARNING]
+> **Aurontra is not certified production-ready.** The production business data plane, endpoint-agent authentication, governed remediation submission, and threat containment remain disabled by default or blocked on external integration and release gates. Passing CI is not proof of production deployment, successful containment, calibrated prediction, or regulatory compliance.
 
-## Current release status
+## Why Aurontra
 
-**Not certified production-ready.** The repository is undergoing security-first hardening. Existing test success is not equivalent to production readiness, and a decision score is not proof that a threat was blocked.
+Aurontra is a Tinlance ecosystem product for IT service operations, infrastructure resilience, risk assessment, and governed remediation. It consumes the Tinlance Agent System; it does not replace or duplicate the Agent Platform's authority over identity, authorization, policy, approvals, secrets, sandboxing, execution, or authoritative evidence.
 
-Until secure endpoint execution and authorization are implemented and tested:
-- Public self-healing execution is disabled.
-- The threat-containment endpoint is disabled; analysis must not be represented as containment.
-- Billing webhooks are rejected when signature verification cannot be performed.
-- Public organization registration and checkout are disabled until secure tenant lifecycle and provider-backed billing are implemented.
-- The production business data plane is disabled by default until JWT verification and durable tenant isolation are configured.
-- Phase 10 provides a pure remediation planner and feature-gated Platform submission service with independent postcondition-verification contracts. Phase 11 adds durable tenant-scoped remediation intents, atomic job/outbox creation, crash-safe unknown-outcome state, and idempotent reconciliation scheduling. Neither phase is wired to a production worker or public route; submission remains disabled until exact Platform tools, a real tenant-scoped verifier, and a scheduler are configured.
-- ROI outputs are illustrative models, not measured savings; control mappings are not compliance certification.
-- Deployment status is reported separately from test status.
+| Need | Aurontra approach | Important boundary |
+|---|---|---|
+| Operational visibility | Tenant-scoped tickets, device telemetry, and evidence records | Production ingestion remains gated on approved identity and release acceptance |
+| Risk assessment | Threat signals and predictive evaluations with provenance | Scores are heuristics unless calibrated against representative labelled data |
+| Remediation planning | Deterministic, freshness-bounded plans and durable intents | No local privileged execution; submission is disabled until Platform contracts and independent verification are configured |
+| Governed action | Reviewed Tinlance Agent Platform SDK and code-owned action allowlists | Platform remains the sole execution authority |
+| Auditability | Durable records, idempotency, and explicit verification states | An accepted action is not proof that the business outcome succeeded |
 
-## Latest repository validation baseline
+## Quick Start
 
-After merge at main commit `50469e0cf94f371dca5531713c51d8637f4d3ea5`, [post-merge CI run 38120944398](https://github.com/LloydCoder/AURONTRA/actions/runs/38120944398) passed **488 tests, 1 skipped, 84.85% coverage**. Clean SQLite migration, backend compilation, PostgreSQL migrations, non-owner tenant RLS, backup/restore, and the secret/archive scan ([run 38120944414](https://github.com/LloydCoder/AURONTRA/actions/runs/38120944414)) passed. Deployment was skipped by the explicit release gate; this is not a production deployment or certification claim.
+Requirements: Python 3.12, Git, and a supported OS. These commands set up the backend and run tests; they do not enable production business APIs.
 
-## Threat containment orchestration (Phase 16)
+~~~bash
+git clone https://github.com/LloydCoder/AURONTRA.git
+cd AURONTRA/backend && python3.12 -m venv .venv && source .venv/bin/activate
+python -m pip install -r requirements.txt
+AUTH_MODE=disabled DATA_PLANE_ENABLED=true TEST_MODE=true pytest tests/ -q
+~~~
 
-Phase 16 adds a durable containment-attempt ledger, a stable idempotent action ID, tenant/device/telemetry binding, and a Platform-governed critical-risk isolation action contract. Aurontra never runs local enforcement. A finding is marked contained only when the Platform reports execution evidence and an independent verifier confirms fresh, target-matched isolation evidence. The default verifier is intentionally absent, and `THREAT_CONTAINMENT_ENABLED=false` and `AGENT_PLATFORM_ENABLED=false`; real containment is still disabled pending Phase 17 telemetry/verifier integration and Platform-side tool/approval-policy verification. CI passed **465 tests, 1 skipped, 85.19% coverage**, PostgreSQL RLS/backup-restore, and secret/history/archive scanning. See [Phase 16 design](docs/PHASE_16_VERIFIED_CONTAINMENT.md) and [Phase 16 forensic audit](docs/audits/PHASE_16_FORENSIC_AUDIT.md).
+The test-only environment overrides are scoped to the test command. Do not use them to run a production service.
 
-## Development and verification
+## Installation
 
-Backend CI uses Python 3.12 and pytest. The CI workflow is the source of truth for currently enforced checks. Durable job/outbox worker primitives are covered by CI; production scheduler/broker configuration, frontend build/integration, remaining subsystem persistence, inbound billing-webhook idempotency, and deployment verification remain release gates. Ticket and device APIs now use durable tenant-scoped persistence; CI verifies cross-tenant behavior, PostgreSQL RLS for tenant-owned tables (including durable replay and remediation intent records), and a backup/restore smoke test. Other business modules remain gated, and no production database migration or tenant-isolated data-plane release is claimed.
+Requirements: Python 3.12, Git, network access for Python dependencies and the pinned Tinlance Agent Platform SDK revision. PostgreSQL 16 is used by the CI tenant-isolation and backup/restore integration checks.
 
-## Endpoint-agent identity (Phase 08)
+From the repository root:
 
-The endpoint-agent API uses Platform-approved, short-lived DPoP-bound access tokens. Aurontra verifies issuer/JWKS, audience, tenant/device subject, scopes, key thumbprint, fresh per-request proof, request URI/method, access-token hash, and a body-hash extension. Replay identifiers are persisted with forced PostgreSQL RLS. Enrollment, telemetry, and key rotation require separate scopes and active device lifecycle state. Agent authentication remains disabled by default; no production enablement is claimed until the approved identity provider is configured and the full data-plane release gate passes. See [docs/PHASE_08_AGENT_IDENTITY.md](docs/PHASE_08_AGENT_IDENTITY.md).
+~~~bash
+cd backend
+python3.12 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+~~~
 
-## Safe remediation playbooks (Phase 10)
+On Windows PowerShell, activate with .venv\Scripts\Activate.ps1.
 
-Phase 10 adds deterministic, evidence-freshness-bounded plans for disk pressure, allowlisted service restarts, certificate expiry, and read-only high-CPU diagnostics. A gated internal service submits only validated plans through code-owned contracts and requires independent postcondition evidence. It performs no local shell, filesystem, process, service, or certificate side effects. Submission is disabled by default; public routes remain disabled until Platform tool registrations and a concrete tenant-scoped verifier are provisioned. See [Phase 10 design](docs/PHASE_10_SAFE_REMEDIATION.md) and [Phase 10 forensic audit](docs/audits/PHASE_10_FORENSIC_AUDIT.md).
+### Run the API locally
 
-## Durable remediation orchestration (Phase 11)
+From backend/, start the FastAPI application:
 
-Phase 11 persists remediation intents with deterministic plan/idempotency keys, state/version transitions, platform/evidence references, and tenant-scoped RLS. Intent, submit job, and outbox event are committed atomically. The worker gets tenant identity from the claimed job row, marks ambiguous external outcomes as `unknown_outcome`, and schedules idempotent reconciliation for stale external states. A plan is only marked verified when Platform execution is completed and independent postcondition evidence exists. The processor and scheduler are not configured in production; no live execution is claimed. See [Phase 11 design](docs/PHASE_11_ORCHESTRATION_RECOVERY.md) and [Phase 11 forensic audit](docs/audits/PHASE_11_FORENSIC_AUDIT.md).
+~~~bash
+uvicorn main:app --host 127.0.0.1 --port 8003
+~~~
 
-## Telemetry evidence and predictive evaluation (Phases 12–13)
+Check liveness at http://127.0.0.1:8003/health/live. Liveness confirms that the process responds; it does not certify dependencies, tenant isolation, or production readiness. Business APIs remain closed unless authentication and release gates are configured.
 
-Phase 12 adds tenant-scoped telemetry evidence with DPoP replay protection, event idempotency, payload provenance hashes, timestamp freshness/order checks, partial-metric safeguards, per-device rate limiting, forced PostgreSQL RLS, and a bounded retention primitive. Production ingestion and retention scheduling remain disabled until the approved identity provider, signed endpoint-agent release, evidence consumers, scheduler and customer environment are verified.
+## Usage
 
-Phase 13 adds strict predictor input validation, time-aware trend slopes, trusted-digest checks before model artifact deserialization, and offline evaluation reports for anomaly detection and temporal forecast errors. Anomaly confidence is explicitly uncalibrated; 72-hour forecasts remain linear heuristics. CI passed **411 tests, 1 skipped, 85.19% coverage**, plus PostgreSQL tenant RLS/backup-restore and secret/history/archive scans. Deployment was skipped.
+### Run tests
 
-These checks validate code paths and synthetic fixtures, not real-world predictive performance. Production decisioning remains blocked on a representative, authorized, labeled holdout dataset, calibration/drift evaluation, monitoring and human-approved thresholds. See [Phase 12 design](docs/PHASE_12_TELEMETRY_EVIDENCE.md), [Phase 12 audit](docs/audits/PHASE_12_FORENSIC_AUDIT.md), [Phase 13 design](docs/PHASE_13_PREDICTIVE_EVALUATION.md), and [Phase 13 audit](docs/audits/PHASE_13_FORENSIC_AUDIT.md).
+From backend/ with the virtual environment activated:
 
-## AI service desk and knowledge retrieval (Phase 14)
+~~~bash
+AUTH_MODE=disabled DATA_PLANE_ENABLED=true TEST_MODE=true pytest tests/ -v --tb=short --cov=. --cov-report=term-missing
+~~~
 
-Phase 14 is **complete at code/CI level**. The resolver is draft-only; unknown, security and high-impact tickets require human review; reporter email is excluded from prompts; common PII/credentials are redacted; provider calls and serialized prompts are bounded; and prompt, response, triage, escalation and knowledge-reference provenance are persisted. Retrieval is deterministic lexical ranking over approved, published global or same-tenant knowledge articles, with content-digest verification and PostgreSQL RLS. CI passed **433 tests, 1 skipped, 85.56% coverage**, plus PostgreSQL tenant RLS/backup-restore and secret/history/archive scans. Deployment was skipped and the production data plane remains closed. See [Phase 14 design](docs/PHASE_14_AI_SERVICE_DESK.md) and [Phase 14 forensic audit](docs/audits/PHASE_14_FORENSIC_AUDIT.md).
+These environment overrides are for isolated automated tests only. CI also runs dependency checks, a clean SQLite migration, compilation, PostgreSQL tenant-row-level-security tests, and a backup/restore smoke test. See the [CI workflow](.github/workflows/ci.yml) for enforced commands.
 
-## Threat detection evidence pipeline (Phase 15)
+### Check liveness
 
-Phase 15 adds validated threat-signal ingestion, tenant-scoped durable findings, canonical signal digests, detector-version provenance, idempotent event replay, PostgreSQL RLS, and reproducible offline evaluation metrics with Wilson intervals. The risk score remains an uncalibrated heuristic; ATT&CK mappings are hypotheses, not confirmed behaviors. The `/threats/block` endpoint remains disabled and the analysis API never claims containment. CI passed **451 tests, 1 skipped, 85.49% coverage**, PostgreSQL RLS/backup-restore, and secret/history/archive scanning. No labelled production dataset or production deployment was exercised. See [Phase 15 design](docs/PHASE_15_THREAT_EVIDENCE.md) and [Phase 15 forensic audit](docs/audits/PHASE_15_FORENSIC_AUDIT.md).
+~~~bash
+curl --fail --silent --show-error http://127.0.0.1:8003/health/live
+~~~
 
-## Governed action engine (Phase 09)
+Expected response:
 
-The governed-action adapter was merged in PR #4 at `90b8760560b7efb773861e0297c86235638a014a` against the pinned Tinlance Agent Platform SDK. It uses a code-owned action allowlist, trusted tenant/subject/agent/task context, stable idempotency keys, bounded JSON arguments, and Platform-owned policy/approval/execution/evidence. It does not execute local shell commands or treat execution acceptance as proof of a business outcome.
+~~~json
+{"alive":true}
+~~~
 
-The integration remains **disabled by default** and is not connected to public playbook routes. The environment-token configuration is single-tenant; multi-tenant deployment requires an approved tenant-scoped credential provider and per-tenant Platform registration. PR CI and post-merge main CI passed, including PostgreSQL RLS/restore and secret/history/archive scans. Deployment was skipped; no live Platform connection or production action is claimed. See [Phase 09 implementation](docs/PHASE_09_GOVERNED_ACTION_ENGINE.md) and the [Phase 09 forensic audit](docs/audits/PHASE_09_FORENSIC_AUDIT.md).
+### Configuration
 
-## Architecture and security principles
+Settings are environment-driven and may also be loaded from backend/.env. Never commit real secrets or copy production credentials into a local development environment.
 
-1. Default-deny for privileged actions.
-2. Authenticate and authorize every non-public operation at tenant and resource level.
-3. Never execute a requested device action on the API host as a substitute for an endpoint agent.
-4. Distinguish observed, detected, decided, requested, enforced, and verified states.
-5. Persist operational records and audit evidence durably.
-6. Keep secrets out of source control, logs, API responses, and artifacts.
-7. Report modeled ROI separately from measured outcomes.
-8. Do not claim NIS2/DORA compliance or certification based only on caller-supplied metrics.
+| Setting | Default | Purpose |
+|---|---|---|
+| ENVIRONMENT | development | Runtime environment; production enforces stricter configuration checks |
+| AUTH_MODE | required | Keeps business API authentication enabled by default |
+| DATA_PLANE_ENABLED | false | Keeps the business data plane closed by default |
+| TEST_MODE | false | Enables deterministic test-only behavior when explicitly set |
+| DATABASE_URL | sqlite+aiosqlite:///./aurontra_dev.db | Local database URL; production requires reviewed durable database configuration |
+| MAX_REQUEST_BODY_BYTES | 1048576 | Maximum declared request body size checked by application middleware |
+| AGENT_AUTH_ENABLED | false | Endpoint-agent authentication feature gate |
+| AGENT_PLATFORM_ENABLED | false | Governed Platform adapter feature gate |
+| REMEDIATION_SUBMISSION_ENABLED | false | Internal remediation submission feature gate |
+| THREAT_CONTAINMENT_ENABLED | false | Threat containment feature gate |
+| REDIS_URL | redis://localhost:6379 | Redis URL for integrations that require it |
 
-## Roadmap
+The full configuration is defined in [backend/core/config.py](backend/core/config.py). This table lists selected safety-relevant settings, not every supported environment variable. Production requires HTTPS identity-provider endpoints, tenant-scoped credentials, verified Platform tool/approval configuration, independent postcondition verification, durable subsystem coverage, and operational release evidence.
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the canonical Tinlance Agent System boundary, [docs/ROADMAP.md](docs/ROADMAP.md) for the phase plan, and [docs/SECURITY_BASELINE.md](docs/SECURITY_BASELINE.md) for safety constraints and release gates.
+## Features and current maturity
+
+| Capability | Repository evidence | Current limitation |
+|---|---|---|
+| Ticket and device APIs | Tenant-scoped persistence and cross-tenant regression tests | Overall production data plane remains gated |
+| Endpoint-agent identity | DPoP-bound token verification and replay protection code | Disabled until approved issuer/JWKS and release gates are configured |
+| Telemetry evidence | Freshness, provenance, idempotency, and tenant-scoped persistence | Production ingestion and retention scheduling are not certified as deployed |
+| Predictive evaluation | Offline evaluation reports and input validation | Anomaly confidence is uncalibrated; forecasts are heuristics |
+| Threat findings | Durable tenant-scoped findings and offline evaluation | Risk score is heuristic; ATT&CK mappings are hypotheses |
+| Governed remediation | Deterministic plans, durable intents, Platform adapter contracts | Submission/worker/scheduler are not production-wired |
+| Threat containment | Durable attempt state and independent-verification contract | Disabled pending verified Platform tool, approval policy, telemetry, and verifier integration |
+| AI service desk | Draft-only resolution, redaction, approved knowledge retrieval, provenance | Production data plane remains closed |
+| CI and security hygiene | Python tests, dependency audit, PostgreSQL RLS/restore checks, Gitleaks scan | CI does not replace production verification or independent security assessment |
+
+## Documentation
+
+- [Documentation index](docs/README.md)
+- [Architecture and Tinlance Agent System boundary](docs/ARCHITECTURE.md)
+- [Enterprise hardening roadmap](docs/ROADMAP.md)
+- [Security baseline and release gates](docs/SECURITY_BASELINE.md)
+- [Phase 08 — endpoint-agent identity](docs/PHASE_08_AGENT_IDENTITY.md)
+- [Phase 09 — governed action engine](docs/PHASE_09_GOVERNED_ACTION_ENGINE.md)
+- [Phase 10 — safe remediation playbooks](docs/PHASE_10_SAFE_REMEDIATION.md)
+- [Phase 11 — durable orchestration and recovery](docs/PHASE_11_ORCHESTRATION_RECOVERY.md)
+- [Phase 12 — telemetry evidence](docs/PHASE_12_TELEMETRY_EVIDENCE.md)
+- [Phase 13 — predictive evaluation](docs/PHASE_13_PREDICTIVE_EVALUATION.md)
+- [Phase 14 — AI service desk](docs/PHASE_14_AI_SERVICE_DESK.md)
+- [Phase 15 — threat evidence](docs/PHASE_15_THREAT_EVIDENCE.md)
+- [Phase 16 — verified containment](docs/PHASE_16_VERIFIED_CONTAINMENT.md)
+- [Phase forensic audits](docs/audits/)
+- [LLM documentation index](llms.txt)
+
+## Contributing
+
+Contributions should include focused tests, documentation updates, and evidence for security-sensitive behavior. Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request. Never submit secrets, customer data, unverified claims, or changes that bypass Platform authorization and approval controls.
+
+## License and acknowledgements
+
+**No license file is currently present.** Until the maintainers choose and add a license, do not assume permission to reuse, modify, or redistribute this repository. See the [license decision note](docs/LICENSING.md).
+
+Aurontra integrates with the Tinlance Agent System through the reviewed [Tinlance Agent Platform SDK](https://github.com/LloydCoder/tinlance-agent-platform-sdk). The Platform remains the authority for governed execution and evidence.
+
+<details>
+<summary>Roadmap and production acceptance</summary>
+
+The roadmap contains 24 sequential hardening phases. The repository records historical acceptance for Phases 01–16, with Phase 17 in progress at the latest recorded checkpoint. Verify the current [roadmap](docs/ROADMAP.md) and CI before relying on phase status.
+
+Production acceptance requires complete resource-level authorization and tenant isolation, durable state across enabled business subsystems, provider-backed webhook idempotency, reviewed Platform tool and approval registrations, independently verified outcomes, worker/scheduler deployment, backups and recovery drills, monitoring, and a real deployment followed by independent verification.
+
+</details>
+
+<details>
+<summary>Troubleshooting</summary>
+
+- **Business APIs return 503:** expected when identity configuration, the data-plane gate, or tenant-isolation release requirements are not satisfied.
+- **Endpoint-agent routes return 503:** check the feature gate and approved issuer/JWKS/audience configuration; do not disable authentication to bypass the gate.
+- **Platform actions are unavailable:** the adapter is disabled by default and needs tenant-scoped credentials, registered tools, and policy/approval configuration.
+- **Dependency installation fails:** use Python 3.12 and ensure Git access is available for the pinned SDK dependency.
+- **A test requires PostgreSQL:** use the PostgreSQL integration workflow or a disposable PostgreSQL 16 test database. Do not point tests at production.
+
+</details>
+
+<details>
+<summary>Support</summary>
+
+Use the repository issue tracker for reproducible bugs and feature requests. Do not disclose vulnerabilities or credentials in public issues; follow [SECURITY.md](SECURITY.md).
+
+</details>
