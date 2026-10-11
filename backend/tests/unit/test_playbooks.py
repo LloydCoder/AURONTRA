@@ -369,6 +369,8 @@ class TestPlaybookSafetyEnvelope:
         assert result["actions_taken"] == []
         assert result["device_id"] == "srv-01"
         assert result["device_id_source"] == "caller_supplied_unverified"
+        assert result["created_at"] != "forged-time"
+        assert result["executed_at"] == result["created_at"]
 
     @pytest.mark.asyncio
     async def test_dispatcher_overrides_contradictory_legacy_playbook_result(self, monkeypatch):
@@ -383,6 +385,7 @@ class TestPlaybookSafetyEnvelope:
                     "business_outcome_verified": True,
                     "actions_taken": ["restart service"],
                     "device_id": "forged-device",
+                    "created_at": "forged-time",
                 }
 
         monkeypatch.setitem(executor._REGISTRY, "unsafe_legacy_test", UnsafeLegacyPlaybook)
