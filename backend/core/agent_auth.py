@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
+import re
 from contextlib import aclosing
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -26,6 +27,7 @@ from core.config import settings
 
 _ALLOWED_DPOP_ALGORITHMS = frozenset({"ES256", "RS256", "EdDSA"})
 _PRIVATE_JWK_MEMBERS = frozenset({"d", "p", "q", "dp", "dq", "qi", "oth", "k"})
+_NORMALIZED_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:@/-]{0,255}$")
 
 
 @dataclass(frozen=True, slots=True)
@@ -103,10 +105,10 @@ def _verify_access_token(token: str) -> dict[str, Any]:
         raise ValueError("agent access token validity window is invalid")
     for name, limit in (("sub", 128), ("jti", 256)):
         value = claims.get(name)
-        if not isinstance(value, str) or not value or value != value.strip() or len(value) > limit:
+        if not isinstance(value, str) or not value or value != value.strip() or len(value) > limit or not _NORMALIZED_ID.fullmatch(value):
             raise ValueError(f"agent access token claim {name!r} is invalid")
     tenant_id = claims.get("tenant_id", claims.get("org_id"))
-    if not isinstance(tenant_id, str) or not tenant_id or tenant_id != tenant_id.strip() or len(tenant_id) > 64:
+    if not isinstance(tenant_id, str) or not tenant_id or tenant_id != tenant_id.strip() or len(tenant_id) > 64 or not _NORMALIZED_ID.fullmatch(tenant_id):
         raise ValueError("agent access token tenant claim is invalid")
     raw_scope = claims.get("scope", claims.get("scp", ""))
     if isinstance(raw_scope, str):
@@ -179,6 +181,8 @@ def _verify_dpop_proof(
         raise ValueError("DPoP public key does not match the sender-constrained access token")
 
     public_key = jwt.PyJWK.from_dict({**jwk_data, "alg": algorithm}, algorithm=algorithm).key
+    if algorithm == "RS256" and getattr(public_key, "key_size", 0) < 2048:
+        raise ValueError("DPoP RSA keys must be at least 2048 bits")
     proof_claims = jwt.decode(
         proof,
         public_key,
@@ -200,7 +204,7 @@ def _verify_dpop_proof(
     ):
         raise ValueError("DPoP proof is outside the accepted time window")
     proof_jti = proof_claims.get("jti")
-    if not isinstance(proof_jti, str) or proof_jti != proof_jti.strip() or not 16 <= len(proof_jti) <= 256:
+    if not isinstance(proof_jti, str) or proof_jti != proof_jti.strip() or not 16 <= len(proof_jti) <= 256 or any(ord(ch) < 0x21 or ord(ch) > 0x7E for ch in proof_jti):
         raise ValueError("DPoP proof identifier is invalid")
     expected_ath = _b64url(sha256(access_token.encode("ascii")).digest())
     if proof_claims.get("ath") != expected_ath:
@@ -216,9 +220,10 @@ async def get_agent_identity(request: Request) -> AgentIdentity:
     if not settings.AGENT_AUTH_ENABLED:
         raise HTTPException(status_code=503, detail="Endpoint-agent authentication is disabled.")
     authorization = request.headers.get("Authorization", "")
-    if not authorization.startswith("DPoP "):
+    scheme, separator, token = authorization.partition(" ")
+    if scheme.lower() != "dpop" or not separator:
         raise HTTPException(status_code=401, headers={"WWW-Authenticate": "DPoP"}, detail="DPoP authorization required.")
-    token = authorization[5:].strip()
+    token = token.strip()
     proof = request.headers.get("DPoP", "")
     try:
         claims = await asyncio.to_thread(_verify_access_token, token)
