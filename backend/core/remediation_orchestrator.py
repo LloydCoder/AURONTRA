@@ -461,6 +461,11 @@ def make_remediation_job_handler(
             reason_code = "processor_evidence_invalid"
         safe_execution_id = str(execution_id) if execution_id is not None else ""
         execution_id_valid = bool(safe_execution_id and _SAFE_ID.fullmatch(safe_execution_id))
+        safe_run_id = str(run_id) if run_id is not None else ""
+        if safe_run_id and not _SAFE_ID.fullmatch(safe_run_id):
+            safe_run_id = ""
+        if not execution_id_valid:
+            safe_execution_id = ""
         mapping = {
             "approval_pending": "approval_pending",
             "platform_not_completed": "platform_pending",
@@ -508,8 +513,8 @@ def make_remediation_job_handler(
                 to_status=target_status,
                 reason_code=reason_code if isinstance(reason_code, str) else None,
                 platform_state=platform_state if isinstance(platform_state, str) else None,
-                platform_run_id=str(run_id) if run_id is not None else None,
-                platform_execution_id=str(execution_id) if execution_id is not None else None,
+                platform_run_id=safe_run_id or None,
+                platform_execution_id=safe_execution_id or None,
                 platform_evidence_ids=clean_platform_evidence,
                 audit_event_ids=clean_audit_ids,
                 postcondition_evidence_ids=clean_postcondition_ids,
