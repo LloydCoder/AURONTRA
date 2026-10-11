@@ -14,6 +14,7 @@ from core import agent_auth
 from core.config import settings
 from core.database import AsyncSessionLocal
 from models.device import Device
+from models.durable_job import OutboxEvent
 from models.organization import Organization
 
 
@@ -129,6 +130,8 @@ async def test_platform_bound_agent_enrollment_activates_only_provisioned_device
         assert device.enrolled_at is not None
         assert device.agent_key_thumbprint == thumbprint
         assert device.agent_version == "1.2.3"
+        events = (await db.scalars(__import__("sqlalchemy").select(OutboxEvent).where(OutboxEvent.aggregate_id == device_id))).all()
+        assert [event.event_type for event in events] == ["agent.enrolled"]
 
 
 @pytest.mark.asyncio
