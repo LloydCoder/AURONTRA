@@ -100,6 +100,7 @@ def _verify_access_token(token: str) -> dict[str, Any]:
         or isinstance(expires_at, bool)
         or not isinstance(expires_at, (int, float))
         or issued_at > now + settings.AGENT_CLOCK_SKEW_SECONDS
+        or expires_at <= issued_at
         or expires_at - issued_at > settings.AGENT_ACCESS_TOKEN_MAX_TTL_SECONDS
     ):
         raise ValueError("agent access token validity window is invalid")
