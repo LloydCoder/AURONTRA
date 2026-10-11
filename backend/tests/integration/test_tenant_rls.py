@@ -19,6 +19,8 @@ async def test_rls_scopes_organization_and_device_rows_and_rejects_cross_tenant_
     device_b = f"device-b-{suffix}"
     ticket_a = f"ticket-a-{suffix}"
     ticket_b = f"ticket-b-{suffix}"
+    replay_a = f"replay-a-{suffix}"
+    replay_b = f"replay-b-{suffix}"
     role = f"aurontra_rls_{suffix}"
     password = f"test-{suffix}-only"
     admin = await asyncpg.connect(dsn)
@@ -26,7 +28,7 @@ async def test_rls_scopes_organization_and_device_rows_and_rejects_cross_tenant_
     try:
         await admin.execute(f'CREATE ROLE "{role}" LOGIN PASSWORD \'{password}\' NOSUPERUSER NOBYPASSRLS')
         await admin.execute(f'GRANT USAGE ON SCHEMA public TO "{role}"')
-        await admin.execute(f'GRANT SELECT, INSERT, UPDATE, DELETE ON organizations, devices, tickets, durable_jobs, outbox_events TO "{role}"')
+        await admin.execute(f'GRANT SELECT, INSERT, UPDATE, DELETE ON organizations, devices, tickets, durable_jobs, outbox_events, agent_request_replays TO "{role}"')
         await admin.execute(
             "INSERT INTO organizations (id, name, status) VALUES ($1, $1, 'active'), ($2, $2, 'active')",
             org_a, org_b,
@@ -53,6 +55,12 @@ async def test_rls_scopes_organization_and_device_rows_and_rejects_cross_tenant_
             "($4, $5, 'ticket', $4, 'ticket.created', '1', $6, '{}'::jsonb, 'pending', 0)",
             f"event-a-{suffix}", org_a, f"event-a-{suffix}", f"event-b-{suffix}", org_b, f"event-b-{suffix}",
         )
+        await admin.execute(
+            "INSERT INTO agent_request_replays (jti, org_id, device_id, request_hash, expires_at) "
+            "VALUES ($1, $2, $3, $4, now() + interval '5 minutes'), "
+            "($5, $6, $7, $8, now() + interval '5 minutes')",
+            replay_a, org_a, device_a, "a" * 64, replay_b, org_b, device_b, "b" * 64,
+        )
 
         app_dsn = dsn.replace("postgresql://postgres:postgres@", f"postgresql://{role}:{password}@")
         app = await asyncpg.connect(app_dsn)
@@ -68,12 +76,15 @@ async def test_rls_scopes_organization_and_device_rows_and_rejects_cross_tenant_
         assert [row["id"] for row in visible_jobs] == [f"job-a-{suffix}"]
         visible_outbox = await app.fetch("SELECT id FROM outbox_events")
         assert [row["id"] for row in visible_outbox] == [f"event-a-{suffix}"]
+        visible_replays = await app.fetch("SELECT jti FROM agent_request_replays")
+        assert [row["jti"] for row in visible_replays] == [replay_a]
 
         await app.execute("SELECT set_config('app.current_org_id', '', false)")
         assert await app.fetch("SELECT id FROM devices") == []
         assert await app.fetch("SELECT id FROM tickets") == []
         assert await app.fetch("SELECT id FROM durable_jobs") == []
         assert await app.fetch("SELECT id FROM outbox_events") == []
+        assert await app.fetch("SELECT jti FROM agent_request_replays") == []
 
         await app.execute("SELECT set_config('app.current_org_id', $1, false)", org_a)
         with pytest.raises(asyncpg.InsufficientPrivilegeError):
@@ -98,6 +109,12 @@ async def test_rls_scopes_organization_and_device_rows_and_rejects_cross_tenant_
                 "INSERT INTO outbox_events (id, org_id, aggregate_type, aggregate_id, event_type, schema_version, idempotency_key, payload, status, attempts) "
                 "VALUES ($1, $2, 'ticket', $1, 'ticket.created', '1', $1, '{}'::jsonb, 'pending', 0)",
                 f"forbidden-event-{suffix}", org_b,
+            )
+        with pytest.raises(asyncpg.InsufficientPrivilegeError):
+            await app.execute(
+                "INSERT INTO agent_request_replays (jti, org_id, device_id, request_hash, expires_at) "
+                "VALUES ($1, $2, $3, $4, now() + interval '5 minutes')",
+                f"forbidden-replay-{suffix}", org_b, device_b, "c" * 64,
             )
     finally:
         if app is not None:
