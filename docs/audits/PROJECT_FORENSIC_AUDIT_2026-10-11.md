@@ -7,7 +7,7 @@
 
 ## Executive summary
 
-The current repository contains a FastAPI backend, SQLAlchemy/Alembic persistence, tenant-isolation tests, endpoint identity verification, governed Platform action adapters, durable job/outbox primitives, remediation planning, telemetry evidence, offline prediction evaluation, AI service-desk assistance, threat findings, and a Platform-governed containment state machine.
+The repository has backend, persistence, identity, remediation, telemetry, service-desk, and threat-analysis modules.
 
 The current main-branch CI workflow and secret/archive scan both completed successfully at baseline commit `c804dc7d72da163c0fe3db928b753d5cc826544c` on 2026-10-11:
 - [CI run 38121327324](https://github.com/LloydCoder/AURONTRA/actions/runs/38121327324)
