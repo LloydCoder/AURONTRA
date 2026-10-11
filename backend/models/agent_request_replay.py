@@ -1,5 +1,5 @@
 """Replay protection records for authenticated endpoint-agent requests."""
-from sqlalchemy import Column, DateTime, ForeignKeyConstraint, Index, String, UniqueConstraint, func
+from sqlalchemy import Column, DateTime, ForeignKeyConstraint, Index, String, func
 
 from core.database import Base
 
@@ -15,7 +15,6 @@ class AgentRequestReplay(Base):
             name="fk_agent_request_replays_org_device",
             ondelete="RESTRICT",
         ),
-        UniqueConstraint("jti", name="uq_agent_request_replays_jti"),
         Index("ix_agent_request_replays_expires_at", "expires_at"),
         Index("ix_agent_request_replays_org_device", "org_id", "device_id"),
     )
