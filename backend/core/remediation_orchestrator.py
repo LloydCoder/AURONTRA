@@ -21,7 +21,7 @@ from core.job_queue import IdempotencyConflict, enqueue_job, enqueue_outbox_even
 from models.device import Device
 from models.organization import Organization
 from models.remediation_intent import RemediationIntent
-from resilience.playbooks.planner import RemediationPlan, plan_as_dict
+from resilience.playbooks.planner import RemediationPlan, TrustedRemediationTarget, build_remediation_plan, plan_as_dict
 
 _SAFE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
 _SAFE_CODE = re.compile(r"^[a-z][a-z0-9_.-]{0,99}$")
@@ -89,14 +89,30 @@ async def _set_database_rls(session: AsyncSession, org_id: str) -> None:
 async def enqueue_remediation_intent(
     session: AsyncSession,
     plan: RemediationPlan,
+    target: TrustedRemediationTarget,
 ) -> tuple[RemediationIntent, bool]:
     """Persist intent, initial outbox event and optional submit job atomically."""
     if not isinstance(plan, RemediationPlan) or plan.status != "proposed":
         raise RemediationOrchestrationError("remediation_plan_not_proposed")
+    if not isinstance(target, TrustedRemediationTarget):
+        raise RemediationOrchestrationError("trusted_remediation_target_required")
     if not _SAFE_ID.fullmatch(plan.tenant_id) or not _SAFE_ID.fullmatch(plan.device_id):
         raise RemediationOrchestrationError("remediation_target_invalid")
     if session.info.get("tenant_id") != plan.tenant_id:
         raise RemediationOrchestrationError("tenant_session_mismatch")
+    if (
+        target.tenant_id != plan.tenant_id
+        or target.device_id != plan.device_id
+        or target.actor_subject != plan.actor_subject
+        or target.source_evidence_id != plan.source_evidence_id
+    ):
+        raise RemediationOrchestrationError("plan_target_context_mismatch")
+    try:
+        rebuilt_plan = build_remediation_plan(plan.playbook, target, dict(plan.parameters))
+    except (TypeError, ValueError):
+        raise RemediationOrchestrationError("remediation_plan_integrity_failed") from None
+    if rebuilt_plan != plan:
+        raise RemediationOrchestrationError("remediation_plan_integrity_failed")
     payload = plan_as_dict(plan)
     if payload.get("execution_enabled") is not False or payload.get("business_outcome_verified") is not False:
         raise RemediationOrchestrationError("remediation_plan_semantics_invalid")

@@ -22,16 +22,22 @@ from models.durable_job import DurableJob, OutboxEvent
 from resilience.playbooks.planner import TrustedRemediationTarget, build_remediation_plan
 
 
-def _plan():
-    now = datetime.now(timezone.utc)
-    target = TrustedRemediationTarget(
+def _target():
+    return TrustedRemediationTarget(
         tenant_id="test-tenant",
         device_id="device-01",
         actor_subject="operator-01",
         source_evidence_id="evidence-01",
-        observed_at=now - timedelta(seconds=30),
+        observed_at=datetime.now(timezone.utc) - timedelta(seconds=30),
     )
-    return build_remediation_plan("high_cpu", target, {"cpu_percent": 95}, now=now)
+
+
+def _plan(target=None):
+    target = target or _target()
+    return build_remediation_plan(
+        "high_cpu", target, {"cpu_percent": 95},
+        now=target.observed_at + timedelta(seconds=30),
+    )
 
 
 async def _prepare_device(session):
@@ -52,9 +58,10 @@ async def test_intent_outbox_and_job_are_atomic_and_idempotent_when_enabled(monk
     monkeypatch.setattr(settings, "REMEDIATION_SUBMISSION_ENABLED", True)
     async with AsyncSessionLocal() as session:
         await _prepare_device(session)
-        plan = _plan()
-        first, created = await enqueue_remediation_intent(session, plan)
-        duplicate, created_again = await enqueue_remediation_intent(session, plan)
+        target = _target()
+        plan = _plan(target)
+        first, created = await enqueue_remediation_intent(session, plan, target)
+        duplicate, created_again = await enqueue_remediation_intent(session, plan, target)
         assert created is True
         assert created_again is False
         assert first.id == duplicate.id == plan.plan_id
@@ -80,8 +87,9 @@ async def test_intent_is_saved_as_proposal_when_submission_is_disabled(monkeypat
     monkeypatch.setattr(settings, "REMEDIATION_SUBMISSION_ENABLED", False)
     async with AsyncSessionLocal() as session:
         await _prepare_device(session)
-        plan = _plan()
-        intent, created = await enqueue_remediation_intent(session, plan)
+        target = _target()
+        plan = _plan(target)
+        intent, created = await enqueue_remediation_intent(session, plan, target)
         assert created is True
         assert intent.status == "proposed"
         assert await session.scalar(select(DurableJob).where(DurableJob.job_type == "remediation.submit")) is None
@@ -94,11 +102,12 @@ async def test_idempotency_key_cannot_be_reused_for_modified_plan(monkeypatch):
     monkeypatch.setattr(settings, "REMEDIATION_SUBMISSION_ENABLED", False)
     async with AsyncSessionLocal() as session:
         await _prepare_device(session)
-        plan = _plan()
-        await enqueue_remediation_intent(session, plan)
-        with pytest.raises(IdempotencyConflict):
+        target = _target()
+        plan = _plan(target)
+        await enqueue_remediation_intent(session, plan, target)
+        with pytest.raises(RemediationOrchestrationError, match="plan_integrity_failed"):
             await enqueue_remediation_intent(
-                session, replace(plan, recommended_action="run_arbitrary_command")
+                session, replace(plan, recommended_action="run_arbitrary_command"), target
             )
 
 
@@ -108,16 +117,18 @@ async def test_unenrolled_or_revoked_device_cannot_receive_intent():
         session.info["tenant_id"] = "test-tenant"
         session.add(Device(id="device-01", org_id="test-tenant", name="Legacy inactive", is_active=True))
         await session.flush()
+        target = _target()
         with pytest.raises(RemediationOrchestrationError, match="not_enrolled"):
-            await enqueue_remediation_intent(session, _plan())
+            await enqueue_remediation_intent(session, _plan(target), target)
 
 
 @pytest.mark.asyncio
 async def test_state_machine_rejects_illegal_transition_and_is_idempotent():
     async with AsyncSessionLocal() as session:
         await _prepare_device(session)
-        plan = _plan()
-        intent, _ = await enqueue_remediation_intent(session, plan)
+        target = _target()
+        plan = _plan(target)
+        intent, _ = await enqueue_remediation_intent(session, plan, target)
         queued = await transition_remediation_intent(
             session, org_id="test-tenant", intent_id=intent.id, to_status="queued"
         )
@@ -165,11 +176,12 @@ def _verified_result(plan):
 async def test_worker_persists_verified_result_only_with_postcondition_evidence(monkeypatch):
     monkeypatch.setattr(settings, "REMEDIATION_SUBMISSION_ENABLED", True)
     monkeypatch.setattr(settings, "AGENT_PLATFORM_ENABLED", True)
-    plan = _plan()
+    target = _target()
+    plan = _plan(target)
     processor = _Processor(_verified_result(plan))
     async with AsyncSessionLocal() as session:
         await _prepare_device(session)
-        intent, _ = await enqueue_remediation_intent(session, plan)
+        intent, _ = await enqueue_remediation_intent(session, plan, target)
         await session.commit()
 
     handler = make_remediation_job_handler(session_factory=AsyncSessionLocal, processor=processor)
@@ -196,10 +208,11 @@ async def test_worker_persists_verified_result_only_with_postcondition_evidence(
 async def test_processor_crash_records_unknown_outcome_then_reuses_same_idempotency_key(monkeypatch):
     monkeypatch.setattr(settings, "REMEDIATION_SUBMISSION_ENABLED", True)
     monkeypatch.setattr(settings, "AGENT_PLATFORM_ENABLED", True)
-    plan = _plan()
+    target = _target()
+    plan = _plan(target)
     async with AsyncSessionLocal() as session:
         await _prepare_device(session)
-        await enqueue_remediation_intent(session, plan)
+        await enqueue_remediation_intent(session, plan, target)
         await session.commit()
 
     failing = _Processor(error=RuntimeError("secret provider response must not persist"))
@@ -233,8 +246,9 @@ async def test_stale_pending_intent_gets_idempotent_reconciliation_job(monkeypat
     monkeypatch.setattr(settings, "AGENT_PLATFORM_ENABLED", True)
     async with AsyncSessionLocal() as session:
         await _prepare_device(session)
-        plan = _plan()
-        intent, _ = await enqueue_remediation_intent(session, plan)
+        target = _target()
+        plan = _plan(target)
+        intent, _ = await enqueue_remediation_intent(session, plan, target)
         await transition_remediation_intent(
             session, org_id="test-tenant", intent_id=intent.id, to_status="submitting"
         )
@@ -279,13 +293,14 @@ async def test_tenant_mismatch_is_rejected_before_processor_call(monkeypatch):
 async def test_verified_status_without_verified_postcondition_is_downgraded(monkeypatch):
     monkeypatch.setattr(settings, "REMEDIATION_SUBMISSION_ENABLED", True)
     monkeypatch.setattr(settings, "AGENT_PLATFORM_ENABLED", True)
-    plan = _plan()
+    target = _target()
+    plan = _plan(target)
     bad = _verified_result(plan)
     bad.business_outcome_verified = False
     bad.postcondition_evidence_ids = ()
     async with AsyncSessionLocal() as session:
         await _prepare_device(session)
-        await enqueue_remediation_intent(session, plan)
+        await enqueue_remediation_intent(session, plan, target)
         await session.commit()
     handler = make_remediation_job_handler(
         session_factory=AsyncSessionLocal, processor=_Processor(bad)
