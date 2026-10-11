@@ -247,7 +247,7 @@ async def analyse_threat(
                 )
             )
         if existing is not None and existing.evidence_sha256 == evidence_sha256:
-            return {**assessment, "finding": _serialize_finding(existing), "idempotent_replay": True}
+            return _response_from_finding(existing, idempotent_replay=True)
         raise HTTPException(status_code=409, detail="Threat finding could not be persisted without a conflict.") from exc
 
     return {**assessment, "finding": _serialize_finding(finding), "idempotent_replay": False}
