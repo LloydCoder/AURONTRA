@@ -29,7 +29,7 @@ def configured_source(source_id: str) -> dict[str, Any]:
     if not 1 <= settings.THREAT_VERIFIER_MAX_SKEW_SECONDS <= 300:
         raise ContainmentWebhookAuthError("verifier_clock_skew_configuration_invalid", 503)
     try:
-        config = json.loads(settings.THREAT_VERIFIER_HMAC_KEYS_JSON or "{}")
+        config = json.loads(settings.THREAT_VERIFIER_INTEGRATION_CONFIG_JSON or "{}")
     except (TypeError, json.JSONDecodeError):
         raise ContainmentWebhookAuthError("verifier_key_configuration_invalid", 503) from None
     if not isinstance(config, dict):
