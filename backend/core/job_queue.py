@@ -11,7 +11,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -125,8 +125,26 @@ async def claim_jobs(
     if not 5 <= lease_seconds <= 3600:
         raise ValueError("lease_seconds must be between 5 and 3600")
     now = _now()
+    # A worker may crash after consuming its final attempt. Reap that expired
+    # lease into the dead-letter state rather than leaving it running forever.
+    await session.execute(
+        update(DurableJob)
+        .where(
+            DurableJob.status == "running",
+            DurableJob.lease_expires_at <= now,
+            DurableJob.attempts >= DurableJob.max_attempts,
+        )
+        .values(
+            status="dead_letter",
+            lease_owner=None,
+            lease_expires_at=None,
+            last_error_code="lease_expired_max_attempts",
+            completed_at=now,
+            updated_at=now,
+        )
+    )
     ready = or_(
-        DurableJob.status.in_([ "pending", "retry_wait" ]),
+        DurableJob.status.in_(["pending", "retry_wait"]),
         and_(DurableJob.status == "running", DurableJob.lease_expires_at <= now),
     )
     statement = (
@@ -298,3 +316,105 @@ async def enqueue_outbox_event(
             return existing, False
         raise IdempotencyConflict("Idempotency key already exists with different event content.")
     return event, True
+
+
+
+async def claim_outbox_events(
+    session: AsyncSession,
+    *,
+    worker_id: str,
+    limit: int = 50,
+    lease_seconds: int = 60,
+) -> list[OutboxEvent]:
+    """Lease pending events for at-least-once publication."""
+    if not worker_id or len(worker_id) > 255:
+        raise ValueError("worker_id is required and must be <= 255 characters")
+    if not 1 <= limit <= 200:
+        raise ValueError("limit must be between 1 and 200")
+    if not 5 <= lease_seconds <= 3600:
+        raise ValueError("lease_seconds must be between 5 and 3600")
+    now = _now()
+    statement = (
+        select(OutboxEvent)
+        .where(
+            OutboxEvent.available_at <= now,
+            or_(
+                OutboxEvent.status == "pending",
+                and_(OutboxEvent.status == "publishing", OutboxEvent.lease_expires_at <= now),
+            ),
+        )
+        .order_by(OutboxEvent.available_at, OutboxEvent.created_at, OutboxEvent.id)
+        .limit(limit)
+        .with_for_update(skip_locked=True)
+    )
+    events = list((await session.scalars(statement)).all())
+    for event in events:
+        event.status = "publishing"
+        event.attempts += 1
+        event.lease_owner = worker_id
+        event.lease_expires_at = now + timedelta(seconds=lease_seconds)
+    await session.flush()
+    return events
+
+
+async def mark_outbox_published(
+    session: AsyncSession,
+    *,
+    event_id: str,
+    org_id: str,
+    worker_id: str,
+) -> OutboxEvent:
+    now = _now()
+    event = await session.scalar(
+        select(OutboxEvent).where(
+            OutboxEvent.id == event_id,
+            OutboxEvent.org_id == org_id,
+        ).with_for_update()
+    )
+    if event is None:
+        raise LookupError("Outbox event not found.")
+    if event.status != "publishing" or event.lease_owner != worker_id or not event.lease_expires_at or event.lease_expires_at <= now:
+        raise JobLeaseLost("Worker does not own the active outbox lease.")
+    event.status = "published"
+    event.published_at = now
+    event.lease_owner = None
+    event.lease_expires_at = None
+    event.last_error_code = None
+    await session.flush()
+    return event
+
+
+async def fail_outbox_event(
+    session: AsyncSession,
+    *,
+    event_id: str,
+    org_id: str,
+    worker_id: str,
+    error_code: str = "publisher_error",
+    retry_after_seconds: int | None = None,
+    max_attempts: int = 10,
+) -> OutboxEvent:
+    now = _now()
+    event = await session.scalar(
+        select(OutboxEvent).where(
+            OutboxEvent.id == event_id,
+            OutboxEvent.org_id == org_id,
+        ).with_for_update()
+    )
+    if event is None:
+        raise LookupError("Outbox event not found.")
+    if event.status != "publishing" or event.lease_owner != worker_id or not event.lease_expires_at or event.lease_expires_at <= now:
+        raise JobLeaseLost("Worker does not own the active outbox lease.")
+    event.last_error_code = _safe_error_code(error_code)
+    event.lease_owner = None
+    event.lease_expires_at = None
+    if event.attempts >= max_attempts:
+        event.status = "dead_letter"
+    else:
+        delay = retry_after_seconds if retry_after_seconds is not None else min(3600, 2 ** min(event.attempts, 10))
+        if not 1 <= delay <= 86400:
+            raise ValueError("retry_after_seconds must be between 1 and 86400")
+        event.status = "pending"
+        event.available_at = now + timedelta(seconds=delay)
+    await session.flush()
+    return event
