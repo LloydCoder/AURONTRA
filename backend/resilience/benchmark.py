@@ -42,6 +42,30 @@ def _wilson_interval(successes: int, trials: int, z: float = 1.959963984540054) 
     return [round(max(0.0, center - margin), 6), round(min(1.0, center + margin), 6)]
 
 
+def _classification_summary(labels: list[int], predictions: list[int], scores: list[float]) -> dict:
+    tn, fp, fn, tp = (
+        int(value)
+        for value in confusion_matrix(labels, predictions, labels=[0, 1]).ravel()
+    )
+    negative_count = tn + fp
+    positive_count = tp + fn
+    return {
+        "accuracy": round(float(accuracy_score(labels, predictions)), 6),
+        "precision": round(float(precision_score(labels, predictions, zero_division=0)), 6),
+        "recall": round(float(recall_score(labels, predictions, zero_division=0)), 6),
+        "f1": round(float(f1_score(labels, predictions, zero_division=0)), 6),
+        "false_positive_rate": round(fp / negative_count, 6),
+        "false_positive_rate_ci95_wilson": _wilson_interval(fp, negative_count),
+        "false_negative_rate": round(fn / positive_count, 6),
+        "average_precision": round(float(average_precision_score(labels, scores)), 6),
+        "roc_auc": round(float(roc_auc_score(labels, scores)), 6),
+        "confusion_matrix": {
+            "true_negative": tn, "false_positive": fp,
+            "false_negative": fn, "true_positive": tp,
+        },
+    }
+
+
 def evaluate_anomaly_detector(
     training_baseline: list[dict],
     evaluation_samples: list[dict],
@@ -80,13 +104,13 @@ def evaluate_anomaly_detector(
     predictor = ResiliencePredictor(contamination=contamination, n_estimators=n_estimators)
     predictor.train(train_data)
     outputs = [predictor.predict(sample) for sample in eval_data]
-    predicted = [int(result["is_anomaly"]) for result in outputs]
+    combined_predictions = [int(result["is_anomaly"]) for result in outputs]
+    model_predictions = [int(result["model_is_anomaly"]) for result in outputs]
     scores = [float(result["anomaly_score"]) for result in outputs]
-    tn, fp, fn, tp = (int(value) for value in confusion_matrix(normalized_labels, predicted, labels=[0, 1]).ravel())
-    negative_count = tn + fp
-    positive_count = tp + fn
-    false_positive_rate = fp / negative_count
-    false_negative_rate = fn / positive_count
+    combined_metrics = _classification_summary(normalized_labels, combined_predictions, scores)
+    model_only_metrics = _classification_summary(normalized_labels, model_predictions, scores)
+    negative_count = sum(label == 0 for label in normalized_labels)
+    positive_count = sum(label == 1 for label in normalized_labels)
 
     train_manifest = {
         "features": train_data,
@@ -126,16 +150,10 @@ def evaluate_anomaly_detector(
             "evaluation_sha256": _canonical_hash(evaluation_manifest),
         },
         "metrics": {
-            "accuracy": round(float(accuracy_score(normalized_labels, predicted)), 6),
-            "precision": round(float(precision_score(normalized_labels, predicted, zero_division=0)), 6),
-            "recall": round(float(recall_score(normalized_labels, predicted, zero_division=0)), 6),
-            "f1": round(float(f1_score(normalized_labels, predicted, zero_division=0)), 6),
-            "false_positive_rate": round(false_positive_rate, 6),
-            "false_positive_rate_ci95_wilson": _wilson_interval(fp, negative_count),
-            "false_negative_rate": round(false_negative_rate, 6),
-            "average_precision": round(float(average_precision_score(normalized_labels, scores)), 6),
-            "roc_auc": round(float(roc_auc_score(normalized_labels, scores)), 6),
-            "confusion_matrix": {"true_negative": tn, "false_positive": fp, "false_negative": fn, "true_positive": tp},
+            # Backward-compatible top-level fields describe the combined operational decision.
+            **combined_metrics,
+            "combined_policy": combined_metrics,
+            "model_only": model_only_metrics,
         },
     }
 
@@ -155,7 +173,7 @@ def evaluate_temporal_forecasts(cases: list[dict], *, horizon_hours: int = 72) -
         if isinstance(actual, bool) or not isinstance(actual, Real) or not math.isfinite(float(actual)) or not 0 <= float(actual) <= 100:
             raise ValueError(f"Temporal evaluation case {index} actual_score must be finite and between 0 and 100.")
         forecast = correlator.analyse(case["series"])
-        predictions.append(float(forecast["predicted_score_72h"]))
+        predictions.append(float(forecast["predicted_score"]))
         actuals.append(float(actual))
         manifest_cases.append({
             "case_id": str(case.get("case_id", index)),
@@ -182,7 +200,7 @@ def evaluate_temporal_forecasts(cases: list[dict], *, horizon_hours: int = 72) -
             "mean_bias_score_points": round(bias, 4),
             "within_10_points_rate": round(sum(error <= 10 for error in absolute_errors) / len(errors), 6),
             "predictions": [
-                {"case_id": manifest_cases[i]["case_id"], "actual_score": actuals[i], "predicted_score": predictions[i], "error": round(errors[i], 4)}
+                {"case_id": manifest_cases[i]["case_id"], "actual_score": actuals[i], "predicted_score": predictions[i], "horizon_hours": horizon_hours, "error": round(errors[i], 4)}
                 for i in range(len(cases))
             ],
         },
