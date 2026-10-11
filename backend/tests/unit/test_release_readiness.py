@@ -1,9 +1,14 @@
 """Production release readiness gate tests."""
 import hashlib
+import importlib.util
 import json
 from pathlib import Path
 
-from scripts import release_readiness
+ROOT = Path(__file__).resolve().parents[3]
+SPEC = importlib.util.spec_from_file_location("release_readiness", ROOT / "scripts" / "release_readiness.py")
+release_readiness = importlib.util.module_from_spec(SPEC)
+assert SPEC and SPEC.loader
+SPEC.loader.exec_module(release_readiness)
 
 
 def test_current_manifest_fails_closed_and_lists_external_blockers():
