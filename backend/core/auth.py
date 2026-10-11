@@ -75,6 +75,7 @@ def authorize_claims(claims: dict[str, Any], method: str, path: str) -> dict[str
         or path.startswith("/devices/provision")
         or path.endswith("/revoke")
         or path.startswith("/organizations/offboard")
+        or path.startswith("/admin/")
         or normalized_method == "DELETE"
     )
     minimum_rank = 3 if admin_only else (2 if normalized_method in {"POST", "PUT", "PATCH"} else 1)
