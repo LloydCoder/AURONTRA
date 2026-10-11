@@ -8,7 +8,8 @@
 - Removed the in-memory subscription list and fake subscription activation response.
 - Persisted authenticated Lemon Squeezy deliveries through the existing unique provider/event ID webhook ledger.
 - Derived a stable event key from the SHA-256 digest of the exact raw payload because the provider envelope does not expose a universal delivery ID.
-- Enforced payload size limits, strict envelope validation, HMAC verification before parsing/processing, bounded event/object identifiers, and sanitized logs.
+- Enforced payload size limits, strict envelope validation, HMAC verification before parsing/processing, optional `X-Event-Name` consistency checking, bounded event/object identifiers, and sanitized logs.
+- Return HTTP 200 for accepted deliveries, matching Lemon Squeezy's documented webhook acknowledgement contract.
 - Added duplicate-delivery, invalid-signature, and unknown-event regression tests.
 - Marked price estimates as quotes only. The endpoint does not create checkout sessions.
 - Kept checkout and entitlement grants disabled: a provider-signed payload alone is not proof of an authorized tenant's purchase.
@@ -26,7 +27,7 @@
 
 - [ ] Frontend and backend workflows pass on the exact candidate SHA.
 - [ ] PostgreSQL migration/RLS/restore and secret/archive/history scans pass.
-- [ ] Provider sandbox checkout and signed event delivery are exercised using non-production credentials.
+- [ ] Provider sandbox checkout and signed event delivery are exercised using non-production credentials. The current webhook behavior is grounded in the [official webhook request contract](https://docs.lemonsqueezy.com/help/webhooks/webhook-requests) and [signature verification guidance](https://docs.lemonsqueezy.com/help/webhooks/signing-requests).
 - [ ] Server-created checkout intents are bound to the authenticated tenant and provider checkout/session IDs.
 - [ ] Subscription state transitions are reconciled idempotently, including out-of-order events, cancellation, expiry, refunds, and replay.
 - [ ] Entitlements are derived from durable reconciled state and enforced server-side; frontend state is never authoritative.
