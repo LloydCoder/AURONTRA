@@ -16,7 +16,9 @@ class ServiceRestartPlaybook(BasePlaybook):
             context,
             status="simulated" if approved_name else "approval_required",
             service_name=service_name,
-            actions_taken=[
+            service_name_source="caller_supplied_unverified" if service_name is not None else "not_provided",
+            actions_taken=[],
+            recommendations=[
                 "No service command was executed on the API host.",
                 "Service restart requires an authenticated endpoint agent and an explicit target policy.",
             ],
