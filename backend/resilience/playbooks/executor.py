@@ -26,7 +26,7 @@ def list_playbooks() -> list[str]:
 
 async def execute_playbook(playbook_name: str, context: dict) -> dict:
     """
-    Execute a named self-healing playbook.
+    Build a recommendation from a named playbook; never execute actions.
 
     Args:
         playbook_name: one of disk_full | service_restart | cert_expiry | high_cpu
@@ -49,14 +49,20 @@ async def execute_playbook(playbook_name: str, context: dict) -> dict:
 
     result = await playbook.execute(context)
 
-    # Compatibility API: this dispatcher only builds recommendations. It is
-    # not an execution authority and must never claim a verified outcome.
-    result.setdefault("playbook", playbook_name)
-    result.setdefault("device_id", context.get("device_id", "unknown"))
-    result.setdefault("executed_at", datetime.now(timezone.utc).isoformat())
-    result.setdefault("status", "simulated")
-    result.setdefault("execution_mode", "recommendation_only")
-    result.setdefault("execution_enabled", False)
-    result.setdefault("business_outcome_verified", False)
+    # Compatibility API: enforce the non-execution contract even if a future
+    # playbook implementation returns contradictory legacy fields.
+    created_at = result.get("created_at") or datetime.now(timezone.utc).isoformat()
+    result["playbook"] = playbook_name
+    result.setdefault("device_id", "unknown")
+    result.setdefault("created_at", created_at)
+    result["executed_at"] = created_at
+    result["timestamp_semantics"] = "recommendation_created"
+    result["status"] = "simulated"
+    result["execution_mode"] = "recommendation_only"
+    result["execution_enabled"] = False
+    result["business_outcome_verified"] = False
+    result["actions_taken"] = []
+    if not isinstance(result.get("recommendations"), list):
+        result["recommendations"] = []
 
     return result
