@@ -199,3 +199,54 @@ async def test_dpop_proof_is_bound_to_exact_body(monkeypatch):
 
     assert response.status_code == 401
     assert "DPoP" in response.json()["detail"] or "Invalid agent identity" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_agent_scope_and_tenant_binding_are_enforced(monkeypatch):
+    key = ec.generate_private_key(ec.SECP256R1())
+    jwk = _jwk(key)
+    thumbprint = agent_auth.jwk_thumbprint(jwk)
+    async with AsyncSessionLocal() as db:
+        db.add(Organization(id="other-tenant", name="Other Tenant", status="active"))
+        await db.flush()
+        db.add(Device(
+            id="other-tenant-device", org_id="other-tenant", name="foreign device",
+            is_active=True, enrolled_at=__import__("datetime").datetime.now(__import__("datetime").timezone.utc),
+            agent_key_thumbprint=thumbprint,
+        ))
+        await db.commit()
+
+    payload = {"cpu_percent": 12.0}
+    body = _body(payload)
+    headers, _ = _headers(
+        monkeypatch, device_id="other-tenant-device", tenant_id="test-tenant",
+        scope="aurontra:telemetry:write", path="/agent/v1/telemetry", body=body, device_key=key,
+    )
+    async with await _client() as client:
+        cross_tenant = await client.post("/agent/v1/telemetry", content=body, headers=headers)
+
+    assert cross_tenant.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_agent_scope_is_required_for_telemetry(monkeypatch):
+    device_id = "agent-wrong-scope"
+    key = ec.generate_private_key(ec.SECP256R1())
+    thumbprint = agent_auth.jwk_thumbprint(_jwk(key))
+    async with AsyncSessionLocal() as db:
+        db.add(Device(
+            id=device_id, org_id="test-tenant", name="scope test device",
+            is_active=True, enrolled_at=__import__("datetime").datetime.now(__import__("datetime").timezone.utc),
+            agent_key_thumbprint=thumbprint,
+        ))
+        await db.commit()
+
+    body = _body({"cpu_percent": 18.0})
+    headers, _ = _headers(
+        monkeypatch, device_id=device_id, tenant_id="test-tenant",
+        scope="aurontra:agent:enroll", path="/agent/v1/telemetry", body=body, device_key=key,
+    )
+    async with await _client() as client:
+        response = await client.post("/agent/v1/telemetry", content=body, headers=headers)
+
+    assert response.status_code == 403
